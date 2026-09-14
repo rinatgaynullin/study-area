@@ -1,0 +1,323 @@
+/*
+ * Content styles for the editable area and for rendering exported HTML.
+ * Everything visual resolves through CSS variables, so a host can restyle the
+ * editor by overriding variables on `.rte-root` without forking the package.
+ */
+
+.rte-content {
+  font-family: var(--rte-font-family, inherit);
+  font-size: var(--rte-font-size, 15px);
+  line-height: var(--rte-line-height, 1.6);
+  color: var(--rte-color-text, #1d1d1d);
+  outline: none;
+  word-break: break-word;
+}
+
+.rte-content > * + * {
+  margin-top: var(--rte-block-gap, 0.75em);
+}
+
+.rte-content p {
+  margin: 0;
+}
+
+.rte-content h1,
+.rte-content h2,
+.rte-content h3,
+.rte-content h4,
+.rte-content h5,
+.rte-content h6 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.rte-content h1 { font-size: 1.9em; }
+.rte-content h2 { font-size: 1.6em; }
+.rte-content h3 { font-size: 1.35em; }
+.rte-content h4 { font-size: 1.15em; }
+.rte-content h5 { font-size: 1em; }
+.rte-content h6 { font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.rte-content ul,
+.rte-content ol {
+  padding-left: 1.5em;
+  margin: 0;
+}
+
+.rte-content li > p {
+  margin: 0;
+}
+
+.rte-content blockquote {
+  margin: 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--rte-color-border, #d5d5d5);
+  color: var(--rte-color-muted, #6b6b6b);
+}
+
+.rte-content code {
+  font-family: var(--rte-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.9em;
+  background: var(--rte-color-code-bg, rgb(0 0 0 / 6%));
+  border-radius: var(--rte-radius-sm, 3px);
+  padding: 0.15em 0.35em;
+}
+
+.rte-content pre {
+  font-family: var(--rte-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  background: var(--rte-color-code-block-bg, #f4f4f5);
+  border-radius: var(--rte-radius, 4px);
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.rte-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.875em;
+}
+
+.rte-content hr {
+  border: none;
+  border-top: 1px solid var(--rte-color-border, #d5d5d5);
+  margin: 1.25em 0;
+}
+
+.rte-content a {
+  color: var(--rte-color-primary, #1976d2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.rte-content mark {
+  border-radius: var(--rte-radius-sm, 3px);
+  padding: 0 0.1em;
+}
+
+/* ------------------------------------------------------------------ tables */
+
+.rte-content table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  overflow: hidden;
+}
+
+.rte-content th,
+.rte-content td {
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  padding: 0.4em 0.6em;
+  vertical-align: top;
+  position: relative;
+  min-width: 2em;
+}
+
+.rte-content th {
+  background: var(--rte-color-subtle-bg, #f4f4f5);
+  font-weight: 600;
+  text-align: left;
+}
+
+.rte-content .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--rte-color-selection, rgb(25 118 210 / 12%));
+  pointer-events: none;
+}
+
+.rte-content .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--rte-color-primary, #1976d2);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ images */
+
+.rte-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--rte-radius, 4px);
+  display: block;
+}
+
+.rte-content img.ProseMirror-selectednode {
+  outline: 2px solid var(--rte-color-primary, #1976d2);
+}
+
+/* ---------------------------------------------------------------- formulas */
+
+.rte-formula {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 var(--rte-formula-padding, 2px);
+  border-radius: var(--rte-radius-sm, 3px);
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.rte-formula:hover {
+  background: var(--rte-color-formula-hover, rgb(25 118 210 / 10%));
+}
+
+.rte-formula--selected,
+.rte-formula.ProseMirror-selectednode {
+  background: var(--rte-color-formula-hover, rgb(25 118 210 / 10%));
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #1976d2);
+}
+
+.rte-formula__render {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.rte-formula__render svg {
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+/* ------------------------------------------------------------------- audio */
+
+.rte-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--rte-audio-padding, 10px 12px);
+  background: var(--rte-color-subtle-bg, #f4f4f5);
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius-lg, 8px);
+  max-width: var(--rte-audio-max-width, 420px);
+}
+
+.rte-audio.ProseMirror-selectednode {
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #1976d2);
+}
+
+.rte-audio__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rte-audio__toggle {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: var(--rte-color-primary, #1976d2);
+  color: var(--rte-color-on-primary, #fff);
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rte-audio__waveform {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.rte-audio__bar {
+  flex: 1 1 auto;
+  min-width: 2px;
+  border-radius: 1px;
+  background: var(--rte-color-waveform, #b9bcc2);
+  transition: background-color 80ms linear;
+}
+
+.rte-audio__bar--played {
+  background: var(--rte-color-primary, #1976d2);
+}
+
+.rte-audio__time {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--rte-color-muted, #6b6b6b);
+}
+
+.rte-audio__name {
+  font-size: 12px;
+  color: var(--rte-color-muted, #6b6b6b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The editor replaces audio blocks with its own waveform player, so the native
+ * element is never in the DOM there. Everywhere the raw HTML is displayed —
+ * the read-only viewer, an email, another site — this plain player is what
+ * makes the recording playable, so it must stay visible.
+ */
+.rte-audio__native {
+  width: 100%;
+}
+
+/* -------------------------------------------------------------- attachment */
+
+.rte-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--rte-color-subtle-bg, #f4f4f5);
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius-lg, 8px);
+  max-width: 100%;
+}
+
+.rte-attachment.ProseMirror-selectednode {
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #1976d2);
+}
+
+.rte-attachment__icon {
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.rte-attachment__link {
+  color: var(--rte-color-primary, #1976d2);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rte-attachment__meta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--rte-color-muted, #6b6b6b);
+}
+
+/* ------------------------------------------------------------- placeholder */
+
+.rte-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--rte-color-placeholder, #9a9a9a);
+}
+
+/* ------------------------------------------------------------- gapcursor */
+
+.rte-content .ProseMirror-gapcursor::after {
+  border-top-color: var(--rte-color-text, #1d1d1d);
+}

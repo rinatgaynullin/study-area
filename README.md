@@ -1,1 +1,437 @@
-# study-area
+# @rich-editor/vue
+
+Rich text editor for Vue 3 with **math and chemistry formulas** (MathML +
+MathJax), images, voice messages, text attachments and i18n. Toolbar and editing
+feel modelled on Quasar's QEditor; formula editing modelled on Wiris MathType —
+built entirely on MIT / Apache-2.0 dependencies.
+
+- **MathML is the canonical format.** Formulas are stored as MathML in the HTML,
+  rendered by MathJax, reopened in a visual editor by clicking them, and deleted
+  only as a whole.
+- **HTML in, HTML out.** `v-model` is a plain HTML string.
+- **Russian by default**, any other locale via a JSON tree.
+- **Restyle without forking** — every value is a CSS variable.
+
+```
+packages/editor-core   @rich-editor/core   framework-agnostic engine
+packages/editor-vue    @rich-editor/vue    the Vue 3 components  ← install this
+apps/demo                                  runnable demo
+```
+
+> The `@rich-editor` npm scope is a placeholder — rename it before publishing.
+
+## Install
+
+```bash
+npm install @rich-editor/vue vue
+```
+
+## Quick start
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { RichEditor } from '@rich-editor/vue';
+import '@rich-editor/vue/styles.css';
+
+const html = ref('<p>Начните писать…</p>');
+</script>
+
+<template>
+  <RichEditor v-model="html" />
+</template>
+```
+
+That is the whole integration. The toolbar, formula editor, recorder and
+dialogs come with it.
+
+## Read-only viewer
+
+Use `<RichContent />` to display a saved document. It loads **none** of the
+editing stack — no ProseMirror, no MathLive — so it is a fraction of the weight
+of the editor.
+
+```vue
+<script setup lang="ts">
+import { RichContent } from '@rich-editor/vue';
+import '@rich-editor/vue/styles.css';
+
+const props = defineProps<{ html: string }>();
+</script>
+
+<template>
+  <RichContent :html="props.html" />
+</template>
+```
+
+Documents exported by `<RichEditor />` carry their formula SVG, so MathJax never
+loads. Formulas that arrive with only `data-mathml` — for example from a backend
+that stores just the source — are rendered on demand.
+
+| Prop | Type | Default | |
+| --- | --- | --- | --- |
+| `html` | `string` | `''` | Sanitized before rendering, always |
+| `formulaScale` | `number` | `1` | Formula size relative to surrounding text |
+
+Emits `rendered` once pending formulas have been drawn.
+
+## `<RichEditor />`
+
+```vue
+<RichEditor
+  v-model="html"
+  locale="ru"
+  :messages="messages"
+  :upload-image="uploadImage"
+  :upload-audio="uploadAudio"
+  :upload-file="uploadFile"
+  :limits="{ maxAudioDurationSec: 120, maxImageSizeBytes: 5_000_000 }"
+  :editable="true"
+  toolbar="full"
+  placeholder="Начните писать…"
+  :formula-scale="1"
+  min-height="320px"
+  @change="onChange"
+  @focus="onFocus"
+  @blur="onBlur"
+  @error="onError"
+  @ready="onReady"
+/>
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `modelValue` | `string` | `''` | Document HTML. Sanitized on the way in |
+| `locale` | `string` | `'ru'` | Active locale |
+| `messages` | `Record<string, MessagesTree>` | — | Translations by locale |
+| `uploadImage` / `uploadAudio` / `uploadFile` | `UploadAdapter` | — | Omit for the local blob-URL pipeline |
+| `limits` | `Partial<EditorLimits>` | see below | Size and duration caps |
+| `editable` | `boolean` | `true` | `false` hides the toolbar and locks the document |
+| `toolbar` | `'full' \| 'standard' \| 'minimal' \| ToolbarGroup[]` | `'full'` | Preset or explicit configuration |
+| `placeholder` | `string` | localized | Empty-document hint |
+| `formulaScale` | `number` | `1` | Formula size relative to the text |
+| `mathliveFontsDirectory` | `string \| null` | `null` | See *Formula fonts* |
+| `minHeight` | `string` | `'220px'` | Minimum height of the editing surface |
+
+### Events
+
+`update:modelValue` · `change` · `focus` · `blur` · `error` (a `RichEditorError`) ·
+`ready` (the `RichEditorCore` instance)
+
+### Exposed methods
+
+```ts
+const editor = ref<InstanceType<typeof RichEditor>>();
+
+editor.value.getHTML();
+editor.value.setHTML('<p>…</p>');
+editor.value.getJSON();
+editor.value.getText();
+editor.value.isEmpty();
+editor.value.focus();
+editor.value.insertFormula(mathml, 'chem');
+await editor.value.whenFormulasReady();  // resolves once formula SVGs are cached
+editor.value.editor;                     // the underlying TipTap editor
+editor.value.core;                        // the RichEditorCore instance
+```
+
+`getHTML()` is synchronous and includes the rendered SVG for every formula that
+has been drawn. Await `whenFormulasReady()` first if you are exporting a document
+immediately after loading it.
+
+## Toolbar
+
+Everything below is available in v1: **bold, italic, underline, strike,
+headings (H1–H6), ordered and unordered lists, blockquote, inline code, code
+block, links, tables, text alignment, text colour, highlight, undo/redo, clear
+formatting, horizontal rule, subscript, superscript**, plus image, voice message,
+text file and formula insertion.
+
+Standard hotkeys come from TipTap: `Ctrl/Cmd+B`, `I`, `U`, `Shift+Ctrl+S`,
+`Ctrl+Z` / `Shift+Ctrl+Z`, `Ctrl+Alt+1…6`, `Shift+Ctrl+7/8`, `Shift+Ctrl+B`,
+`Ctrl+E`, and so on.
+
+Build a custom toolbar from groups:
+
+```ts
+const toolbar = [
+  { id: 'format', items: ['bold', 'italic', 'underline'] },
+  { id: 'insert', items: ['link', 'image', 'formulaMath'], collapsible: true },
+];
+```
+
+A `collapsible` group made only of plain buttons folds into a `⋯` menu when the
+toolbar is too narrow.
+
+## Upload adapters
+
+Without an adapter, files stay local as object URLs — good for prototypes, gone
+on reload. Pass an adapter and the editor hands you the `File`, waits, and
+inserts whatever URL you return.
+
+```ts
+import type { UploadAdapter } from '@rich-editor/vue';
+
+const uploadImage: UploadAdapter = async (file, ctx) => {
+  const body = new FormData();
+  body.append('file', file);
+
+  const response = await fetch('/api/uploads', { method: 'POST', body, signal: ctx.signal });
+  if (!response.ok) throw new Error('Upload failed');
+
+  const { url } = await response.json();
+  return { url, name: file.name, mime: file.type, size: file.size };
+};
+```
+
+```ts
+type UploadAdapter = (file: File, ctx: UploadContext) => Promise<UploadResult>;
+
+interface UploadContext {
+  kind: 'image' | 'audio' | 'file';
+  signal: AbortSignal;   // aborted if the editor unmounts mid-upload
+  t: Translate;          // to localize your own errors
+}
+
+interface UploadResult {
+  url: string;
+  name?: string;
+  mime?: string;
+  size?: number;
+  meta?: Record<string, unknown>;
+}
+```
+
+Throwing surfaces a localized `upload-failed` error through `@error` and inserts
+nothing.
+
+### Limits
+
+```ts
+{
+  maxAudioDurationSec: 300,
+  maxAudioSizeBytes:   10 * 1024 * 1024,
+  maxImageSizeBytes:   10 * 1024 * 1024,
+  maxFileSizeBytes:     5 * 1024 * 1024,
+}
+```
+
+A file over the limit is rejected before the adapter is called. The recorder
+stops itself at the duration cap.
+
+## Media behaviour
+
+**Images** — file picker, drag & drop, or paste. Inserted as `<img src alt>`.
+Resize, crop and caption UI are out of scope for v1.
+
+**Voice messages** — recorded with `MediaRecorder`, with container detection
+across WebM/Opus, Ogg, MP4/AAC and MP3. The editor shows a waveform player
+(peaks computed live through the Web Audio API, stored in `data-peaks`);
+exported HTML carries a native `<audio controls>` so the recording plays
+anywhere.
+
+**Text files** — the documented default is an **attachment chip**: the file is
+uploaded and inserted as a downloadable `<a download>`. The toolbar's file menu
+also offers *«Вставить содержимое как текст»*, which inserts the file's contents
+as plain paragraphs. Markdown is **never parsed** — a `.md` file is inserted
+exactly as written, `#` and `**` included.
+
+Accepted text types: `.txt`, `.md`, `.markdown`, `.csv`, `.tsv`, `.json`,
+`.log`, `.xml`, `.yml`, `.yaml`, plus any `text/*` MIME type.
+
+## Formulas
+
+Insert from the toolbar (math or chemistry), or click any formula to reopen it.
+The dialog offers a visual MathLive field, a template gallery organized by
+category, and a live preview rendered exactly as it will appear.
+
+Categories: fractions, roots, scripts, sums and products, integrals, limits,
+matrices, Greek letters, relations, functions — and for chemistry: reactions,
+states, isotopes, common formulas.
+
+Insert programmatically:
+
+```ts
+import { latexToMathML } from '@rich-editor/vue';
+
+const mathml = await latexToMathML('2\\mathrm{H}_2+\\mathrm{O}_2\\rightarrow 2\\mathrm{H}_2\\mathrm{O}', 'chem');
+editor.value.insertFormula(mathml, 'chem');
+```
+
+The stored HTML looks like this — MathML is authoritative, the SVG is the
+portable projection:
+
+```html
+<span data-formula="true" data-formula-type="chem"
+      data-mathml="&lt;math …&gt;…&lt;/math&gt;" contenteditable="false" class="rte-formula">
+  <span class="rte-formula__render" data-render-host="true"><svg …>…</svg></span>
+</span>
+```
+
+### Formula fonts
+
+MathLive needs its fonts. Either let your bundler handle them:
+
+```ts
+import 'mathlive/fonts.css';   // Vite/webpack emit the font files
+```
+
+or serve them yourself and point the editor at them:
+
+```vue
+<RichEditor v-model="html" mathlive-fonts-directory="/fonts/mathlive" />
+```
+
+MathJax needs nothing: glyph outlines are inlined into every rendered SVG.
+
+## i18n
+
+Russian is built in. Add a locale by passing a JSON tree — a **partial** tree is
+fine, missing keys fall back to Russian.
+
+```vue
+<script setup lang="ts">
+import en from './locales/en.json';
+</script>
+
+<template>
+  <RichEditor v-model="html" locale="en" :messages="{ en }" />
+</template>
+```
+
+```jsonc
+{
+  "toolbar": { "bold": "Bold", "italic": "Italic", "headingLevel": "Heading {level}" },
+  "formula": { "titleMath": "Math formula", "categories": { "fractions": "Fractions" } },
+  "errors":  { "fileTooLarge": "File “{name}” is too large: {size}. Maximum is {max}." }
+}
+```
+
+`{name}`-style placeholders are interpolated. A complete English bundle ships as
+an export:
+
+```ts
+import { enMessages } from '@rich-editor/vue';
+```
+
+Top-level sections: `toolbar`, `table`, `link`, `color`, `image`, `audio`,
+`file`, `formula`, `errors`, `common`, `editor`. See
+`apps/demo/src/locales/en.json` for a full example.
+
+## Theming
+
+Override CSS variables — globally, per instance, or per theme:
+
+```css
+.rte-root,
+.rte-content-root {
+  --rte-color-primary: #6750a4;
+  --rte-color-bg: #1e1e21;
+  --rte-color-text: #eceff4;
+  --rte-color-border: #3a3a40;
+  --rte-radius: 10px;
+  --rte-btn-size: 36px;
+  --rte-font-size: 16px;
+}
+```
+
+| Group | Variables |
+| --- | --- |
+| Palette | `--rte-color-primary`, `--rte-color-on-primary`, `--rte-color-text`, `--rte-color-muted`, `--rte-color-placeholder`, `--rte-color-bg`, `--rte-color-subtle-bg`, `--rte-color-border`, `--rte-color-danger`, `--rte-color-selection`, `--rte-color-code-bg`, `--rte-color-code-block-bg`, `--rte-color-formula-hover`, `--rte-color-waveform` |
+| Toolbar | `--rte-toolbar-bg`, `--rte-toolbar-padding`, `--rte-toolbar-gap`, `--rte-btn-size`, `--rte-btn-hover-bg`, `--rte-btn-active-bg`, `--rte-btn-active-color` |
+| Shape & type | `--rte-radius-sm`, `--rte-radius`, `--rte-radius-lg`, `--rte-font-family`, `--rte-font-mono`, `--rte-font-size`, `--rte-line-height`, `--rte-content-padding`, `--rte-block-gap`, `--rte-shadow`, `--rte-z-modal` |
+| Media | `--rte-audio-max-width`, `--rte-audio-padding`, `--rte-formula-padding` |
+
+Stable class hooks for anything variables cannot reach: `.rte-root`,
+`.rte-content-root`, `.rte-toolbar`, `.rte-toolbar__group`, `.rte-btn`,
+`.rte-btn--active`, `.rte-dropdown__panel`, `.rte-menu__item`,
+`.rte-modal__panel`, `.rte-content`, `.rte-formula`, `.rte-audio`,
+`.rte-attachment`.
+
+## Nuxt / SSR
+
+The editor is client-only: it needs a DOM for ProseMirror, for sanitization and
+for MathLive.
+
+```vue
+<template>
+  <ClientOnly>
+    <RichEditor v-model="html" />
+  </ClientOnly>
+</template>
+```
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  css: ['@rich-editor/vue/styles.css'],
+  vite: { optimizeDeps: { include: ['mathlive'] } },
+});
+```
+
+`<RichContent />` is safe to place anywhere: it renders an empty shell on the
+server and fills it on hydration.
+
+## Security
+
+All content entering the document is sanitized — `setHTML`, the initial value,
+`v-model` updates and paste alike. `<script>`, event handlers, `javascript:`,
+`iframe`/`object`/`form`, and CSS `url()` / `expression()` are removed.
+`data:` URLs are accepted on media elements only, never on links. Formula MathML
+is sanitized separately, with `annotation-xml` — the classic MathML mXSS vector —
+forbidden outright, and MathJax's SVG output is sanitized before insertion.
+
+Details and rationale: [ADR 0004](docs/adr/0004-formula-html-contract.md).
+
+## Using the core without Vue
+
+```ts
+import { RichEditorCore } from '@rich-editor/core';
+import '@rich-editor/core/styles.css';
+
+const editor = new RichEditorCore({
+  element: document.querySelector('#editor')!,
+  content: '<p>Привет</p>',
+  onChange: (html) => console.log(html),
+  onFormulaEdit: (payload) => openYourOwnDialog(payload),
+});
+```
+
+You supply the toolbar and dialogs; the schema, node views, sanitization,
+formula pipeline, uploads and recorder all work as they do under Vue.
+
+## Development
+
+```bash
+npm install
+npm run dev          # demo at http://localhost:5173
+npm test             # unit, integration and component tests
+npm run test:e2e     # Playwright, desktop + mobile
+npm run build        # build both packages
+npm run ci           # typecheck + test + build
+```
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — package split, data flow, plugin boundaries
+- [LIMITATIONS.md](LIMITATIONS.md) — what v1 does not do, and why
+- [docs/adr/](docs/adr/) — the decisions and their trade-offs
+
+## Dependencies and licences
+
+| Package | Licence | Why |
+| --- | --- | --- |
+| `@tiptap/*`, `prosemirror-*` | MIT | Editor engine and schema |
+| `mathlive` | MIT | Visual formula input, LaTeX → MathML |
+| `mathml-to-latex` | MIT | MathML → LaTeX for formulas authored elsewhere |
+| `@mathjax/src`, `@mathjax/mathjax-newcm-font` | Apache-2.0 | MathML → SVG rendering |
+| `dompurify` | MPL-2.0 OR Apache-2.0 | Sanitization |
+| `vue` | MIT | Peer dependency |
+
+All MIT/Apache-2.0 compatible. The commercial Wiris SDK is not used.
+
+## Licence
+
+MIT

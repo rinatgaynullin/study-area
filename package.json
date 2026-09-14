@@ -1,0 +1,39 @@
+{
+  "name": "rich-editor-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Production-ready Vue 3 rich text editor with MathML formulas (math + chemistry), media and i18n",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @rich-editor/core && npm run build -w @rich-editor/vue",
+    "build:demo": "npm run build -w @rich-editor/demo",
+    "dev": "npm run dev -w @rich-editor/demo",
+    "typecheck": "npm run typecheck -w @rich-editor/core && npm run typecheck -w @rich-editor/vue && npm run typecheck -w @rich-editor/demo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "ci": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^26.5.1",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vitest/coverage-v8": "^5.0.0",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^28.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.0",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^5.0.0",
+    "vue-tsc": "^3.2.0"
+  }
+}

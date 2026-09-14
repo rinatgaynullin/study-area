@@ -1,0 +1,724 @@
+/*
+ * Theme for @rich-editor/vue.
+ *
+ * Content styles come from @rich-editor/core so this file is the single
+ * stylesheet a host needs to import. Every value below resolves through a
+ * CSS variable declared on `.rte-root`: override those variables (globally or
+ * per instance) to restyle the editor without forking the package.
+ */
+
+@import '../../../editor-core/src/styles.css';
+
+/*
+ * Theme variables live on both the editor shell and the standalone read-only
+ * viewer, so overriding them once restyles either surface.
+ */
+.rte-root,
+.rte-content-root {
+  /* palette */
+  --rte-color-primary: #1976d2;
+  --rte-color-on-primary: #ffffff;
+  --rte-color-text: #1d1d1d;
+  --rte-color-muted: #6b6b6b;
+  --rte-color-placeholder: #9a9a9a;
+  --rte-color-bg: #ffffff;
+  --rte-color-subtle-bg: #f4f4f5;
+  --rte-color-border: #d5d5d5;
+  --rte-color-danger: #c62828;
+  --rte-color-code-bg: rgb(0 0 0 / 6%);
+  --rte-color-code-block-bg: #f4f4f5;
+  --rte-color-selection: rgb(25 118 210 / 12%);
+  --rte-color-formula-hover: rgb(25 118 210 / 10%);
+  --rte-color-waveform: #b9bcc2;
+
+  /* toolbar */
+  --rte-toolbar-bg: #ffffff;
+  --rte-toolbar-gap: 2px;
+  --rte-toolbar-padding: 4px 6px;
+  --rte-btn-size: 32px;
+  --rte-btn-hover-bg: rgb(0 0 0 / 6%);
+  --rte-btn-active-bg: rgb(25 118 210 / 12%);
+  --rte-btn-active-color: var(--rte-color-primary);
+
+  /* shape and type */
+  --rte-radius-sm: 3px;
+  --rte-radius: 4px;
+  --rte-radius-lg: 8px;
+  --rte-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --rte-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --rte-font-size: 15px;
+  --rte-line-height: 1.6;
+  --rte-content-padding: 12px 14px;
+  --rte-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+  --rte-z-modal: 1000;
+
+  color: var(--rte-color-text);
+  font-family: var(--rte-font-family);
+}
+
+.rte-root {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  background: var(--rte-color-bg);
+  overflow: hidden;
+}
+
+.rte-root *,
+.rte-content-root *,
+.rte-modal * {
+  box-sizing: border-box;
+}
+
+/* ----------------------------------------------------------------- toolbar */
+
+.rte-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rte-toolbar-gap);
+  padding: var(--rte-toolbar-padding);
+  background: var(--rte-toolbar-bg);
+  border-bottom: 1px solid var(--rte-color-border);
+}
+
+.rte-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--rte-toolbar-gap);
+}
+
+.rte-toolbar__group + .rte-toolbar__group::before {
+  content: '';
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 4px;
+  background: var(--rte-color-border);
+}
+
+.rte-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: var(--rte-btn-size);
+  height: var(--rte-btn-size);
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--rte-radius);
+  background: transparent;
+  color: var(--rte-color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  transition: background-color 120ms ease, color 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rte-btn:hover:not(:disabled) {
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-btn:focus-visible {
+  outline: 2px solid var(--rte-color-primary);
+  outline-offset: -2px;
+}
+
+.rte-btn--active {
+  background: var(--rte-btn-active-bg);
+  color: var(--rte-btn-active-color);
+}
+
+.rte-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.rte-btn__text {
+  font-weight: 600;
+  padding: 0 2px;
+  min-width: 2.5em;
+}
+
+.rte-btn__caret {
+  opacity: 0.6;
+  margin-left: -2px;
+}
+
+.rte-icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* ---------------------------------------------------------------- dropdown */
+
+.rte-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.rte-dropdown__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 180px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--rte-color-bg);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  box-shadow: var(--rte-shadow);
+}
+
+.rte-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--rte-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rte-menu__item:hover:not(:disabled) {
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-menu__item--active {
+  color: var(--rte-color-primary);
+  font-weight: 600;
+}
+
+.rte-menu__item:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.rte-menu__separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--rte-color-border);
+}
+
+.rte-menu__heading--1 { font-size: 1.5em; font-weight: 700; }
+.rte-menu__heading--2 { font-size: 1.3em; font-weight: 700; }
+.rte-menu__heading--3 { font-size: 1.15em; font-weight: 600; }
+.rte-menu__heading--4 { font-size: 1.05em; font-weight: 600; }
+.rte-menu__heading--5 { font-size: 1em; font-weight: 600; }
+.rte-menu__heading--6 { font-size: 0.9em; font-weight: 600; text-transform: uppercase; }
+
+/* ------------------------------------------------------------------ colors */
+
+.rte-colors {
+  width: 208px;
+  padding: 4px;
+}
+
+.rte-colors__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.rte-colors__swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgb(0 0 0 / 12%);
+  border-radius: var(--rte-radius-sm);
+  cursor: pointer;
+  padding: 0;
+}
+
+.rte-colors__swatch--active {
+  box-shadow: 0 0 0 2px var(--rte-color-primary);
+}
+
+.rte-colors__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.rte-colors__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--rte-radius-sm);
+}
+
+.rte-colors__reset:hover {
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-colors__custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.rte-colors__custom input {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+/* ----------------------------------------------------------------- surface */
+
+.rte-surface {
+  display: flex;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.rte-host {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rte-host .rte-content {
+  padding: var(--rte-content-padding);
+  min-height: 100%;
+}
+
+.rte-root--readonly .rte-surface {
+  background: var(--rte-color-subtle-bg);
+}
+
+.rte-hidden-input {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ modals */
+
+.rte-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--rte-z-modal, 1000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-family: var(--rte-font-family, system-ui, sans-serif);
+}
+
+.rte-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+}
+
+.rte-modal__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  max-height: min(90vh, 860px);
+  background: var(--rte-color-bg, #fff);
+  color: var(--rte-color-text, #1d1d1d);
+  border-radius: var(--rte-radius-lg, 8px);
+  box-shadow: var(--rte-shadow, 0 4px 16px rgb(0 0 0 / 14%));
+  overflow: hidden;
+}
+
+.rte-modal__panel--wide {
+  width: min(860px, 100%);
+}
+
+.rte-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--rte-color-border, #d5d5d5);
+}
+
+.rte-modal__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rte-modal__close {
+  display: inline-flex;
+  padding: 6px;
+  border: none;
+  border-radius: var(--rte-radius, 4px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rte-modal__close:hover {
+  background: var(--rte-btn-hover-bg, rgb(0 0 0 / 6%));
+}
+
+.rte-modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.rte-modal__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--rte-color-border, #d5d5d5);
+}
+
+.rte-modal__spacer {
+  flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------------------ inputs */
+
+.rte-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.rte-field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.rte-field-row .rte-field {
+  flex: 1 1 0;
+}
+
+.rte-field__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--rte-color-muted, #6b6b6b);
+}
+
+.rte-field__error {
+  margin: 0 0 12px;
+  color: var(--rte-color-danger, #c62828);
+  font-size: 13px;
+}
+
+.rte-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius, 4px);
+  background: var(--rte-color-bg, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.rte-input:focus {
+  outline: none;
+  border-color: var(--rte-color-primary, #1976d2);
+  box-shadow: 0 0 0 2px var(--rte-color-selection, rgb(25 118 210 / 12%));
+}
+
+.rte-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.rte-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius, 4px);
+  background: var(--rte-color-bg, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.rte-button:hover:not(:disabled) {
+  background: var(--rte-btn-hover-bg, rgb(0 0 0 / 6%));
+}
+
+.rte-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rte-button--primary {
+  background: var(--rte-color-primary, #1976d2);
+  border-color: var(--rte-color-primary, #1976d2);
+  color: var(--rte-color-on-primary, #fff);
+}
+
+.rte-button--danger {
+  color: var(--rte-color-danger, #c62828);
+  border-color: currentColor;
+}
+
+/* --------------------------------------------------------- formula editor */
+
+.rte-formula-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rte-formula-editor__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--rte-color-border, #d5d5d5);
+}
+
+.rte-formula-editor__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--rte-color-muted, #6b6b6b);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.rte-formula-editor__tab--active {
+  color: var(--rte-color-primary, #1976d2);
+  border-bottom-color: var(--rte-color-primary, #1976d2);
+  font-weight: 600;
+}
+
+.rte-formula-editor__status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--rte-color-muted, #6b6b6b);
+}
+
+.rte-formula-editor__host {
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius, 4px);
+  padding: 10px 12px;
+  min-height: 56px;
+  background: var(--rte-color-bg, #fff);
+}
+
+.rte-formula-editor__field {
+  width: 100%;
+  font-size: 20px;
+}
+
+.rte-formula-editor__hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--rte-color-muted, #6b6b6b);
+}
+
+.rte-formula-editor__section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rte-color-muted, #6b6b6b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rte-formula-editor__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.rte-formula-editor__category {
+  padding: 5px 10px;
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rte-formula-editor__category--active {
+  background: var(--rte-color-primary, #1976d2);
+  border-color: var(--rte-color-primary, #1976d2);
+  color: var(--rte-color-on-primary, #fff);
+}
+
+.rte-formula-editor__gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.rte-formula-editor__template {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 6px;
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius, 4px);
+  background: var(--rte-color-bg, #fff);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.rte-formula-editor__template:hover {
+  border-color: var(--rte-color-primary, #1976d2);
+  background: var(--rte-color-selection, rgb(25 118 210 / 12%));
+}
+
+.rte-formula-editor__template-preview svg {
+  max-width: 100%;
+  max-height: 34px;
+}
+
+.rte-formula-editor__preview-box {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px dashed var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius, 4px);
+  background: var(--rte-color-subtle-bg, #f4f4f5);
+  overflow-x: auto;
+}
+
+.rte-formula-editor__empty {
+  color: var(--rte-color-placeholder, #9a9a9a);
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- recorder */
+
+.rte-recorder {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.rte-recorder__indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--rte-color-subtle-bg, #f4f4f5);
+  color: var(--rte-color-muted, #6b6b6b);
+}
+
+.rte-recorder__indicator--live {
+  background: var(--rte-color-danger, #c62828);
+  color: #fff;
+  /* Scales with live input level, so the user sees the mic is picking up. */
+  transform: scale(var(--rte-level, 1));
+  transition: transform 100ms ease-out;
+}
+
+.rte-recorder__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rte-recorder__time {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rte-recorder__limit,
+.rte-recorder__hint {
+  font-size: 13px;
+  color: var(--rte-color-muted, #6b6b6b);
+  margin: 0;
+}
+
+.rte-recorder__preview {
+  width: 100%;
+  margin: 12px 0;
+}
+
+.rte-recorder__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ mobile */
+
+@media (max-width: 640px) {
+  .rte-root {
+    --rte-btn-size: 36px;
+    --rte-font-size: 16px;
+    --rte-content-padding: 10px 12px;
+  }
+
+  .rte-toolbar {
+    overflow-x: auto;
+    flex-wrap: wrap;
+  }
+
+  .rte-modal {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .rte-modal__panel,
+  .rte-modal__panel--wide {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: var(--rte-radius-lg, 8px) var(--rte-radius-lg, 8px) 0 0;
+  }
+
+  .rte-formula-editor__gallery {
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    max-height: 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rte-btn,
+  .rte-recorder__indicator--live,
+  .rte-audio__bar {
+    transition: none;
+  }
+}
