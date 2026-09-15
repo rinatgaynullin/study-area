@@ -115,6 +115,53 @@ No realtime collaboration, no presence, no comments, no version history. Undo
 and redo are local to the session. TipTap supports Y.js collaboration, so the
 extension point exists, but nothing here is wired for it.
 
+## Content saved by Froala
+
+Legacy markup renders through an opt-in compatibility layer
+([ADR 0007](docs/adr/0007-froala-compatibility.md)). What it does **not**
+reproduce:
+
+**Video is dropped entirely.** `<video>` and `<iframe>` are outside the
+sanitizer's allowlist, so `.fr-video` arrives as an empty wrapper and `.fr-rv`
+has nothing to size. Admitting either tag would widen the attack surface the
+sanitizer exists to narrow. Confirmed with the data owner that video does not
+occur in the stored content; if that changes, it needs its own decision rather
+than a loosened allowlist.
+
+**Emoticons do not render.** Froala stores them as a `<span>` whose image is a
+`background: url(…)` in the style attribute, and the CSS sanitizer strips `url()`
+values. The image reference is removed before any stylesheet could act on it, so
+this is not fixable in the compat CSS.
+
+**Editing drops decoration classes.** The viewer keeps all 24 decoration classes;
+the editor keeps the three that sit on links (`fr-file`, `fr-green`,
+`fr-strong`), because TipTap's link mark passes `class` through. Everything else
+— `fr-rounded`, `fr-bordered`, `fr-shadow`, the table and text classes — is gone
+once a document is edited and saved.
+
+What does survive editing: formulas (recovered into real formula nodes),
+highlight colour, text alignment, font size, and the document structure.
+
+**Image captions lose their structure.** Froala's three-level
+`fr-img-caption > fr-img-wrap > fr-inner` wrapper has no counterpart in the
+schema. In the viewer it renders correctly; in the editor the caption text merges
+into the paragraph holding the image.
+
+**`legacyEmbed` content is preserved, not editable.** MathJax output and JSME
+chemistry structures carry no source data, so the node stores the rendered markup
+and returns it unchanged. Selecting and deleting it works; editing it does not.
+
+**`legacy` is read once on `RichEditor`.** The mode changes the document schema,
+which ProseMirror cannot swap under a live editor. Re-key the component to switch
+modes.
+
+**Unverified: project-specific classes.** The Froala config was reported to carry
+no custom `imageStyles`, `paragraphStyles` or `inlineClass`, which would mean the
+vendor class list is exhaustive. That could not be confirmed from this
+environment — the GitLab host holding the project is outside the egress policy.
+If custom classes do exist, the compat layer will not cover them, and it will
+show up in production rather than in tests.
+
 ## Bundle size
 
 The editor is not small, and the heavy parts are lazy:
@@ -124,9 +171,14 @@ The editor is not small, and the heavy parts are lazy:
 | Editor + TipTap + Vue | ~615 KB | Always |
 | MathJax SVG output | ~965 KB | First formula renders |
 | MathLive | ~780 KB | Formula dialog first opens |
+| Froala compat CSS | ~10 KB | Only if imported explicitly |
 
 A document with no formulas never loads MathJax or MathLive. `<RichContent />`
 on an exported document loads neither, because the SVG travels with the HTML.
+
+The compat stylesheet is built outside the library bundle, so `styles.css` is
+byte-for-byte the same whether or not legacy support exists. A host that never
+imports `legacy.css` pays nothing for it.
 
 ## Not implemented by design
 

@@ -33,6 +33,7 @@ toolbar, the dialogs and the reactive bindings.
 │  formula/         MathML ⇄ LaTeX · MathJax renderer · templates  │
 │  media/           upload pipeline · MediaRecorder · text files   │
 │  security/        HTML · MathML · SVG sanitizers                 │
+│  legacy/          Froala import · Wiris decoder (opt-in)         │
 │  i18n/            ru (default) + en, flat lower_snake tables     │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -43,10 +44,15 @@ toolbar, the dialogs and the reactive bindings.
 
 ```
 host HTML
+  → upgradeLegacyHtml()            Froala/Wiris markup, only when `legacy`
   → inlineMathMLToFormulaNodes()   raw <math> becomes a formula node
   → sanitizeHtml()                 allowlist, schemes, CSS, event handlers
   → ProseMirror parse              node views mount, formulas render
 ```
+
+Both upgrade steps run **before** sanitization: the MathML they recover has to be
+sanitized itself, and some of the source markup would otherwise be stripped
+before it could be read.
 
 The same path runs for `setHTML()`, for the initial `content`, and for
 `transformPastedHTML`, so there is exactly one way content enters the document.
@@ -85,6 +91,7 @@ toolbar / click on formula
 | Audio recorder | `nodes/audio.ts` + `media/recorder.ts` | `div[data-audio] > audio[controls]` |
 | Text attachment | `nodes/attachment.ts` | `div[data-attachment] > a[download]` |
 | Formula | `nodes/formula.ts` + `formula/*` | `span[data-formula]` (ADR 0004) |
+| Froala compatibility | `legacy/*` + `nodes/legacy-embed.ts` + `legacy.css` | unchanged legacy markup (ADR 0007) |
 
 Every media node exports markup that still works outside the editor: the audio
 block carries a native `<audio controls>`, the attachment a real `<a download>`.
