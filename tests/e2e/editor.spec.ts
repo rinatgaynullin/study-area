@@ -282,3 +282,175 @@ test.describe('responsive layout', () => {
     expect(box!.width).toBeLessThanOrEqual(390);
   });
 });
+
+test.describe('legacy-контент Froala', () => {
+  async function applyLegacySample(page: import('@playwright/test').Page) {
+    await openDemo(page);
+    await page.getByRole('checkbox', { name: 'Legacy-контент (Froala)' }).check();
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page.getByRole('button', { name: 'Legacy-контент Froala' }).click();
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+    await expect(page.locator(`${EDITOR} table`)).toBeVisible();
+  }
+
+  test('формула Wiris становится формулой и не рвёт строку', async ({ page }) => {
+    await applyLegacySample(page);
+
+    // Картинка-заглушка Wiris заменена узлом формулы с восстановленным MathML.
+    await expect(page.locator(`${EDITOR} img.Wirisformula`)).toHaveCount(0);
+    const formula = page.locator(`${EDITOR} .rte-formula`).first();
+    await expect(formula).toBeVisible();
+    expect(await formula.getAttribute('data-mathml')).toContain('mfrac');
+
+    // Текст до и после формулы остался одним абзацем.
+    const paragraph = page.locator(`${EDITOR} p`).filter({ hasText: 'Решите уравнение' });
+    await expect(paragraph).toHaveCount(1);
+    await expect(paragraph).toContainText('при указанных условиях.');
+  });
+
+  test('один базовый токен управляет и новым, и legacy-контентом', async ({ page }) => {
+    await applyLegacySample(page);
+
+    const legacyCell = page.locator(`${EDITOR} table td`).first();
+    const readBorder = () =>
+      legacyCell.evaluate((cell) => getComputedStyle(cell).borderTopColor);
+
+    const before = await readBorder();
+
+    // Правка одного токена на корне темы.
+    await page.evaluate(() => {
+      document
+        .querySelector('.rte-root, .rte-content-root')
+        ?.setAttribute('style', '--rte-color-border: rgb(255, 0, 0)');
+    });
+
+    await expect.poll(readBorder).toBe('rgb(255, 0, 0)');
+    expect(before).not.toBe('rgb(255, 0, 0)');
+  });
+
+  test('compat-стили не применяются с выключенным режимом', async ({ page }) => {
+    await openDemo(page);
+    await expect(page.locator(`${EDITOR}.rte-legacy`)).toHaveCount(0);
+
+    await page.getByRole('checkbox', { name: 'Legacy-контент (Froala)' }).check();
+    await expect(page.locator(`${EDITOR}.rte-legacy`)).toHaveCount(1);
+  });
+});
+
+test.describe('инлайновое оформление', () => {
+  /** Снимает вид абзаца так, как его видит браузер. */
+  async function readComputedLook(page: import('@playwright/test').Page) {
+    return page.locator(`${EDITOR} p`).first().evaluate((paragraph) => {
+      const sized = [...paragraph.querySelectorAll('span')].map(
+        (span) => getComputedStyle(span).fontSize,
+      );
+      return { align: getComputedStyle(paragraph).textAlign, sized };
+    });
+  }
+
+  async function applyInlineSample(page: import('@playwright/test').Page) {
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page.getByRole('button', { name: 'Инлайновое оформление' }).click();
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+    await expect(page.locator('.demo__input-report')).toBeVisible();
+  }
+
+  test('кегль и выравнивание переживают редактор', async ({ page }) => {
+    await openDemo(page);
+    await applyInlineSample(page);
+
+    const look = await readComputedLook(page);
+    expect(look.align).toBe('center');
+    // 72px, 30px и 96px из инлайновых стилей, а не базовый кегль.
+    expect(look.sized).toContain('72px');
+    expect(look.sized).toContain('30px');
+    expect(look.sized).toContain('96px');
+  });
+
+  test('выглядит одинаково с legacy-режимом и без него', async ({ page }) => {
+    await openDemo(page);
+    await applyInlineSample(page);
+    const asNew = await readComputedLook(page);
+
+    await page.getByRole('checkbox', { name: 'Legacy-контент (Froala)' }).check();
+    await applyInlineSample(page);
+    const asLegacy = await readComputedLook(page);
+
+    expect(asLegacy).toEqual(asNew);
+  });
+});
+
+test.describe('compat-стили применяются в браузере', () => {
+  /**
+   * Проверяем вид через computed-стили, а не через пиксельный снимок.
+   * Playwright 1.58 ставит сборку Chromium 1243, а в среде разработки может
+   * стоять другая — baseline, снятый на одной сборке, разойдётся с CI из-за
+   * растеризации шрифтов. Computed-стили от сборки не зависят и проверяют
+   * ровно то, что задаёт compat-слой.
+   */
+  async function openLegacyViewer(page: import('@playwright/test').Page) {
+    await openDemo(page);
+    await page.getByRole('checkbox', { name: 'Legacy-контент (Froala)' }).check();
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page.getByRole('button', { name: 'Legacy-контент Froala' }).click();
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+
+    // Вьюер рендерит исходный HTML без ProseMirror — классы там доживают до
+    // DOM, поэтому compat-стили проверяем именно на нём. Вкладка с экспортом
+    // редактора для этого не годится: схема классы снимает.
+    await page.getByRole('button', { name: 'Вьюер без редактора' }).click();
+    const viewer = page.locator('.demo__preview--raw.rte-legacy');
+    await expect(viewer).toBeVisible();
+    return viewer;
+  }
+
+  const styleOf = (locator: import('@playwright/test').Locator, property: string) =>
+    locator.evaluate(
+      (element, name) => getComputedStyle(element).getPropertyValue(name),
+      property,
+    );
+
+  test('раскладка и оформление картинок', async ({ page }) => {
+    const viewer = await openLegacyViewer(page);
+
+    // fr-dib блочная и по центру, fr-dii в строке — это и есть модель Froala.
+    expect(await styleOf(viewer.locator('img.fr-dib').first(), 'display')).toBe('block');
+    expect(await styleOf(viewer.locator('img.fr-dii').first(), 'display')).toBe('inline-block');
+
+    // Скругление только у fr-rounded: собственное правило редактора скругляло
+    // бы все картинки подряд.
+    expect(await styleOf(viewer.locator('img.fr-rounded'), 'border-radius')).not.toBe('0px');
+    expect(await styleOf(viewer.locator('img.fr-dib').first(), 'border-radius')).toBe('0px');
+
+    expect(await styleOf(viewer.locator('img.fr-bordered'), 'border-top-style')).toBe('solid');
+    expect(await styleOf(viewer.locator('img.fr-shadow'), 'box-shadow')).not.toBe('none');
+  });
+
+  test('таблицы, текстовые классы и подпись', async ({ page }) => {
+    const viewer = await openLegacyViewer(page);
+
+    expect(
+      await styleOf(viewer.locator('table.fr-dashed-borders td').first(), 'border-top-style'),
+    ).toBe('dashed');
+    expect(await styleOf(viewer.locator('td.fr-thick'), 'border-top-width')).toBe('2px');
+    expect(await styleOf(viewer.locator('td.fr-highlighted'), 'border-top-style')).toBe('double');
+
+    expect(await styleOf(viewer.locator('.fr-text-uppercase'), 'text-transform')).toBe('uppercase');
+    expect(await styleOf(viewer.locator('.fr-text-spaced'), 'letter-spacing')).toBe('1px');
+    expect(await styleOf(viewer.locator('.fr-class-transparency'), 'opacity')).toBe('0.5');
+    expect(await styleOf(viewer.locator('.fr-inner'), 'text-align')).toBe('center');
+  });
+
+  test('формулы не разрывают строку', async ({ page }) => {
+    const viewer = await openLegacyViewer(page);
+
+    // Формула Wiris стала узлом и стоит внутри абзаца с текстом.
+    const paragraph = viewer.locator('p').filter({ hasText: 'Решите уравнение' });
+    await expect(paragraph.locator('.rte-formula')).toHaveCount(1);
+    await expect(paragraph).toContainText('при указанных условиях.');
+
+    // Вывод MathJax внутри формулы остаётся инлайновым, несмотря на то что
+    // preflight у хоста мог бы сделать svg блочным.
+    expect(await styleOf(viewer.locator('.rte-formula svg').first(), 'display')).not.toBe('block');
+  });
+});

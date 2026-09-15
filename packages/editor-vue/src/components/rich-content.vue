@@ -22,8 +22,10 @@ const props = withDefaults(
     html?: string;
     /** Scales formulas relative to the surrounding text. */
     formulaScale?: number;
+    /** Разбирать разметку старого редактора (Froala + Wiris). */
+    legacy?: boolean;
   }>(),
-  { html: '', formulaScale: 1 },
+  { html: '', formulaScale: 1, legacy: false },
 );
 
 const emit = defineEmits<{ (event: 'rendered'): void }>();
@@ -32,7 +34,9 @@ const root = ref<HTMLElement | null>(null);
 const mounted = ref(false);
 
 // `prepareIncomingHtml` needs a DOM, so it must not run during SSR.
-const safeHtml = computed(() => (mounted.value ? prepareIncomingHtml(props.html) : ''));
+const safeHtml = computed(() =>
+  mounted.value ? prepareIncomingHtml(props.html, { legacy: props.legacy }) : '',
+);
 
 async function renderPendingFormulas(): Promise<void> {
   const container = root.value;
@@ -83,5 +87,10 @@ defineExpose({ renderPendingFormulas });
 </script>
 
 <template>
-  <div ref="root" class="rte-content-root rte-content" v-html="safeHtml" />
+  <div
+    ref="root"
+    class="rte-content-root rte-content"
+    :class="{ 'rte-legacy': legacy }"
+    v-html="safeHtml"
+  />
 </template>

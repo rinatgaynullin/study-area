@@ -20,6 +20,7 @@
       "import": "./dist/index.js"
     },
     "./styles.css": "./dist/styles.css",
+    "./legacy.css": "./dist/legacy.css",
     "./package.json": "./package.json"
   },
   "scripts": {

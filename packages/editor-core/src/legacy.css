@@ -1,0 +1,285 @@
+/**
+ * Совместимость с разметкой, сохранённой старым редактором (Froala + Wiris).
+ *
+ * Правила написаны с нуля: вендорный CSS Froala прочитан как описание
+ * поведения, но ни одна строка из него не скопирована — Froala проприетарный,
+ * а этот пакет под MIT.
+ *
+ * Подключается отдельно и работает только внутри `.rte-legacy`, который
+ * ставится пропом `legacy`. Хост без старых данных не скачивает этот файл и
+ * не платит за него ничем.
+ *
+ * Значения берутся из тех же токенов `--rte-*`, что и остальной редактор:
+ * правка `--rte-color-border` меняет и новые таблицы, и старые. Собственные
+ * `--rte-legacy-*` заведены только там, где у сущности Froala нет аналога в
+ * новом визуальном языке, и каждая по умолчанию ссылается на базовый токен —
+ * кроме нескольких литералов, помеченных отдельно.
+ */
+
+.rte-content.rte-legacy {
+  /* Боковой зазор вокруг картинки. Литерал: в новом редакторе картинка
+     занимает всю ширину и обтекания не знает, так что аналога нет. */
+  --rte-legacy-image-gap: 5px;
+
+  /* Толщина рамки fr-bordered. Литерал по той же причине; цвет — общий. */
+  --rte-legacy-image-border-width: 5px;
+  --rte-legacy-image-border-color: var(--rte-color-border, #d5d5d5);
+
+  --rte-legacy-image-shadow: var(--rte-shadow, 0 2px 8px rgba(0, 0, 0, 0.15));
+  --rte-legacy-image-radius: var(--rte-radius-lg, 10px);
+
+  --rte-legacy-table-header-bg: var(--rte-color-subtle-bg, #f5f5f5);
+  --rte-legacy-table-border-color: var(--rte-color-border, #d5d5d5);
+  --rte-legacy-table-accent-color: var(--rte-color-danger, #d32f2f);
+  /* Утолщённая граница ячейки. Литерал: градаций толщины в новом языке нет. */
+  --rte-legacy-table-thick-width: 2px;
+
+  --rte-legacy-code-bg: var(--rte-color-code-bg, #f5f5f5);
+  --rte-legacy-code-border-color: var(--rte-color-border, #d5d5d5);
+  --rte-legacy-muted-color: var(--rte-color-muted, #6b6b6b);
+  --rte-legacy-rule-color: var(--rte-color-text, #414141);
+
+  /* Фиксированный жёлтый маркер Froala. Литерал: это не подсветка выделения и
+     не акцент темы, а конкретный цвет, с которым контент сохраняли. */
+  --rte-legacy-marker-bg: #ffff00;
+  /* Литералы: у «полупрозрачного» и «разряженного» текста аналогов нет. */
+  --rte-legacy-transparency-opacity: 0.5;
+  --rte-legacy-text-spacing: 1px;
+}
+
+/*
+ * Снятие конфликтов с собственными правилами редактора.
+ *
+ * `.rte-content img` задаёт `display: block` и скругление — для картинки,
+ * вставленной в новом редакторе, это верно, а для старой разметки нет:
+ * «блочность» там определяет класс, а скругления не было вовсе.
+ */
+.rte-content.rte-legacy img {
+  display: inline-block;
+  border-radius: 0;
+  vertical-align: bottom;
+}
+
+/*
+ * Картинка-формула Wiris, у которой не удалось восстановить MathML. Она стоит
+ * внутри строки текста: `display: block` разорвал бы строку, а `max-width`
+ * сжал бы формулу до нечитаемого.
+ */
+.rte-content.rte-legacy img.Wirisformula,
+.rte-content.rte-legacy img.Wiriscas {
+  display: inline;
+  max-width: none;
+  vertical-align: middle;
+}
+
+/*
+ * Preflight у Tailwind в хост-приложении форсит `svg { display: block }`, что
+ * рвёт строку вокруг вывода MathJax и структурных формул химии.
+ */
+.rte-content.rte-legacy .rte-legacy-embed,
+.rte-content.rte-legacy .formula-rendered {
+  display: inline;
+}
+
+.rte-content.rte-legacy .rte-legacy-embed svg,
+.rte-content.rte-legacy .formula-rendered svg {
+  display: inline;
+  vertical-align: middle;
+}
+
+.rte-content.rte-legacy .formula-chemistry-structure svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Раскладка картинок: fr-dib блочная, fr-dii в строке, fr-fil/fr-fir прижимают. */
+.rte-content.rte-legacy img.fr-dib {
+  display: block;
+  float: none;
+  margin: var(--rte-legacy-image-gap) auto;
+  vertical-align: top;
+}
+
+.rte-content.rte-legacy img.fr-dib.fr-fil {
+  margin-left: 0;
+}
+
+.rte-content.rte-legacy img.fr-dib.fr-fir {
+  margin-right: 0;
+}
+
+.rte-content.rte-legacy img.fr-dii {
+  display: inline-block;
+  float: none;
+  margin-left: var(--rte-legacy-image-gap);
+  margin-right: var(--rte-legacy-image-gap);
+  max-width: calc(100% - 2 * var(--rte-legacy-image-gap));
+}
+
+.rte-content.rte-legacy img.fr-dii.fr-fil {
+  float: left;
+  margin: var(--rte-legacy-image-gap) var(--rte-legacy-image-gap) var(--rte-legacy-image-gap) 0;
+  max-width: calc(100% - var(--rte-legacy-image-gap));
+}
+
+.rte-content.rte-legacy img.fr-dii.fr-fir {
+  float: right;
+  margin: var(--rte-legacy-image-gap) 0 var(--rte-legacy-image-gap) var(--rte-legacy-image-gap);
+  max-width: calc(100% - var(--rte-legacy-image-gap));
+}
+
+/* Оформление картинок. */
+.rte-content.rte-legacy img.fr-rounded,
+.rte-content.rte-legacy .fr-img-caption.fr-rounded img {
+  border-radius: var(--rte-legacy-image-radius);
+}
+
+.rte-content.rte-legacy img.fr-bordered,
+.rte-content.rte-legacy .fr-img-caption.fr-bordered img {
+  border: solid var(--rte-legacy-image-border-width) var(--rte-legacy-image-border-color);
+}
+
+.rte-content.rte-legacy img.fr-bordered {
+  box-sizing: content-box;
+}
+
+.rte-content.rte-legacy .fr-img-caption.fr-bordered img {
+  box-sizing: border-box;
+}
+
+.rte-content.rte-legacy img.fr-shadow,
+.rte-content.rte-legacy .fr-img-caption.fr-shadow img {
+  box-shadow: var(--rte-legacy-image-shadow);
+}
+
+/* Картинка с подписью: обёртка по центру, подпись под ней. */
+.rte-content.rte-legacy .fr-img-caption {
+  max-width: 100%;
+}
+
+.rte-content.rte-legacy .fr-img-caption.fr-dib {
+  display: block;
+  margin: var(--rte-legacy-image-gap) auto;
+  text-align: center;
+}
+
+.rte-content.rte-legacy .fr-img-caption.fr-dii {
+  display: inline-block;
+  margin-left: var(--rte-legacy-image-gap);
+  margin-right: var(--rte-legacy-image-gap);
+}
+
+.rte-content.rte-legacy .fr-img-wrap {
+  margin: auto;
+  padding: 0;
+  width: 100%;
+  text-align: center;
+}
+
+.rte-content.rte-legacy .fr-inner {
+  display: block;
+  margin-top: calc(var(--rte-legacy-image-gap) / 2);
+  color: var(--rte-legacy-muted-color);
+  font-size: 0.9em;
+  text-align: center;
+}
+
+/* Таблицы: те же цвета, что и у таблиц нового редактора. */
+.rte-content.rte-legacy table td,
+.rte-content.rte-legacy table th {
+  border: 1px solid var(--rte-legacy-table-border-color);
+}
+
+.rte-content.rte-legacy table th,
+.rte-content.rte-legacy table tfoot td {
+  background: var(--rte-legacy-table-header-bg);
+}
+
+.rte-content.rte-legacy table.fr-dashed-borders td,
+.rte-content.rte-legacy table.fr-dashed-borders th {
+  border-style: dashed;
+}
+
+.rte-content.rte-legacy table.fr-alternate-rows tbody tr:nth-child(2n) {
+  background: var(--rte-legacy-table-header-bg);
+}
+
+.rte-content.rte-legacy table td.fr-highlighted,
+.rte-content.rte-legacy table th.fr-highlighted {
+  border: 1px double var(--rte-legacy-table-accent-color);
+}
+
+.rte-content.rte-legacy table td.fr-thick,
+.rte-content.rte-legacy table th.fr-thick {
+  border-width: var(--rte-legacy-table-thick-width);
+}
+
+/* Оформление текста. */
+.rte-content.rte-legacy .fr-text-gray {
+  color: var(--rte-legacy-muted-color);
+}
+
+.rte-content.rte-legacy .fr-text-bordered {
+  border-top: solid 1px var(--rte-legacy-rule-color);
+  border-bottom: solid 1px var(--rte-legacy-rule-color);
+  padding: var(--rte-block-gap, 0.75em) 0;
+}
+
+.rte-content.rte-legacy .fr-text-spaced {
+  letter-spacing: var(--rte-legacy-text-spacing);
+}
+
+.rte-content.rte-legacy .fr-text-uppercase {
+  text-transform: uppercase;
+}
+
+.rte-content.rte-legacy .fr-class-highlighted {
+  background-color: var(--rte-legacy-marker-bg);
+}
+
+.rte-content.rte-legacy .fr-class-transparency {
+  opacity: var(--rte-legacy-transparency-opacity);
+}
+
+.rte-content.rte-legacy .fr-class-code {
+  background: var(--rte-legacy-code-bg);
+  border: 1px solid var(--rte-legacy-code-border-color);
+  border-radius: var(--rte-radius-sm, 2px);
+  font-family: var(--rte-font-mono, monospace);
+  padding: 0.1em 0.3em;
+}
+
+/* Ссылки: скрепка у файла и два вендорных варианта оформления. */
+.rte-content.rte-legacy a.fr-file::after {
+  content: '\1F4CE';
+  font-weight: normal;
+  margin-left: 0.25em;
+}
+
+.rte-content.rte-legacy a.fr-strong {
+  font-weight: 700;
+}
+
+.rte-content.rte-legacy a.fr-green {
+  color: var(--rte-color-primary, #1976d2);
+}
+
+/* Служебные классы раскладки. */
+.rte-content.rte-legacy .fr-clearfix::after {
+  clear: both;
+  display: block;
+  content: '';
+  height: 0;
+}
+
+.rte-content.rte-legacy .fr-hide-by-clipping {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

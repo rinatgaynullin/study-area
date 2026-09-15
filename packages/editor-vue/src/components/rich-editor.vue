@@ -38,6 +38,14 @@ const props = withDefaults(
     placeholder?: string;
     /** Scales MathJax output relative to the surrounding text. */
     formulaScale?: number;
+    /**
+     * Разбирать разметку старого редактора (Froala + Wiris).
+     *
+     * Читается один раз при создании: режим меняет схему документа, а её
+     * нельзя переключить у живого редактора. Чтобы сменить режим на лету,
+     * пересоздайте компонент через `:key`.
+     */
+    legacy?: boolean;
     /** Passed to `MathfieldElement.fontsDirectory`. */
     mathliveFontsDirectory?: string | null;
     minHeight?: string;
@@ -48,6 +56,7 @@ const props = withDefaults(
     editable: true,
     toolbar: 'full',
     formulaScale: 1,
+    legacy: false,
     mathliveFontsDirectory: null,
     minHeight: '220px',
   },
@@ -99,6 +108,7 @@ onMounted(() => {
     limits: props.limits,
     placeholder: props.placeholder,
     formulaScale: props.formulaScale,
+    legacy: props.legacy,
     uploadImage: props.uploadImage,
     uploadAudio: props.uploadAudio,
     uploadFile: props.uploadFile,

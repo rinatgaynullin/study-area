@@ -20,8 +20,9 @@ const locale = ref<'ru' | 'en'>('ru');
 const uploadMode = ref<UploadMode>('local');
 const editable = ref(true);
 const mobilePreview = ref(false);
+const isLegacyEnabled = ref(false);
 const toolbarPreset = ref<'full' | 'standard' | 'minimal'>('full');
-const outputTab = ref<'preview' | 'source' | 'input'>('preview');
+const outputTab = ref<'preview' | 'source' | 'input' | 'raw'>('preview');
 const log = ref<string[]>([]);
 
 const draftHtml = ref('');
@@ -211,6 +212,11 @@ async function reloadSample(): Promise<void> {
         Мобильный viewport (390px)
       </label>
 
+      <label class="demo__check">
+        <input v-model="isLegacyEnabled" type="checkbox" />
+        Legacy-контент (Froala)
+      </label>
+
       <button type="button" @click="reloadSample">Пример</button>
       <button type="button" @click="clearContent">Очистить</button>
     </section>
@@ -225,11 +231,13 @@ async function reloadSample(): Promise<void> {
       <RichEditor
         v-if="ready"
         ref="editorRef"
+        :key="isLegacyEnabled ? 'legacy' : 'default'"
         v-model="html"
         :locale="locale"
         :messages="messages"
         :limits="limits"
         :editable="editable"
+        :legacy="isLegacyEnabled"
         :toolbar="toolbarPreset"
         :upload-image="adapters.uploadImage"
         :upload-audio="adapters.uploadAudio"
@@ -263,13 +271,35 @@ async function reloadSample(): Promise<void> {
         >
           Вставить HTML
         </button>
+        <button
+          type="button"
+          :class="{ 'demo__tab--active': outputTab === 'raw' }"
+          @click="outputTab = 'raw'"
+        >
+          Вьюер без редактора
+        </button>
       </div>
 
       <!-- Read-only viewer: no toolbar, no ProseMirror, no MathLive. Formulas
            exported by the editor already carry their SVG, so nothing extra
            loads; MathML-only formulas are rendered on the fly. -->
-      <RichContent v-if="outputTab === 'preview'" class="demo__preview" :html="html" />
+      <RichContent
+        v-if="outputTab === 'preview'"
+        class="demo__preview"
+        :html="html"
+        :legacy="isLegacyEnabled"
+      />
       <pre v-else-if="outputTab === 'source'" class="demo__source">{{ html }}</pre>
+
+      <!-- Исходный HTML прямо во вьюере, минуя схему редактора. Это тот путь,
+           которым продакшен показывает legacy-контент: классы доживают до DOM,
+           и его оформляет compat-слой. -->
+      <RichContent
+        v-else-if="outputTab === 'raw'"
+        class="demo__preview demo__preview--raw"
+        :html="draftHtml || html"
+        :legacy="isLegacyEnabled"
+      />
 
       <div v-else class="demo__input">
         <p class="demo__input-lead">

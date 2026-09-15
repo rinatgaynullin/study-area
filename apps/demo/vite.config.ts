@@ -15,6 +15,14 @@ export default defineConfig({
     // build. Subpath entries come first: alias matching is order-sensitive.
     alias: [
       {
+        find: '@rich-editor/vue/legacy.css',
+        replacement: fromRoot('../../packages/editor-core/src/legacy.css'),
+      },
+      {
+        find: '@rich-editor/core/legacy.css',
+        replacement: fromRoot('../../packages/editor-core/src/legacy.css'),
+      },
+      {
         find: '@rich-editor/vue/styles.css',
         replacement: fromRoot('../../packages/editor-vue/src/styles/index.css'),
       },

@@ -9,6 +9,10 @@ export interface HtmlSample {
   html: string;
 }
 
+/** Пустой GIF: в образцах важна разметка вокруг картинки, а не она сама. */
+const PIXEL =
+  'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
 export const HTML_SAMPLES: HtmlSample[] = [
   {
     id: 'mathml',
@@ -24,6 +28,26 @@ export const HTML_SAMPLES: HtmlSample[] = [
     label: 'Система уравнений',
     hint: 'Фигурная скобка (<mfenced>), таблица строк и корень внутри — сложный MathML из стороннего редактора.',
     html: `<p>При каких значениях параметра а система уравнений</p><p><math xmlns="http://www.w3.org/1998/Math/MathML"><mfenced close="" open="{"><mtable columnalign="left"><mtr><mtd><mo>(</mo><mi>x</mi><msup><mi>y</mi><mn>2</mn></msup><mo>-</mo><mn>3</mn><mi>x</mi><mi>y</mi><mo>-</mo><mn>3</mn><mi>y</mi><mo>+</mo><mn>9</mn><mo>)</mo><msqrt><mn>3</mn><mo>-</mo><mi>x</mi></msqrt><mo>=</mo><mn>0</mn></mtd></mtr><mtr><mtd><mi>y</mi><mo>=</mo><mi>a</mi><mi>x</mi></mtd></mtr></mtable></mfenced></math></p><p>имеет ровно три различных решения?</p>`,
+  },
+  {
+    id: 'froala',
+    label: 'Legacy-контент Froala',
+    hint: 'Разметка старого редактора: формула Wiris, картинки с выравниванием, таблица, файл, подсветка. Требует включённого режима legacy.',
+    html: `<p>Решите уравнение <img class="Wirisformula" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-mathml="&amp;lt;math xmlns=&amp;quot;http://www.w3.org/1998/Math/MathML&amp;quot;&amp;gt;&amp;lt;mfrac&amp;gt;&amp;lt;mrow&amp;gt;&amp;lt;mi&amp;gt;x&amp;lt;/mi&amp;gt;&amp;lt;mo&amp;gt;+&amp;lt;/mo&amp;gt;&amp;lt;mn&amp;gt;1&amp;lt;/mn&amp;gt;&amp;lt;/mrow&amp;gt;&amp;lt;msqrt&amp;gt;&amp;lt;mn&amp;gt;2&amp;lt;/mn&amp;gt;&amp;lt;/msqrt&amp;gt;&amp;lt;/mfrac&amp;gt;&amp;lt;/math&amp;gt;"> при указанных условиях.</p>
+<p class="fr-text-gray">Серый пояснительный текст, <span class="fr-text-spaced">с разрядкой</span> и <span class="fr-text-uppercase">капсом</span>.</p>
+<p><span class="fr-class-highlighted">Маркер Froala</span> и <span style="background-color: #B6F0C8;">подсветка инлайновым стилем</span>.</p>
+<p><span class="fr-class-code">inline code</span>, <span class="fr-class-transparency">полупрозрачный текст</span>.</p>
+<table class="fr-dashed-borders"><thead><tr><th>Величина</th><th>Значение</th></tr></thead><tbody><tr><td>Ускорение</td><td class="fr-highlighted">9.81</td></tr><tr><td>Масса</td><td class="fr-thick">2 кг</td></tr></tbody></table>
+<p><a href="theory.pdf" class="fr-file">Теория.pdf</a> и <a href="https://example.com" class="fr-green fr-strong">ссылка Froala</a>.</p>
+<p class="fr-text-bordered">Абзац в рамке сверху и снизу.</p>
+<p><img class="fr-dib" src="${PIXEL}" alt="по центру"> <img class="fr-dii fr-rounded" src="${PIXEL}" alt="скруглённая"> <img class="fr-dii fr-bordered" src="${PIXEL}" alt="в рамке"> <img class="fr-dii fr-shadow" src="${PIXEL}" alt="с тенью"></p>
+<span class="fr-img-caption fr-dib" style="width: 120px;"><span class="fr-img-wrap"><img src="${PIXEL}" alt="схема"><span class="fr-inner">Рис. 1. Подпись</span></span></span>`,
+  },
+  {
+    id: 'inline-styles',
+    label: 'Инлайновое оформление',
+    hint: 'Кегль, выравнивание, вложенные марки и сущности. Должно выглядеть одинаково с включённым legacy и без него.',
+    html: `<p style="text-align: center;"><strong><span style="font-size: 72px;">1321321<s>321</s><u>131&reg;&AElig;</u></span></strong><br><strong><span style="font-size: 30px;"><em><sup>121</sup>1321231<sup>1232131</sup></em></span></strong><br><br><br><span style="font-size: 96px;"><sup>132132131</sup></span></p>`,
   },
   {
     id: 'hostile',

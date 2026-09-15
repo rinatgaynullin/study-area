@@ -13,7 +13,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w @rich-editor/core && npm run build -w @rich-editor/vue",
+    "build": "npm run build -w @rich-editor/core && npm run build -w @rich-editor/vue && node scripts/copy-legacy-css.mjs",
     "build:demo": "npm run build -w @rich-editor/demo",
     "dev": "npm run dev -w @rich-editor/demo",
     "typecheck": "npm run typecheck -w @rich-editor/core && npm run typecheck -w @rich-editor/vue && npm run typecheck -w @rich-editor/demo",

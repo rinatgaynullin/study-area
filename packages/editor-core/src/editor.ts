@@ -6,7 +6,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import TextAlign from '@tiptap/extension-text-align';
 import { TableKit } from '@tiptap/extension-table';
-import { Color, TextStyle } from '@tiptap/extension-text-style';
+import { Color, FontSize } from '@tiptap/extension-text-style';
 import { Placeholder } from '@tiptap/extensions';
 
 import {
@@ -24,11 +24,15 @@ import {
 import { createI18n, type I18n } from './i18n';
 import { sanitizeHtml } from './security/sanitize';
 import { inlineMathMLToFormulaNodes } from './formula/import';
+import { StrictTextStyle } from './extensions/strict-text-style';
+import { LegacyHighlight } from './legacy/legacy-highlight';
+import { upgradeLegacyHtml } from './legacy/upgrade-legacy-html';
 import { whenFormulasReady } from './formula/mathjax';
 import { normalizeMathML } from './formula/mathml';
 import { AttachmentNode } from './nodes/attachment';
 import { AudioNode } from './nodes/audio';
 import { FormulaNode } from './nodes/formula';
+import { LegacyEmbedNode } from './nodes/legacy-embed';
 import { UploadPipeline, isImageFile, isTextFile } from './media/upload';
 import { readTextFile, textToParagraphs } from './media/text-file';
 
@@ -36,9 +40,20 @@ import { readTextFile, textToParagraphs } from './media/text-file';
 // который по соглашению содержит только реэкспорты.
 import './styles.css';
 
+export interface PrepareIncomingHtmlOptions {
+  /** Разбирать разметку старого редактора (Froala + Wiris). */
+  legacy?: boolean;
+}
+
 /** Sanitizes and upgrades HTML arriving from outside the editor. */
-export function prepareIncomingHtml(html: string): string {
-  return sanitizeHtml(inlineMathMLToFormulaNodes(html));
+export function prepareIncomingHtml(
+  html: string,
+  options: PrepareIncomingHtmlOptions = {},
+): string {
+  // Legacy-разбор идёт первым: он восстанавливает MathML из `data-mathml`, а
+  // дальше формула проходит общий путь `<math>` вместе с остальными.
+  const upgraded = options.legacy ? upgradeLegacyHtml(html) : html;
+  return sanitizeHtml(inlineMathMLToFormulaNodes(upgraded));
 }
 
 export class RichEditorCore {
@@ -67,18 +82,18 @@ export class RichEditorCore {
 
     this.editor = new Editor({
       element: options.element,
-      content: options.content ? prepareIncomingHtml(options.content) : '',
+      content: options.content ? prepareIncomingHtml(options.content, { legacy: options.legacy }) : '',
       editable: options.editable ?? true,
       extensions: this.buildExtensions(),
       editorProps: {
         attributes: {
-          class: 'rte-content',
+          class: options.legacy ? 'rte-content rte-legacy' : 'rte-content',
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': this.i18n.t('editor_aria_label'),
         },
         // Every externally authored fragment goes through the sanitizer.
-        transformPastedHTML: (html) => prepareIncomingHtml(html),
+        transformPastedHTML: (html) => prepareIncomingHtml(html, { legacy: this.options.legacy }),
         handlePaste: (_view, event) => this.insertFiles(event.clipboardData?.files),
         handleDrop: (view, event, _slice, moved) => {
           if (moved) return false;
@@ -110,16 +125,30 @@ export class RichEditorCore {
         },
         codeBlock: { HTMLAttributes: { class: 'rte-code-block' } },
       }),
-      TextStyle,
+      StrictTextStyle,
       Color,
-      Highlight.configure({ multicolor: true }),
+      // Размер шрифта из инлайнового стиля. Без него разметка старого
+      // редактора теряет кегль: текст в 72px отрисовывается базовым.
+      // Не привязано к legacy-режиму намеренно — иначе один документ выглядел
+      // бы по-разному в зависимости от флага.
+      FontSize,
+      // В legacy-режиме подсветка приходит инлайновым стилем, а не <mark>.
+      (this.options.legacy ? LegacyHighlight : Highlight).configure({ multicolor: true }),
       Subscript,
       Superscript,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TableKit.configure({
         table: { resizable: true, HTMLAttributes: { class: 'rte-table' } },
       }),
-      Image.configure({ inline: false, allowBase64: true, HTMLAttributes: { class: 'rte-image' } }),
+      Image.configure({
+        // В разметке Froala картинка всегда лежит внутри абзаца, а блочный вид
+        // ей задаёт класс (fr-dib). Блочный узел разорвал бы такой абзац на
+        // два, поэтому в legacy-режиме картинка инлайновая, а «блочность»
+        // остаётся вопросом стилей.
+        inline: this.options.legacy ?? false,
+        allowBase64: true,
+        HTMLAttributes: { class: 'rte-image' },
+      }),
       Placeholder.configure({
         placeholder: this.options.placeholder ?? t('editor_placeholder'),
       }),
@@ -129,6 +158,9 @@ export class RichEditorCore {
       }),
       AudioNode.configure({ t }),
       AttachmentNode.configure({ t }),
+      // Узел нужен только там, где включён legacy-режим: иначе он просто
+      // расширяет схему тем, что никогда не встретится.
+      ...(this.options.legacy ? [LegacyEmbedNode] : []),
       ...((this.options.extensions ?? []) as Extensions),
     ];
   }
@@ -148,7 +180,7 @@ export class RichEditorCore {
   }
 
   setHTML(html: string, options: { emitUpdate?: boolean } = {}): void {
-    this.editor.commands.setContent(prepareIncomingHtml(html), {
+    this.editor.commands.setContent(prepareIncomingHtml(html, { legacy: this.options.legacy }), {
       emitUpdate: options.emitUpdate ?? false,
     });
   }
