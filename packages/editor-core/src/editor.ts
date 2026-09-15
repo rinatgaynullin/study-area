@@ -6,7 +6,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import TextAlign from '@tiptap/extension-text-align';
 import { TableKit } from '@tiptap/extension-table';
-import { Color, TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-text-style';
 import { Placeholder } from '@tiptap/extensions';
 
 import {
@@ -24,6 +24,7 @@ import {
 import { createI18n, type I18n } from './i18n';
 import { sanitizeHtml } from './security/sanitize';
 import { inlineMathMLToFormulaNodes } from './formula/import';
+import { TextStyleWithFontSize } from './extensions/text-style-with-font-size';
 import { LegacyHighlight } from './legacy/legacy-highlight';
 import { upgradeLegacyHtml } from './legacy/upgrade-legacy-html';
 import { whenFormulasReady } from './formula/mathjax';
@@ -86,7 +87,7 @@ export class RichEditorCore {
       extensions: this.buildExtensions(),
       editorProps: {
         attributes: {
-          class: 'rte-content',
+          class: options.legacy ? 'rte-content rte-legacy' : 'rte-content',
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': this.i18n.t('editor_aria_label'),
@@ -124,7 +125,7 @@ export class RichEditorCore {
         },
         codeBlock: { HTMLAttributes: { class: 'rte-code-block' } },
       }),
-      TextStyle,
+      TextStyleWithFontSize,
       Color,
       // В legacy-режиме подсветка приходит инлайновым стилем, а не <mark>.
       (this.options.legacy ? LegacyHighlight : Highlight).configure({ multicolor: true }),

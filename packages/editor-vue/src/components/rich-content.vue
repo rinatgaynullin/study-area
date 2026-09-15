@@ -87,5 +87,10 @@ defineExpose({ renderPendingFormulas });
 </script>
 
 <template>
-  <div ref="root" class="rte-content-root rte-content" v-html="safeHtml" />
+  <div
+    ref="root"
+    class="rte-content-root rte-content"
+    :class="{ 'rte-legacy': legacy }"
+    v-html="safeHtml"
+  />
 </template>

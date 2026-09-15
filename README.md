@@ -347,11 +347,54 @@ Override CSS variables — globally, per instance, or per theme:
 | Shape & type | `--rte-radius-sm`, `--rte-radius`, `--rte-radius-lg`, `--rte-font-family`, `--rte-font-mono`, `--rte-font-size`, `--rte-line-height`, `--rte-content-padding`, `--rte-block-gap`, `--rte-shadow`, `--rte-z-modal` |
 | Media | `--rte-audio-max-width`, `--rte-audio-padding`, `--rte-formula-padding` |
 
+### Legacy content (Froala)
+
+Content saved by a Froala-based editor renders through an opt-in compatibility
+layer. It is a separate stylesheet, so a host without legacy data never
+downloads it:
+
+```ts
+import '@rich-editor/vue/legacy.css';
+```
+
+```vue
+<RichContent :html="html" legacy />
+<RichEditor v-model="html" legacy />
+```
+
+`legacy` on `RichEditor` is read once, at construction: the mode changes the
+document schema, which cannot be swapped on a live editor. Re-key the component
+to switch modes.
+
+Compat rules resolve through the same tokens as everything else — changing
+`--rte-color-border` restyles new and legacy tables alike. The variables below
+exist only where a Froala construct has no counterpart in the new visual
+language; each defaults to a base token unless noted.
+
+| Variable | Default |
+| --- | --- |
+| `--rte-legacy-image-gap` | `5px` — literal; the new editor has no image gutter |
+| `--rte-legacy-image-border-width` | `5px` — literal, same reason |
+| `--rte-legacy-image-border-color` | `var(--rte-color-border)` |
+| `--rte-legacy-image-shadow` | `var(--rte-shadow)` |
+| `--rte-legacy-image-radius` | `var(--rte-radius-lg)` |
+| `--rte-legacy-table-header-bg` | `var(--rte-color-subtle-bg)` |
+| `--rte-legacy-table-border-color` | `var(--rte-color-border)` |
+| `--rte-legacy-table-accent-color` | `var(--rte-color-danger)` |
+| `--rte-legacy-table-thick-width` | `2px` — literal; no border-weight scale exists |
+| `--rte-legacy-code-bg` | `var(--rte-color-code-bg)` |
+| `--rte-legacy-code-border-color` | `var(--rte-color-border)` |
+| `--rte-legacy-muted-color` | `var(--rte-color-muted)` |
+| `--rte-legacy-rule-color` | `var(--rte-color-text)` |
+| `--rte-legacy-marker-bg` | `#ffff00` — literal; Froala's fixed marker colour |
+| `--rte-legacy-transparency-opacity` | `0.5` — literal; no counterpart |
+| `--rte-legacy-text-spacing` | `1px` — literal; no counterpart |
+
 Stable class hooks for anything variables cannot reach: `.rte-root`,
 `.rte-content-root`, `.rte-toolbar`, `.rte-toolbar__group`, `.rte-btn`,
 `.rte-btn--active`, `.rte-dropdown__panel`, `.rte-menu__item`,
 `.rte-modal__panel`, `.rte-content`, `.rte-formula`, `.rte-audio`,
-`.rte-attachment`.
+`.rte-attachment`, `.rte-legacy`, `.rte-legacy-embed`.
 
 ## Nuxt / SSR
 

@@ -137,3 +137,50 @@ describe('legacy-режим выключен по умолчанию', () => {
     expect(mount(MATHJAX_OUTPUT, false).getHTML()).not.toContain('data-legacy-embed');
   });
 });
+
+/**
+ * Реальный фрагмент из старого редактора: выравнивание, вложенные марки,
+ * HTML-сущности, переносы и крупный кегль инлайновым стилем.
+ *
+ * Требование — одинаковый вид независимо от того, пришла разметка из Froala
+ * или была набрана в новом редакторе. Проверяем это самым прямым способом:
+ * прогоняем один и тот же HTML обоими путями и сверяем результат.
+ */
+const MIXED_INLINE_STYLES =
+  '<p style="text-align: center;"><strong><span style="font-size: 72px;">1321321' +
+  '<s>321</s><u>131&reg;&AElig;</u></span></strong><br><strong>' +
+  '<span style="font-size: 30px;"><em><sup>121</sup>1321231<sup>1232131</sup></em></span>' +
+  '</strong><br><br><br><span style="font-size: 96px;"><sup>132132131</sup></span></p>';
+
+describe('смешанное инлайновое оформление', () => {
+  it('выглядит одинаково в legacy-режиме и без него', () => {
+    const asLegacy = mount(MIXED_INLINE_STYLES).getHTML();
+    core?.destroy();
+    element?.remove();
+    const asNew = mount(MIXED_INLINE_STYLES, false).getHTML();
+
+    expect(asLegacy).toBe(asNew);
+  });
+
+  it('сохраняет размер шрифта, заданный инлайновым стилем', () => {
+    const html = mount(MIXED_INLINE_STYLES).getHTML();
+
+    expect(html).toContain('font-size: 72px');
+    expect(html).toContain('font-size: 30px');
+    expect(html).toContain('font-size: 96px');
+  });
+
+  it('сохраняет выравнивание, марки и сущности', () => {
+    const html = mount(MIXED_INLINE_STYLES).getHTML();
+
+    expect(html).toContain('text-align: center');
+    expect(html).toContain('<strong>');
+    expect(html).toContain('<s>');
+    expect(html).toContain('<u>');
+    expect(html).toContain('<em>');
+    expect(html).toContain('<sup>');
+    // &reg; и &AElig; разворачиваются в сами символы.
+    expect(html).toContain('®');
+    expect(html).toContain('Æ');
+  });
+});
