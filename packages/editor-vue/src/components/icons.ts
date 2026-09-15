@@ -67,6 +67,7 @@ export const ICONS: Record<string, string> = {
   chevronDown: `<polyline points="6,9 12,15 18,9" ${S} />`,
   close: `<line x1="6" y1="6" x2="18" y2="18" ${S} /><line x1="18" y1="6" x2="6" y2="18" ${S} />`,
   check: `<polyline points="5,13 10,18 19,6" ${S} />`,
+  openLink: `<path d="M14 4h6v6" ${S} /><path d="M20 4l-9 9" ${S} /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" ${S} />`,
   trash: `<polyline points="4,7 20,7" ${S} /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" ${S} /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" ${S} />`,
 
   play: `<path d="M8 5l11 7-11 7z" fill="currentColor" stroke="none" />`,

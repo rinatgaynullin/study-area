@@ -454,3 +454,150 @@ test.describe('compat-стили применяются в браузере', ()
     expect(await styleOf(viewer.locator('.rte-formula svg').first(), 'display')).not.toBe('block');
   });
 });
+
+test.describe('изменение размера картинки', () => {
+  const IMAGE = `${EDITOR} img`;
+
+  async function insertImage(page: Page): Promise<void> {
+    await openDemo(page);
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page
+      .locator('.demo__textarea')
+      .fill('<p><img src="https://placehold.co/400x300/png" width="400" height="300"></p>');
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+    await expect(page.locator(IMAGE)).toBeVisible();
+    // На узком экране картинка уходит под сгиб, и координаты ручки оказываются
+    // за пределами вьюпорта — живой пользователь тоже сперва доскроллит.
+    await page.locator(IMAGE).first().scrollIntoViewIfNeeded();
+  }
+
+  test('показывает ручки по всем четырём углам', async ({ page }) => {
+    await insertImage(page);
+
+    const handles = page.locator(`${EDITOR} [data-resize-handle]`);
+    await expect(handles).toHaveCount(4);
+    expect(await handles.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-resize-handle')).sort(),
+    )).toEqual(['bottom-left', 'bottom-right', 'top-left', 'top-right']);
+  });
+
+  test('перетаскивание меняет размер и сохраняет пропорции', async ({ page }) => {
+    await insertImage(page);
+
+    const image = page.locator(IMAGE).first();
+    const before = await image.boundingBox();
+    expect(before).not.toBeNull();
+
+    const handle = page.locator(`${EDITOR} [data-resize-handle="bottom-right"]`);
+    const grip = await handle.boundingBox();
+    expect(grip).not.toBeNull();
+
+    await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip!.x - 120, grip!.y - 90, { steps: 12 });
+    await page.mouse.up();
+
+    await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBeLessThan(
+      Math.round(before!.width),
+    );
+
+    const after = (await image.boundingBox())!;
+    // Исходное отношение 4:3 должно сохраниться — допуск на округление пикселей.
+    expect(Math.abs(after.width / after.height - before!.width / before!.height)).toBeLessThan(0.05);
+  });
+
+  test('новый размер попадает в экспортированный HTML', async ({ page }) => {
+    await insertImage(page);
+
+    const handle = page.locator(`${EDITOR} [data-resize-handle="bottom-right"]`);
+    const grip = (await handle.boundingBox())!;
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x - 120, grip.y - 90, { steps: 12 });
+    await page.mouse.up();
+
+    await page.getByRole('button', { name: 'Исходник' }).click();
+    const source = await page.locator('.demo__source').innerText();
+    const tag = /<img[^>]*>/.exec(source)?.[0] ?? '';
+
+    expect(tag).toContain('width="');
+    // Картинка уменьшилась, значит в разметке уже не исходные 400.
+    expect(tag).not.toContain('width="400"');
+  });
+});
+
+test.describe('поповер ссылки', () => {
+  const POPOVER = '.rte-link-popover';
+
+  async function insertLink(page: Page): Promise<void> {
+    await openDemo(page);
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page
+      .locator('.demo__textarea')
+      .fill('<p>Смотри <a href="https://example.com">эту ссылку</a> внимательно.</p>');
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+    await expect(page.locator(`${EDITOR} a`)).toBeVisible();
+  }
+
+  test('появляется по курсору внутри ссылки и не раньше', async ({ page }) => {
+    await insertLink(page);
+    await expect(page.locator(POPOVER)).toHaveCount(0);
+
+    await page.locator(`${EDITOR} a`).first().click();
+    await expect(page.locator(POPOVER)).toBeVisible();
+
+    // Адрес и подпись подставлены из самой ссылки.
+    const inputs = page.locator(`${POPOVER} input`);
+    await expect(inputs.nth(0)).toHaveValue('https://example.com');
+    await expect(inputs.nth(1)).toHaveValue('эту ссылку');
+  });
+
+  test('меняет подпись, заменяя её, а не дублируя', async ({ page }) => {
+    await insertLink(page);
+    await page.locator(`${EDITOR} a`).first().click();
+    await expect(page.locator(POPOVER)).toBeVisible();
+
+    await page.locator(`${POPOVER} input`).nth(1).fill('новая подпись');
+    await page.locator(POPOVER).getByRole('button', { name: 'Применить' }).click();
+
+    await expect(page.locator(`${EDITOR} a`)).toHaveText('новая подпись');
+    // Старый текст не остался рядом с новым.
+    await expect(page.locator(`${EDITOR} p`).first()).toHaveText(
+      'Смотри новая подпись внимательно.',
+    );
+  });
+
+  test('меняет адрес и оформление', async ({ page }) => {
+    await insertLink(page);
+    await page.locator(`${EDITOR} a`).first().click();
+    await expect(page.locator(POPOVER)).toBeVisible();
+
+    await page.locator(`${POPOVER} input`).nth(0).fill('https://umschool.net');
+    await page.locator(`${POPOVER} select`).selectOption('rte-link--strong');
+    await page.locator(POPOVER).getByRole('button', { name: 'Применить' }).click();
+
+    const link = page.locator(`${EDITOR} a`).first();
+    await expect(link).toHaveAttribute('href', 'https://umschool.net');
+    await expect(link).toHaveClass(/rte-link--strong/);
+  });
+
+  test('удаляет ссылку, оставляя текст', async ({ page }) => {
+    await insertLink(page);
+    await page.locator(`${EDITOR} a`).first().click();
+    await expect(page.locator(POPOVER)).toBeVisible();
+
+    await page.locator(`${POPOVER} button[title="Удалить ссылку"]`).click();
+
+    await expect(page.locator(`${EDITOR} a`)).toHaveCount(0);
+    await expect(page.locator(`${EDITOR} p`).first()).toContainText('эту ссылку');
+  });
+
+  test('закрывается по Escape', async ({ page }) => {
+    await insertLink(page);
+    await page.locator(`${EDITOR} a`).first().click();
+    await expect(page.locator(POPOVER)).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator(POPOVER)).toHaveCount(0);
+  });
+});
