@@ -5,6 +5,10 @@ import { defineConfig } from 'vite';
 const fromRoot = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
+  // GitHub Pages serves a project site from a subpath, so the built asset URLs
+  // need that prefix. Unset everywhere else, which keeps `npm run dev` and the
+  // Playwright suite on `/`.
+  base: process.env.DEMO_BASE || '/',
   plugins: [vue()],
   resolve: {
     // The demo runs against package sources so changes hot-reload without a

@@ -413,6 +413,21 @@ npm run build        # build both packages
 npm run ci           # typecheck + test + build
 ```
 
+CI runs typecheck, the tests and both Playwright projects on every pull request
+(`.github/workflows/ci.yml`).
+
+### Publishing the demo
+
+`.github/workflows/pages.yml` builds `apps/demo` and publishes it to GitHub
+Pages on every push to `main`, or on demand through *Run workflow*. Two
+prerequisites: **Settings → Pages → Source: GitHub Actions**, and — for a
+private repository — a plan that includes Pages (Pro, Team or Enterprise).
+Note that a published Pages site is publicly reachable.
+
+A project site is served from `/<repo>/`, so the workflow passes that prefix to
+the build as `DEMO_BASE`, which the demo's Vite config maps to `base`. It is
+unset locally, which keeps `npm run dev` and the Playwright suite on `/`.
+
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — package split, data flow, plugin boundaries
