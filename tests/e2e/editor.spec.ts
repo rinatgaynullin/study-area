@@ -148,6 +148,42 @@ test.describe('formula editing', () => {
     await expect(page.locator(FORMULA)).toHaveCount(4);
   });
 
+  test('keeps the virtual keyboard out and puts the menu in Russian', async ({ page }) => {
+    await openDemo(page);
+
+    await page.locator(FORMULA).first().click();
+    const field = page.locator('math-field').first();
+    await expect(field).toBeAttached();
+
+    // The toggle lives in MathLive's shadow DOM; it is hidden via ::part, so
+    // asking the browser for its computed style is the only honest check.
+    await expect
+      .poll(() =>
+        field.evaluate((el) => {
+          const toggle = el.shadowRoot?.querySelector('.ML__virtual-keyboard-toggle');
+          return toggle ? getComputedStyle(toggle).display : 'missing';
+        }),
+      )
+      .toBe('none');
+
+    // Focusing the field must not summon the keyboard either.
+    await field.click();
+    await expect(page.locator('.ML__keyboard')).toHaveCount(0);
+
+    // MathLive's own menu, not ours — it ships no Russian, so any Russian here
+    // proves the merged string table is in use. Playwright's CSS engine pierces
+    // the open shadow root, so the toggle is clicked like a user would.
+    await page.locator('math-field .ML__menu-toggle').first().click();
+    await expect(page.getByRole('menuitem', { name: 'Вставить матрицу' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Начертание' })).toBeVisible();
+    // No English left at the top level of the menu.
+    const items = await page.getByRole('menuitem').allTextContents();
+    expect(items.length).toBeGreaterThan(5);
+    expect(items.filter((item) => /^[A-Za-z]/.test(item.trim()))).toEqual([]);
+
+    await page.keyboard.press('Escape');
+  });
+
   test('inserts a new chemistry formula from the toolbar', async ({ page }) => {
     await openDemo(page);
 
