@@ -246,7 +246,7 @@ describe('i18n', () => {
   });
 
   it('accepts a partial JSON tree and falls back for the rest', async () => {
-    const w = await mountEditor({ locale: 'fr', messages: { fr: { toolbar: { bold: 'Gras' } } } });
+    const w = await mountEditor({ locale: 'fr', messages: { fr: { toolbar_bold: 'Gras' } } });
 
     expect(button(w, 'Gras').exists()).toBe(true);
     expect(button(w, 'Курсив').exists()).toBe(true);

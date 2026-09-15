@@ -89,7 +89,7 @@ export class VoiceRecorder {
   async start(): Promise<void> {
     if (!isRecordingSupported()) {
       throw this.fail(
-        new RichEditorError('recorder-unsupported', this.options.t('errors.recorderUnsupported')),
+        new RichEditorError('recorder-unsupported', this.options.t('error_recorder_unsupported')),
       );
     }
 
@@ -103,7 +103,7 @@ export class VoiceRecorder {
         new RichEditorError(
           denied ? 'recorder-permission-denied' : 'recorder-failed',
           this.options.t(
-            denied ? 'errors.recorderPermissionDenied' : 'errors.recorderFailed',
+            denied ? 'error_recorder_permission_denied' : 'error_recorder_failed',
           ),
           cause,
         ),
@@ -124,7 +124,7 @@ export class VoiceRecorder {
     } catch (cause) {
       this.releaseStream();
       throw this.fail(
-        new RichEditorError('recorder-failed', this.options.t('errors.recorderFailed'), cause),
+        new RichEditorError('recorder-failed', this.options.t('error_recorder_failed'), cause),
       );
     }
 
@@ -157,7 +157,7 @@ export class VoiceRecorder {
     const recorder = this.recorder;
     if (!recorder || this.state === 'idle' || this.state === 'stopped') {
       throw this.fail(
-        new RichEditorError('recorder-failed', this.options.t('errors.recorderFailed')),
+        new RichEditorError('recorder-failed', this.options.t('error_recorder_failed')),
       );
     }
 
@@ -211,7 +211,7 @@ export class VoiceRecorder {
       this.options.onError?.(
         new RichEditorError(
           'file-too-large',
-          this.options.t('errors.audioTooLong', { seconds: this.options.maxDurationSec }),
+          this.options.t('error_audio_too_long', { seconds: this.options.maxDurationSec }),
         ),
       );
       this.stopAtLimit();
@@ -220,7 +220,7 @@ export class VoiceRecorder {
 
   private onRecorderError = (event: Event) => {
     this.options.onError?.(
-      new RichEditorError('recorder-failed', this.options.t('errors.recorderFailed'), event),
+      new RichEditorError('recorder-failed', this.options.t('error_recorder_failed'), event),
     );
   };
 

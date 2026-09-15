@@ -20,7 +20,7 @@ toolbar, the dialogs and the reactive bindings.
 
 ```
 ┌──────────────────────── @rich-editor/vue ────────────────────────┐
-│  RichEditor.vue          RichContent.vue     (public components) │
+│  rich-editor.vue         rich-content.vue    (public components) │
 │  EditorToolbar  dialogs (link, table, formula, recorder)         │
 │  composables: i18n binding, toolbar state, formula previews      │
 │  styles/index.css — the single stylesheet, theme variables       │
@@ -33,7 +33,7 @@ toolbar, the dialogs and the reactive bindings.
 │  formula/         MathML ⇄ LaTeX · MathJax renderer · templates  │
 │  media/           upload pipeline · MediaRecorder · text files   │
 │  security/        HTML · MathML · SVG sanitizers                 │
-│  i18n/            ru (default) + en, dot-path translator         │
+│  i18n/            ru (default) + en, flat lower_snake tables     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -117,9 +117,11 @@ so any storage backend fits without the editor knowing anything about it.
 
 ## i18n
 
-A dot-path translator with a three-step fallback: requested locale → built-in
-Russian → the key itself. A partial translation JSON therefore degrades to
-Russian rather than to blanks. Russian is bundled; English ships as an optional
+A translator over flat `lower_snake` tables with a three-step fallback:
+requested locale → built-in Russian → the key itself. A partial translation JSON
+therefore degrades to Russian rather than to blanks. Keys carry their context as
+a prefix (`toolbar_bold`, `formula_title_math`) instead of nesting, so the table
+stays flat and hard to duplicate into. Russian is bundled; English ships as an optional
 export and as `apps/demo/src/locales/en.json` demonstrating the file format.
 
 ## Read-only rendering

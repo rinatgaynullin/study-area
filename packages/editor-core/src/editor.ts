@@ -16,7 +16,7 @@ import {
   type AudioAttributes,
   type EditorLimits,
   type FormulaType,
-  type MessagesTree,
+  type Messages,
   type RichEditorCoreOptions,
   type UploadKind,
   type UploadResult,
@@ -31,6 +31,10 @@ import { AudioNode } from './nodes/audio';
 import { FormulaNode } from './nodes/formula';
 import { UploadPipeline, isImageFile, isTextFile } from './media/upload';
 import { readTextFile, textToParagraphs } from './media/text-file';
+
+// Стили редактируемой области. Импорт живёт здесь, а не в index.ts,
+// который по соглашению содержит только реэкспорты.
+import './styles.css';
 
 /** Sanitizes and upgrades HTML arriving from outside the editor. */
 export function prepareIncomingHtml(html: string): string {
@@ -71,16 +75,16 @@ export class RichEditorCore {
           class: 'rte-content',
           role: 'textbox',
           'aria-multiline': 'true',
-          'aria-label': this.i18n.t('editor.ariaLabel'),
+          'aria-label': this.i18n.t('editor_aria_label'),
         },
         // Every externally authored fragment goes through the sanitizer.
         transformPastedHTML: (html) => prepareIncomingHtml(html),
-        handlePaste: (_view, event) => this.handleFiles(event.clipboardData?.files),
+        handlePaste: (_view, event) => this.insertFiles(event.clipboardData?.files),
         handleDrop: (view, event, _slice, moved) => {
           if (moved) return false;
           const dropEvent = event as DragEvent;
           const pos = view.posAtCoords({ left: dropEvent.clientX, top: dropEvent.clientY });
-          return this.handleFiles(dropEvent.dataTransfer?.files, pos?.pos);
+          return this.insertFiles(dropEvent.dataTransfer?.files, pos?.pos);
         },
       },
       onUpdate: () => options.onChange?.(this.getHTML()),
@@ -117,7 +121,7 @@ export class RichEditorCore {
       }),
       Image.configure({ inline: false, allowBase64: true, HTMLAttributes: { class: 'rte-image' } }),
       Placeholder.configure({
-        placeholder: this.options.placeholder ?? t('editor.placeholder'),
+        placeholder: this.options.placeholder ?? t('editor_placeholder'),
       }),
       FormulaNode.configure({
         onEdit: (payload) => this.options.onFormulaEdit?.(payload),
@@ -172,7 +176,7 @@ export class RichEditorCore {
     this.i18n.setLocale(locale);
   }
 
-  setMessages(messages: Record<string, MessagesTree> | undefined): void {
+  setMessages(messages: Record<string, Messages> | undefined): void {
     this.i18n.setMessages(messages);
   }
 
@@ -194,7 +198,7 @@ export class RichEditorCore {
   insertFormula(mathml: string, type: FormulaType = 'math'): boolean {
     const safe = normalizeMathML(mathml);
     if (!safe) {
-      this.reportError(new RichEditorError('invalid-mathml', this.i18n.t('errors.invalidMathml')));
+      this.reportError(new RichEditorError('invalid-mathml', this.i18n.t('error_invalid_mathml')));
       return false;
     }
     return this.editor.chain().focus().insertFormula({ mathml: safe, type }).run();
@@ -203,7 +207,7 @@ export class RichEditorCore {
   updateFormulaAt(pos: number, mathml: string, type: FormulaType = 'math'): boolean {
     const safe = normalizeMathML(mathml);
     if (!safe) {
-      this.reportError(new RichEditorError('invalid-mathml', this.i18n.t('errors.invalidMathml')));
+      this.reportError(new RichEditorError('invalid-mathml', this.i18n.t('error_invalid_mathml')));
       return false;
     }
     return this.editor.chain().focus().updateFormula({ pos, mathml: safe, type }).run();
@@ -299,7 +303,7 @@ export class RichEditorCore {
    * Routes dropped or pasted files to the right plugin. Returns `true` when at
    * least one file was claimed, which stops ProseMirror's default handling.
    */
-  private handleFiles(files: FileList | null | undefined, at?: number): boolean {
+  private insertFiles(files: FileList | null | undefined, at?: number): boolean {
     if (!files || files.length === 0) return false;
 
     const candidates = Array.from(files).filter(

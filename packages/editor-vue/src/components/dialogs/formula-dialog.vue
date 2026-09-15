@@ -9,9 +9,9 @@ import {
   type FormulaType,
   type Translate,
 } from '@rich-editor/core';
-import RteModal from '../RteModal.vue';
-import RteIcon from '../RteIcon.vue';
-import { renderLatexPreview } from '../../composables/useFormulaPreview';
+import RteModal from '../rte-modal.vue';
+import RteIcon from '../rte-icon.vue';
+import { renderLatexPreview } from '../../composables/use-formula-preview';
 import { MATHLIVE_STRINGS } from '../../i18n/mathlive';
 
 const props = withDefaults(
@@ -39,7 +39,10 @@ const loading = ref(false);
 const failed = ref(false);
 
 /** MathLive holds its locale on the class, so the loaded constructor is kept. */
-type MathfieldCtor = { locale: string };
+interface MathfieldCtor {
+  locale: string;
+}
+
 const mathfieldCtor = shallowRef<MathfieldCtor | null>(null);
 
 function applyLocale(ctor: MathfieldCtor): void {
@@ -64,7 +67,7 @@ const isEditing = computed(() => props.payload?.pos !== null && props.payload?.p
 const categories = computed(() => getTemplateCategories(type.value));
 
 const title = computed(() =>
-  type.value === 'chem' ? props.t('formula.titleChem') : props.t('formula.titleMath'),
+  type.value === 'chem' ? props.t('formula_title_chem') : props.t('formula_title_math'),
 );
 
 /** MathLive is browser-only and heavy, so it loads when the dialog first opens. */
@@ -105,7 +108,7 @@ async function ensureMathfield(): Promise<void> {
   }
 }
 
-async function open(): Promise<void> {
+async function prepareField(): Promise<void> {
   const payload = props.payload;
   type.value = payload?.type ?? 'math';
   activeCategory.value = categories.value[0]?.id ?? '';
@@ -127,8 +130,8 @@ async function open(): Promise<void> {
 
 watch(
   () => props.modelValue,
-  (isOpen) => {
-    if (isOpen) void open();
+  (isVisible) => {
+    if (isVisible) void prepareField();
   },
 );
 
@@ -191,7 +194,7 @@ onBeforeUnmount(() => {
   <RteModal
     :model-value="modelValue"
     :title="title"
-    :close-label="t('common.close')"
+    :close-label="t('common_close')"
     wide
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -206,7 +209,7 @@ onBeforeUnmount(() => {
           @click="type = 'math'"
         >
           <RteIcon name="formulaMath" :size="16" />
-          {{ t('formula.tabMath') }}
+          {{ t('formula_tab_math') }}
         </button>
         <button
           type="button"
@@ -217,22 +220,22 @@ onBeforeUnmount(() => {
           @click="type = 'chem'"
         >
           <RteIcon name="formulaChem" :size="16" />
-          {{ t('formula.tabChem') }}
+          {{ t('formula_tab_chem') }}
         </button>
       </div>
 
-      <p v-if="loading" class="rte-formula-editor__status">{{ t('formula.loading') }}</p>
+      <p v-if="loading" class="rte-formula-editor__status">{{ t('formula_loading') }}</p>
       <p v-else-if="failed" class="rte-formula-editor__status rte-field__error">
-        {{ t('formula.invalid') }}
+        {{ t('formula_invalid') }}
       </p>
 
       <div class="rte-formula-editor__input">
         <div ref="host" class="rte-formula-editor__host" />
-        <p class="rte-formula-editor__hint">{{ t('formula.inputHint') }}</p>
+        <p class="rte-formula-editor__hint">{{ t('formula_input_hint') }}</p>
       </div>
 
       <section class="rte-formula-editor__templates">
-        <h3 class="rte-formula-editor__section-title">{{ t('formula.templates') }}</h3>
+        <h3 class="rte-formula-editor__section-title">{{ t('formula_templates') }}</h3>
 
         <div class="rte-formula-editor__categories" role="tablist">
           <button
@@ -268,10 +271,10 @@ onBeforeUnmount(() => {
       </section>
 
       <section class="rte-formula-editor__preview">
-        <h3 class="rte-formula-editor__section-title">{{ t('formula.preview') }}</h3>
+        <h3 class="rte-formula-editor__section-title">{{ t('formula_preview') }}</h3>
         <div class="rte-formula-editor__preview-box">
           <span v-if="previewSvg" v-html="previewSvg" />
-          <span v-else class="rte-formula-editor__empty">{{ t('formula.empty') }}</span>
+          <span v-else class="rte-formula-editor__empty">{{ t('formula_empty') }}</span>
         </div>
       </section>
     </div>
@@ -283,11 +286,11 @@ onBeforeUnmount(() => {
         class="rte-button rte-button--danger"
         @click="remove"
       >
-        {{ t('formula.remove') }}
+        {{ t('formula_remove') }}
       </button>
       <span class="rte-modal__spacer" />
       <button type="button" class="rte-button" @click="emit('update:modelValue', false)">
-        {{ t('formula.cancel') }}
+        {{ t('formula_cancel') }}
       </button>
       <button
         type="button"
@@ -295,7 +298,7 @@ onBeforeUnmount(() => {
         :disabled="!latex.trim()"
         @click="save"
       >
-        {{ isEditing ? t('formula.save') : t('formula.insert') }}
+        {{ isEditing ? t('formula_save') : t('formula_insert') }}
       </button>
     </template>
   </RteModal>

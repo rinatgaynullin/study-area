@@ -156,7 +156,7 @@ describe('limits', () => {
     const onError = vi.fn();
     const editor = mount({
       locale: 'en',
-      messages: { en: { errors: { fileTooLarge: 'Too big: {name}' } } },
+      messages: { en: { error_file_too_large: 'Too big: {name}' } },
       limits: { maxImageSizeBytes: 1 },
       onError,
     });

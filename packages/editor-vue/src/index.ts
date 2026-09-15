@@ -1,15 +1,10 @@
-import './styles/index.css';
-
-import type { App, Plugin } from 'vue';
-import RichContent from './components/RichContent.vue';
-import RichEditor from './components/RichEditor.vue';
-
-export { RichContent, RichEditor };
-export { default as EditorToolbar } from './components/EditorToolbar.vue';
-export { default as RteIcon } from './components/RteIcon.vue';
-export { default as RteModal } from './components/RteModal.vue';
-export { default as FormulaDialog } from './components/dialogs/FormulaDialog.vue';
-export { default as AudioRecorderDialog } from './components/dialogs/AudioRecorderDialog.vue';
+export { default as RichContent } from './components/rich-content.vue';
+export { default as RichEditor } from './components/rich-editor.vue';
+export { default as EditorToolbar } from './components/editor-toolbar.vue';
+export { default as RteIcon } from './components/rte-icon.vue';
+export { default as RteModal } from './components/rte-modal.vue';
+export { default as FormulaDialog } from './components/dialogs/formula-dialog.vue';
+export { default as AudioRecorderDialog } from './components/dialogs/audio-recorder-dialog.vue';
 
 export { ICONS, type IconName } from './components/icons';
 export {
@@ -24,10 +19,10 @@ export {
   emptyToolbarState,
   readToolbarState,
   type ToolbarState,
-} from './composables/toolbarState';
-export { useEditorI18n } from './composables/useEditorI18n';
+} from './composables/toolbar-state';
+export { useEditorI18n } from './composables/use-editor-i18n';
 export { MATHLIVE_STRINGS, mathliveRu } from './i18n/mathlive';
-export { clearPreviewCache, renderLatexPreview } from './composables/useFormulaPreview';
+export { clearPreviewCache, renderLatexPreview } from './composables/use-formula-preview';
 
 // Re-exported so hosts need only this package for typing adapters and messages.
 export {
@@ -44,19 +39,13 @@ export {
   type EditorLimits,
   type FormulaPayload,
   type FormulaType,
-  type MessagesTree,
+  type Messages,
   type UploadAdapter,
   type UploadContext,
   type UploadKind,
   type UploadResult,
 } from '@rich-editor/core';
 
-/** `app.use(RichEditorPlugin)` registers `<RichEditor />` and `<RichContent />`. */
-export const RichEditorPlugin: Plugin = {
-  install(app: App) {
-    app.component('RichEditor', RichEditor);
-    app.component('RichContent', RichContent);
-  },
-};
+export { RichEditorPlugin } from './plugin';
 
-export default RichEditor;
+export { default } from './components/rich-editor.vue';

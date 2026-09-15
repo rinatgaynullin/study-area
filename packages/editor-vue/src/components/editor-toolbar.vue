@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { Translate } from '@rich-editor/core';
-import RteToolbarButton from './RteToolbarButton.vue';
-import RteDropdown from './RteDropdown.vue';
-import RteIcon from './RteIcon.vue';
-import ColorPanel from './ColorPanel.vue';
+import RteToolbarButton from './rte-toolbar-button.vue';
+import RteDropdown from './rte-dropdown.vue';
+import RteIcon from './rte-icon.vue';
+import ColorPanel from './color-panel.vue';
 import type { ToolbarGroup, ToolbarItemId } from '../toolbar/presets';
-import type { ToolbarState } from '../composables/toolbarState';
+import type { ToolbarState } from '../composables/toolbar-state';
 
 const props = withDefaults(
   defineProps<{
@@ -102,27 +102,27 @@ const ICONS: Partial<Record<ToolbarItemId, string>> = {
 };
 
 const LABELS: Partial<Record<ToolbarItemId, string>> = {
-  undo: 'toolbar.undo',
-  redo: 'toolbar.redo',
-  bold: 'toolbar.bold',
-  italic: 'toolbar.italic',
-  underline: 'toolbar.underline',
-  strike: 'toolbar.strike',
-  subscript: 'toolbar.subscript',
-  superscript: 'toolbar.superscript',
-  bulletList: 'toolbar.bulletList',
-  orderedList: 'toolbar.orderedList',
-  blockquote: 'toolbar.blockquote',
-  code: 'toolbar.code',
-  codeBlock: 'toolbar.codeBlock',
-  horizontalRule: 'toolbar.horizontalRule',
-  link: 'toolbar.link',
-  image: 'toolbar.image',
-  audio: 'toolbar.audio',
-  file: 'toolbar.file',
-  formulaMath: 'toolbar.formulaMath',
-  formulaChem: 'toolbar.formulaChem',
-  clearFormat: 'toolbar.clearFormat',
+  undo: 'toolbar_undo',
+  redo: 'toolbar_redo',
+  bold: 'toolbar_bold',
+  italic: 'toolbar_italic',
+  underline: 'toolbar_underline',
+  strike: 'toolbar_strike',
+  subscript: 'toolbar_subscript',
+  superscript: 'toolbar_superscript',
+  bulletList: 'toolbar_bullet_list',
+  orderedList: 'toolbar_ordered_list',
+  blockquote: 'toolbar_blockquote',
+  code: 'toolbar_code',
+  codeBlock: 'toolbar_code_block',
+  horizontalRule: 'toolbar_horizontal_rule',
+  link: 'toolbar_link',
+  image: 'toolbar_image',
+  audio: 'toolbar_audio',
+  file: 'toolbar_file',
+  formulaMath: 'toolbar_formula_math',
+  formulaChem: 'toolbar_formula_chem',
+  clearFormat: 'toolbar_clear_format',
 };
 
 function isActive(item: ToolbarItemId): boolean {
@@ -153,7 +153,7 @@ function isDisabled(item: ToolbarItemId): boolean {
 const headingLabel = computed(() =>
   props.state.headingLevel > 0
     ? `H${props.state.headingLevel}`
-    : props.t('toolbar.paragraph'),
+    : props.t('toolbar_paragraph'),
 );
 
 const ALIGN_ICONS = {
@@ -164,10 +164,10 @@ const ALIGN_ICONS = {
 } as const;
 
 const ALIGN_LABELS = {
-  left: 'toolbar.alignLeft',
-  center: 'toolbar.alignCenter',
-  right: 'toolbar.alignRight',
-  justify: 'toolbar.alignJustify',
+  left: 'toolbar_align_left',
+  center: 'toolbar_align_center',
+  right: 'toolbar_align_right',
+  justify: 'toolbar_align_justify',
 } as const;
 
 const alignIcon = computed(() => ALIGN_ICONS[props.state.align]);
@@ -182,13 +182,13 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
 </script>
 
 <template>
-  <div ref="root" class="rte-toolbar" role="toolbar" :aria-label="t('toolbar.groupFormatting')">
+  <div ref="root" class="rte-toolbar" role="toolbar" :aria-label="t('toolbar_group_formatting')">
     <div v-for="group in visibleGroups" :key="group.id" class="rte-toolbar__group">
       <template v-for="item in group.items" :key="item">
         <!-- Heading picker -->
         <template v-if="item === 'heading'">
           <RteDropdown
-            :label="t('toolbar.heading')"
+            :label="t('toolbar_heading')"
             :active="state.headingLevel > 0"
             :disabled="disabled"
           >
@@ -202,7 +202,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
                 :class="{ 'rte-menu__item--active': state.headingLevel === 0 }"
                 @click="emit('command', 'heading', 0); close()"
               >
-                {{ t('toolbar.paragraph') }}
+                {{ t('toolbar_paragraph') }}
               </button>
               <button
                 v-for="level in HEADING_LEVELS"
@@ -213,7 +213,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
                 @click="emit('command', 'heading', level); close()"
               >
                 <span :class="`rte-menu__heading rte-menu__heading--${level}`">
-                  {{ t('toolbar.headingLevel', { level }) }}
+                  {{ t('toolbar_heading_level', { level }) }}
                 </span>
               </button>
             </template>
@@ -225,7 +225,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
           <RteDropdown
             v-slot="{ close }"
             :icon="alignIcon"
-            :label="t('toolbar.align')"
+            :label="t('toolbar_align')"
             :disabled="disabled"
           >
             <button
@@ -247,7 +247,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
           <RteDropdown
             v-slot="{ close }"
             icon="textColor"
-            :label="t('toolbar.textColor')"
+            :label="t('toolbar_text_color')"
             :active="!!state.textColor"
             :disabled="disabled"
           >
@@ -266,7 +266,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
           <RteDropdown
             v-slot="{ close }"
             icon="highlight"
-            :label="t('toolbar.highlight')"
+            :label="t('toolbar_highlight')"
             :active="state.highlight"
             :disabled="disabled"
           >
@@ -285,7 +285,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
           <RteDropdown
             v-slot="{ close }"
             icon="table"
-            :label="t('toolbar.table')"
+            :label="t('toolbar_table')"
             :active="state.inTable"
             :disabled="disabled"
           >
@@ -294,7 +294,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
               class="rte-menu__item"
               @click="emit('command', 'table:insert'); close()"
             >
-              {{ t('table.insert') }}
+              {{ t('table_insert') }}
             </button>
             <div class="rte-menu__separator" />
             <button
@@ -315,7 +315,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
           <RteDropdown
             v-slot="{ close }"
             icon="file"
-            :label="t('toolbar.file')"
+            :label="t('toolbar_file')"
             :disabled="disabled"
           >
             <button
@@ -323,14 +323,14 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
               class="rte-menu__item"
               @click="emit('command', 'file:attach'); close()"
             >
-              {{ t('file.attach') }}
+              {{ t('file_attach') }}
             </button>
             <button
               type="button"
               class="rte-menu__item"
               @click="emit('command', 'file:insert'); close()"
             >
-              {{ t('file.insertContent') }}
+              {{ t('file_insert_content') }}
             </button>
           </RteDropdown>
         </template>
@@ -349,7 +349,7 @@ function alignLabelFor(value: (typeof ALIGNMENTS)[number]): string {
     </div>
 
     <template v-if="overflowGroups.length > 0">
-      <RteDropdown v-slot="{ close }" icon="more" :label="t('toolbar.more')" :disabled="disabled">
+      <RteDropdown v-slot="{ close }" icon="more" :label="t('toolbar_more')" :disabled="disabled">
         <template v-for="group in overflowGroups" :key="group.id">
           <button
             v-for="item in group.items"

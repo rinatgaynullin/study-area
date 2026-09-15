@@ -3,7 +3,7 @@ import { createApp } from 'vue';
 // font files, so `MathfieldElement.fontsDirectory` can stay null.
 import 'mathlive/fonts.css';
 import '@rich-editor/vue/styles.css';
-import App from './App.vue';
+import App from './app.vue';
 import './styles.css';
 
 createApp(App).mount('#app');

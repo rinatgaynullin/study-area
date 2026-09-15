@@ -7,7 +7,7 @@ export async function readTextFile(file: File, t: Translate): Promise<string> {
   } catch (cause) {
     throw new RichEditorError(
       'file-read-failed',
-      t('errors.fileReadFailed', { name: file.name }),
+      t('error_file_read_failed', { name: file.name }),
       cause,
     );
   }

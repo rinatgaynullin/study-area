@@ -1,4 +1,7 @@
 <script setup lang="ts">
+// Единая таблица стилей пакета. Импорт живёт в компонентах, а не в index.ts,
+// который по соглашению содержит только реэкспорты.
+import '../styles/index.css';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRef, watch } from 'vue';
 import {
   IMAGE_ACCEPT,
@@ -7,25 +10,25 @@ import {
   type EditorLimits,
   type FormulaPayload,
   type FormulaType,
-  type MessagesTree,
+  type Messages,
   type RichEditorError,
   type UploadAdapter,
 } from '@rich-editor/core';
 
-import EditorToolbar from './EditorToolbar.vue';
-import LinkDialog from './dialogs/LinkDialog.vue';
-import TableDialog from './dialogs/TableDialog.vue';
-import FormulaDialog from './dialogs/FormulaDialog.vue';
-import AudioRecorderDialog from './dialogs/AudioRecorderDialog.vue';
-import { useEditorI18n } from '../composables/useEditorI18n';
-import { emptyToolbarState, readToolbarState, type ToolbarState } from '../composables/toolbarState';
+import EditorToolbar from './editor-toolbar.vue';
+import LinkDialog from './dialogs/link-dialog.vue';
+import TableDialog from './dialogs/table-dialog.vue';
+import FormulaDialog from './dialogs/formula-dialog.vue';
+import AudioRecorderDialog from './dialogs/audio-recorder-dialog.vue';
+import { useEditorI18n } from '../composables/use-editor-i18n';
+import { emptyToolbarState, readToolbarState, type ToolbarState } from '../composables/toolbar-state';
 import { resolveToolbar, type ToolbarConfig } from '../toolbar/presets';
 
 const props = withDefaults(
   defineProps<{
     modelValue?: string;
     locale?: string;
-    messages?: Record<string, MessagesTree>;
+    messages?: Record<string, Messages>;
     uploadImage?: UploadAdapter;
     uploadAudio?: UploadAdapter;
     uploadFile?: UploadAdapter;
@@ -67,10 +70,10 @@ const imageInput = ref<HTMLInputElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const fileMode = ref<'attach' | 'insert'>('attach');
 
-const linkOpen = ref(false);
-const tableOpen = ref(false);
-const formulaOpen = ref(false);
-const recorderOpen = ref(false);
+const isLinkVisible = ref(false);
+const isTableVisible = ref(false);
+const isFormulaVisible = ref(false);
+const isRecorderVisible = ref(false);
 const formulaPayload = ref<FormulaPayload | null>(null);
 
 const { t } = useEditorI18n(toRef(props, 'locale'), toRef(props, 'messages'));
@@ -110,7 +113,7 @@ onMounted(() => {
     onError: (error) => emit('error', error),
     onFormulaEdit: (payload) => {
       formulaPayload.value = payload;
-      formulaOpen.value = true;
+      isFormulaVisible.value = true;
     },
   });
 
@@ -137,7 +140,7 @@ watch(
 // Dialogs take focus away from the editor; hand it back when the last one
 // closes so selection-based keyboard actions keep working.
 watch(
-  () => [linkOpen.value, tableOpen.value, formulaOpen.value, recorderOpen.value],
+  () => [isLinkVisible.value, isTableVisible.value, isFormulaVisible.value, isRecorderVisible.value],
   (flags, previous) => {
     if (previous?.some(Boolean) && !flags.some(Boolean)) core.value?.focus();
   },
@@ -207,12 +210,12 @@ function onCommand(id: string, payload?: unknown): void {
   }
 
   if (id === 'link') {
-    linkOpen.value = true;
+    isLinkVisible.value = true;
     return;
   }
 
   if (id === 'table:insert') {
-    tableOpen.value = true;
+    isTableVisible.value = true;
     return;
   }
 
@@ -241,7 +244,7 @@ function onCommand(id: string, payload?: unknown): void {
   }
 
   if (id === 'audio') {
-    recorderOpen.value = true;
+    isRecorderVisible.value = true;
     return;
   }
 
@@ -251,7 +254,7 @@ function onCommand(id: string, payload?: unknown): void {
       type: id === 'formulaChem' ? 'chem' : 'math',
       pos: null,
     };
-    formulaOpen.value = true;
+    isFormulaVisible.value = true;
   }
 }
 
@@ -376,7 +379,7 @@ defineExpose({
     />
 
     <LinkDialog
-      v-model="linkOpen"
+      v-model="isLinkVisible"
       :t="t"
       :href="state.linkHref"
       :target-blank="state.linkTargetBlank"
@@ -385,10 +388,10 @@ defineExpose({
       @remove="removeLink"
     />
 
-    <TableDialog v-model="tableOpen" :t="t" @insert="insertTable" />
+    <TableDialog v-model="isTableVisible" :t="t" @insert="insertTable" />
 
     <FormulaDialog
-      v-model="formulaOpen"
+      v-model="isFormulaVisible"
       :t="t"
       :payload="formulaPayload"
       :fonts-directory="mathliveFontsDirectory"
@@ -399,7 +402,7 @@ defineExpose({
 
     <AudioRecorderDialog
       v-if="limits"
-      v-model="recorderOpen"
+      v-model="isRecorderVisible"
       :t="t"
       :max-duration-sec="limits.maxAudioDurationSec"
       :max-size-bytes="limits.maxAudioSizeBytes"

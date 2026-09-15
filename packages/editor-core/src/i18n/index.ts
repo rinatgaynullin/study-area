@@ -1,4 +1,4 @@
-import type { MessagesTree, Translate } from '../types';
+import type { Messages, Translate } from '../types';
 import { ru } from './ru';
 
 export { ru } from './ru';
@@ -9,24 +9,19 @@ export const DEFAULT_LOCALE = 'ru';
 export interface I18nOptions {
   locale?: string;
   /** Locale → message tree. Merged over the built-in Russian bundle. */
-  messages?: Record<string, MessagesTree>;
+  messages?: Record<string, Messages>;
 }
 
 export interface I18n {
   readonly locale: string;
   t: Translate;
   setLocale(locale: string): void;
-  setMessages(messages: Record<string, MessagesTree> | undefined): void;
+  setMessages(messages: Record<string, Messages> | undefined): void;
 }
 
-function lookup(tree: MessagesTree | undefined, key: string): string | undefined {
-  if (!tree) return undefined;
-  let node: string | MessagesTree | undefined = tree;
-  for (const part of key.split('.')) {
-    if (typeof node !== 'object' || node === null) return undefined;
-    node = node[part];
-  }
-  return typeof node === 'string' ? node : undefined;
+function lookup(table: Messages | undefined, key: string): string | undefined {
+  const value = table?.[key];
+  return typeof value === 'string' ? value : undefined;
 }
 
 function interpolate(template: string, params?: Record<string, string | number>): string {
@@ -37,9 +32,9 @@ function interpolate(template: string, params?: Record<string, string | number>)
 }
 
 /**
- * Minimal dot-path translator. Resolution order: requested locale → built-in
- * Russian → the key itself, so a partial translation JSON degrades gracefully
- * instead of rendering blanks.
+ * Minimal translator over flat `lower_snake` tables. Resolution order:
+ * requested locale → built-in Russian → the key itself, so a partial
+ * translation JSON degrades gracefully instead of rendering blanks.
  */
 export function createI18n(options: I18nOptions = {}): I18n {
   let locale = options.locale ?? DEFAULT_LOCALE;
@@ -68,7 +63,7 @@ export function createI18n(options: I18nOptions = {}): I18n {
     setLocale(next: string) {
       locale = next;
     },
-    setMessages(next: Record<string, MessagesTree> | undefined) {
+    setMessages(next: Record<string, Messages> | undefined) {
       messages = next ?? {};
     },
   };

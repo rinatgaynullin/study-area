@@ -1,5 +1,3 @@
-import './styles.css';
-
 export { RichEditorCore, prepareIncomingHtml } from './editor';
 
 export {
@@ -10,7 +8,7 @@ export {
   type EditorLimits,
   type FormulaPayload,
   type FormulaType,
-  type MessagesTree,
+  type Messages,
   type RichEditorCoreOptions,
   type RichEditorErrorCode,
   type Translate,

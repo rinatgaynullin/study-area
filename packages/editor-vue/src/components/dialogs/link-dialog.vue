@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import type { Translate } from '@rich-editor/core';
-import RteModal from '../RteModal.vue';
+import RteModal from '../rte-modal.vue';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -44,7 +44,7 @@ function normalize(value: string): string | null {
 function apply(): void {
   const normalized = normalize(href.value);
   if (!normalized) {
-    error.value = props.t('link.invalid');
+    error.value = props.t('link_invalid');
     return;
   }
   emit('apply', { href: normalized, targetBlank: targetBlank.value });
@@ -55,19 +55,19 @@ function apply(): void {
 <template>
   <RteModal
     :model-value="modelValue"
-    :title="t('link.title')"
-    :close-label="t('common.close')"
+    :title="t('link_title')"
+    :close-label="t('common_close')"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <label class="rte-field">
-      <span class="rte-field__label">{{ t('link.url') }}</span>
+      <span class="rte-field__label">{{ t('link_url') }}</span>
       <input
         v-model="href"
         data-autofocus
         class="rte-input"
         type="url"
         inputmode="url"
-        :placeholder="t('link.urlPlaceholder')"
+        :placeholder="t('link_url_placeholder')"
         @keydown.enter.prevent="apply"
       />
     </label>
@@ -76,7 +76,7 @@ function apply(): void {
 
     <label class="rte-checkbox">
       <input v-model="targetBlank" type="checkbox" />
-      <span>{{ t('link.openInNewTab') }}</span>
+      <span>{{ t('link_open_in_new_tab') }}</span>
     </label>
 
     <template #footer>
@@ -86,14 +86,14 @@ function apply(): void {
         class="rte-button rte-button--danger"
         @click="emit('remove'); emit('update:modelValue', false)"
       >
-        {{ t('link.remove') }}
+        {{ t('link_remove') }}
       </button>
       <span class="rte-modal__spacer" />
       <button type="button" class="rte-button" @click="emit('update:modelValue', false)">
-        {{ t('common.cancel') }}
+        {{ t('common_cancel') }}
       </button>
       <button type="button" class="rte-button rte-button--primary" @click="apply">
-        {{ t('link.apply') }}
+        {{ t('link_apply') }}
       </button>
     </template>
   </RteModal>

@@ -7,8 +7,8 @@ import {
   type RichEditorError,
   type Translate,
 } from '@rich-editor/core';
-import RteModal from '../RteModal.vue';
-import RteIcon from '../RteIcon.vue';
+import RteModal from '../rte-modal.vue';
+import RteIcon from '../rte-icon.vue';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -139,11 +139,11 @@ onBeforeUnmount(reset);
 <template>
   <RteModal
     :model-value="modelValue"
-    :title="t('audio.title')"
-    :close-label="t('common.close')"
+    :title="t('audio_title')"
+    :close-label="t('common_close')"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <p v-if="!supported" class="rte-field__error">{{ t('audio.unsupported') }}</p>
+    <p v-if="!supported" class="rte-field__error">{{ t('audio_unsupported') }}</p>
 
     <template v-else>
       <div class="rte-recorder">
@@ -160,15 +160,15 @@ onBeforeUnmount(reset);
           <span class="rte-recorder__limit">
             {{
               phase === 'recording' || phase === 'paused'
-                ? t('audio.remaining', { time: formatDuration(remaining) })
-                : t('audio.durationLimit', { seconds: maxDurationSec })
+                ? t('audio_remaining', { time: formatDuration(remaining) })
+                : t('audio_duration_limit', { seconds: maxDurationSec })
             }}
           </span>
         </div>
       </div>
 
       <p v-if="phase === 'idle' && !message" class="rte-recorder__hint">
-        {{ t('audio.permissionHint') }}
+        {{ t('audio_permission_hint') }}
       </p>
       <p v-if="message" class="rte-field__error">{{ message }}</p>
 
@@ -183,17 +183,17 @@ onBeforeUnmount(reset);
           @click="start"
         >
           <RteIcon name="record" :size="16" />
-          {{ t('audio.record') }}
+          {{ t('audio_record') }}
         </button>
 
         <button v-if="phase === 'recording'" type="button" class="rte-button" @click="pause">
           <RteIcon name="pause" :size="16" />
-          {{ t('audio.pause') }}
+          {{ t('audio_pause') }}
         </button>
 
         <button v-if="phase === 'paused'" type="button" class="rte-button" @click="resume">
           <RteIcon name="play" :size="16" />
-          {{ t('audio.resume') }}
+          {{ t('audio_resume') }}
         </button>
 
         <button
@@ -203,11 +203,11 @@ onBeforeUnmount(reset);
           @click="stop"
         >
           <RteIcon name="stop" :size="16" />
-          {{ t('audio.stop') }}
+          {{ t('audio_stop') }}
         </button>
 
         <button v-if="phase === 'ready'" type="button" class="rte-button" @click="start">
-          {{ t('audio.rerecord') }}
+          {{ t('audio_rerecord') }}
         </button>
       </div>
     </template>
@@ -215,7 +215,7 @@ onBeforeUnmount(reset);
     <template #footer>
       <span class="rte-modal__spacer" />
       <button type="button" class="rte-button" @click="emit('update:modelValue', false)">
-        {{ t('audio.cancel') }}
+        {{ t('audio_cancel') }}
       </button>
       <button
         type="button"
@@ -223,7 +223,7 @@ onBeforeUnmount(reset);
         :disabled="phase !== 'ready'"
         @click="insert"
       >
-        {{ t('audio.insert') }}
+        {{ t('audio_insert') }}
       </button>
     </template>
   </RteModal>
