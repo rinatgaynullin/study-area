@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 import {
   RichContent,
   RichEditor,
@@ -10,6 +10,7 @@ import {
   type UploadResult,
 } from '@rich-editor/vue';
 import enMessages from './locales/en.json';
+import { HTML_SAMPLES, type HtmlSample } from './samples';
 
 type UploadMode = 'local' | 'mock-server';
 
@@ -20,8 +21,12 @@ const uploadMode = ref<UploadMode>('local');
 const editable = ref(true);
 const mobilePreview = ref(false);
 const toolbarPreset = ref<'full' | 'standard' | 'minimal'>('full');
-const outputTab = ref<'preview' | 'source'>('preview');
+const outputTab = ref<'preview' | 'source' | 'input'>('preview');
 const log = ref<string[]>([]);
+
+const draftHtml = ref('');
+const draftHint = ref('');
+const appliedReport = ref('');
 
 const editorRef = shallowRef<InstanceType<typeof RichEditor> | null>(null);
 
@@ -115,6 +120,40 @@ onMounted(async () => {
 async function onReady(core: { whenFormulasReady(): Promise<void>; getHTML(): string }): Promise<void> {
   await core.whenFormulasReady();
   html.value = core.getHTML();
+}
+
+/**
+ * Feeds arbitrary HTML through the editor's import path, then reads back what
+ * the editor actually kept — which is the interesting part, since sanitization
+ * and schema parsing both run on the way in.
+ */
+async function applyDraft(): Promise<void> {
+  const input = draftHtml.value;
+  html.value = input;
+
+  await nextTick();
+  const editor = editorRef.value;
+  if (!editor) return;
+
+  await editor.whenFormulasReady();
+  const kept = editor.getHTML();
+  html.value = kept;
+
+  appliedReport.value =
+    `На входе ${input.length} символов → редактор сохранил ${kept.length}. ` +
+    'Что именно осталось — на вкладке «Исходник».';
+}
+
+function useSample(sample: HtmlSample): void {
+  draftHtml.value = sample.html;
+  draftHint.value = sample.hint;
+  appliedReport.value = '';
+}
+
+function takeCurrentHtml(): void {
+  draftHtml.value = html.value;
+  draftHint.value = '';
+  appliedReport.value = '';
 }
 
 function clearContent(): void {
@@ -217,13 +256,58 @@ async function reloadSample(): Promise<void> {
         >
           Исходник
         </button>
+        <button
+          type="button"
+          :class="{ 'demo__tab--active': outputTab === 'input' }"
+          @click="outputTab = 'input'"
+        >
+          Вставить HTML
+        </button>
       </div>
 
       <!-- Read-only viewer: no toolbar, no ProseMirror, no MathLive. Formulas
            exported by the editor already carry their SVG, so nothing extra
            loads; MathML-only formulas are rendered on the fly. -->
       <RichContent v-if="outputTab === 'preview'" class="demo__preview" :html="html" />
-      <pre v-else class="demo__source">{{ html }}</pre>
+      <pre v-else-if="outputTab === 'source'" class="demo__source">{{ html }}</pre>
+
+      <div v-else class="demo__input">
+        <p class="demo__input-lead">
+          Вставьте произвольный HTML и примените — он пройдёт через тот же путь
+          импорта, что и <code>setHTML()</code>: санитизация, затем разбор по схеме
+          редактора.
+        </p>
+
+        <div class="demo__samples">
+          <button
+            v-for="sample in HTML_SAMPLES"
+            :key="sample.id"
+            type="button"
+            @click="useSample(sample)"
+          >
+            {{ sample.label }}
+          </button>
+        </div>
+
+        <p v-if="draftHint" class="demo__input-hint">{{ draftHint }}</p>
+
+        <textarea
+          v-model="draftHtml"
+          class="demo__textarea"
+          spellcheck="false"
+          placeholder="<p>Вставьте сюда HTML…</p>"
+        />
+
+        <div class="demo__input-actions">
+          <button type="button" class="demo__primary" @click="applyDraft">
+            Применить в редактор
+          </button>
+          <button type="button" @click="takeCurrentHtml">Подставить текущий</button>
+          <button type="button" @click="draftHtml = ''">Очистить поле</button>
+        </div>
+
+        <p v-if="appliedReport" class="demo__input-report">{{ appliedReport }}</p>
+      </div>
     </section>
 
     <section v-if="log.length" class="demo__log">
