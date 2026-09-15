@@ -4,7 +4,7 @@ import {
   RichContent,
   RichEditor,
   latexToMathML,
-  type MessagesTree,
+  type Messages,
   type RichEditorError,
   type UploadAdapter,
   type UploadResult,
@@ -30,8 +30,8 @@ const appliedReport = ref('');
 
 const editorRef = shallowRef<InstanceType<typeof RichEditor> | null>(null);
 
-const messages = computed<Record<string, MessagesTree>>(() => ({
-  en: enMessages as MessagesTree,
+const messages = computed<Record<string, Messages>>(() => ({
+  en: enMessages as Messages,
 }));
 
 const limits = {

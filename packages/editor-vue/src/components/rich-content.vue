@@ -1,4 +1,7 @@
 <script setup lang="ts">
+// Единая таблица стилей пакета. Импорт живёт в компонентах, а не в index.ts,
+// который по соглашению содержит только реэкспорты.
+import '../styles/index.css';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { prepareIncomingHtml, renderMathML } from '@rich-editor/core';
 

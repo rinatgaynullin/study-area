@@ -37,9 +37,9 @@ export const DEFAULT_LIMITS: EditorLimits = {
   maxFileSizeBytes: 5 * 1024 * 1024,
 };
 
-/** Nested translation tree. Leaves are strings, branches are further trees. */
-export interface MessagesTree {
-  [key: string]: string | MessagesTree;
+/** Flat translation table: `lower_snake` key to translated string. */
+export interface Messages {
+  [key: string]: string;
 }
 
 export type Translate = (key: string, params?: Record<string, string | number>) => string;
@@ -100,7 +100,7 @@ export interface RichEditorCoreOptions {
   editable?: boolean;
   placeholder?: string;
   locale?: string;
-  messages?: Record<string, MessagesTree>;
+  messages?: Record<string, Messages>;
   limits?: Partial<EditorLimits>;
   uploadImage?: UploadAdapter;
   uploadAudio?: UploadAdapter;

@@ -9,7 +9,7 @@ built entirely on MIT / Apache-2.0 dependencies.
   rendered by MathJax, reopened in a visual editor by clicking them, and deleted
   only as a whole.
 - **HTML in, HTML out.** `v-model` is a plain HTML string.
-- **Russian by default**, any other locale via a JSON tree.
+- **Russian by default**, any other locale via a flat JSON table.
 - **Restyle without forking** — every value is a CSS variable.
 
 ```
@@ -105,7 +105,7 @@ Emits `rendered` once pending formulas have been drawn.
 | --- | --- | --- | --- |
 | `modelValue` | `string` | `''` | Document HTML. Sanitized on the way in |
 | `locale` | `string` | `'ru'` | Active locale |
-| `messages` | `Record<string, MessagesTree>` | — | Translations by locale |
+| `messages` | `Record<string, Messages>` | — | Translations by locale |
 | `uploadImage` / `uploadAudio` / `uploadFile` | `UploadAdapter` | — | Omit for the local blob-URL pipeline |
 | `limits` | `Partial<EditorLimits>` | see below | Size and duration caps |
 | `editable` | `boolean` | `true` | `false` hides the toolbar and locks the document |
@@ -288,8 +288,8 @@ MathJax needs nothing: glyph outlines are inlined into every rendered SVG.
 
 ## i18n
 
-Russian is built in. Add a locale by passing a JSON tree — a **partial** tree is
-fine, missing keys fall back to Russian.
+Russian is built in. Add a locale by passing a flat JSON table — a **partial**
+table is fine, missing keys fall back to Russian.
 
 ```vue
 <script setup lang="ts">
@@ -303,9 +303,12 @@ import en from './locales/en.json';
 
 ```jsonc
 {
-  "toolbar": { "bold": "Bold", "italic": "Italic", "headingLevel": "Heading {level}" },
-  "formula": { "titleMath": "Math formula", "categories": { "fractions": "Fractions" } },
-  "errors":  { "fileTooLarge": "File “{name}” is too large: {size}. Maximum is {max}." }
+  "toolbar_bold": "Bold",
+  "toolbar_italic": "Italic",
+  "toolbar_heading_level": "Heading {level}",
+  "formula_title_math": "Math formula",
+  "formula_categories_fractions": "Fractions",
+  "error_file_too_large": "File “{name}” is too large: {size}. Maximum is {max}."
 }
 ```
 
@@ -316,9 +319,9 @@ an export:
 import { enMessages } from '@rich-editor/vue';
 ```
 
-Top-level sections: `toolbar`, `table`, `link`, `color`, `image`, `audio`,
-`file`, `formula`, `errors`, `common`, `editor`. See
-`apps/demo/src/locales/en.json` for a full example.
+Keys are flat and `lower_snake`, prefixed by context: `toolbar_`, `table_`,
+`link_`, `color_`, `image_`, `audio_`, `file_`, `formula_`, `error_`, `common_`,
+`editor_`. See `apps/demo/src/locales/en.json` for a full example.
 
 ## Theming
 

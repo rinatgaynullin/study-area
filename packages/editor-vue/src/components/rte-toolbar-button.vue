@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import RteIcon from './RteIcon.vue';
+import RteIcon from './rte-icon.vue';
 
 withDefaults(
   defineProps<{

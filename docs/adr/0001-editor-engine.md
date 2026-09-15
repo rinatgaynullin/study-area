@@ -83,7 +83,7 @@ through `@tiptap/pm`), so it adds no new dependency surface. The cost is not
 trivial, and is recorded here so it need not be re-derived:
 
 - ~1,060 lines across six core files to rewrite, plus ~510 lines of Vue to
-  re-point (~50 command call sites in `RichEditor.vue` and `toolbarState.ts`).
+  re-point (~50 command call sites in `rich-editor.vue` and `toolbar-state.ts`).
 - The three node views port nearly verbatim — they are already plain DOM
   ProseMirror node views — but StarterKit's 22 built-ins would be hand-rolled,
   and `ListKeymap` and `TrailingNode` have no `prosemirror-*` equivalent.

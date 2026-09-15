@@ -49,7 +49,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'basic',
     type: 'math',
-    labelKey: 'formula.categories.basic',
+    labelKey: 'formula_categories_basic',
     templates: [
       t('basic', 'plus', 'a+b'),
       t('basic', 'minus', 'a-b'),
@@ -71,7 +71,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'fractions',
     type: 'math',
-    labelKey: 'formula.categories.fractions',
+    labelKey: 'formula_categories_fractions',
     templates: [
       t('fractions', 'frac', `\\frac{${P}}{${P}}`, '\\frac{a}{b}'),
       t('fractions', 'dfrac', `\\dfrac{${P}}{${P}}`, '\\dfrac{a}{b}'),
@@ -86,7 +86,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'roots',
     type: 'math',
-    labelKey: 'formula.categories.roots',
+    labelKey: 'formula_categories_roots',
     templates: [
       t('roots', 'sqrt', `\\sqrt{${P}}`, '\\sqrt{a}'),
       t('roots', 'nthroot', `\\sqrt[${P}]{${P}}`, '\\sqrt[n]{a}'),
@@ -98,7 +98,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'scripts',
     type: 'math',
-    labelKey: 'formula.categories.scripts',
+    labelKey: 'formula_categories_scripts',
     templates: [
       t('scripts', 'sup', `${P}^{${P}}`, 'a^{n}'),
       t('scripts', 'sub', `${P}_{${P}}`, 'a_{n}'),
@@ -118,7 +118,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'sums',
     type: 'math',
-    labelKey: 'formula.categories.sums',
+    labelKey: 'formula_categories_sums',
     templates: [
       t('sums', 'sum', `\\sum_{${P}}^{${P}}${P}`, '\\sum_{i=1}^{n}a_i'),
       t('sums', 'sumInf', '\\sum_{n=1}^{\\infty}a_n'),
@@ -132,7 +132,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'integrals',
     type: 'math',
-    labelKey: 'formula.categories.integrals',
+    labelKey: 'formula_categories_integrals',
     templates: [
       t('integrals', 'indefinite', `\\int ${P}\\,d${P}`, '\\int f(x)\\,dx'),
       t('integrals', 'definite', `\\int_{${P}}^{${P}}${P}\\,d${P}`, '\\int_{a}^{b}f(x)\\,dx'),
@@ -145,7 +145,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'limits',
     type: 'math',
-    labelKey: 'formula.categories.limits',
+    labelKey: 'formula_categories_limits',
     templates: [
       t('limits', 'lim', `\\lim_{${P}\\to ${P}}${P}`, '\\lim_{x\\to 0}f(x)'),
       t('limits', 'limInf', '\\lim_{n\\to\\infty}a_n'),
@@ -159,7 +159,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'matrices',
     type: 'math',
-    labelKey: 'formula.categories.matrices',
+    labelKey: 'formula_categories_matrices',
     templates: [
       t(
         'matrices',
@@ -191,7 +191,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'greek',
     type: 'math',
-    labelKey: 'formula.categories.greek',
+    labelKey: 'formula_categories_greek',
     templates: [
       t('greek', 'alpha', '\\alpha'),
       t('greek', 'beta', '\\beta'),
@@ -226,7 +226,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'relations',
     type: 'math',
-    labelKey: 'formula.categories.relations',
+    labelKey: 'formula_categories_relations',
     templates: [
       t('relations', 'ne', 'a\\ne b'),
       t('relations', 'approx', 'a\\approx b'),
@@ -255,7 +255,7 @@ const MATH_CATEGORIES: TemplateCategory[] = [
   {
     id: 'functions',
     type: 'math',
-    labelKey: 'formula.categories.functions',
+    labelKey: 'formula_categories_functions',
     templates: [
       t('functions', 'sin', `\\sin ${P}`, '\\sin x'),
       t('functions', 'cos', `\\cos ${P}`, '\\cos x'),
@@ -286,7 +286,7 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
   {
     id: 'chemReactions',
     type: 'chem',
-    labelKey: 'formula.categories.chemReactions',
+    labelKey: 'formula_categories_chem_reactions',
     templates: [
       t('chemReactions', 'yields', `${P}\\rightarrow ${P}`, '\\mathrm{A}\\rightarrow\\mathrm{B}'),
       t(
@@ -321,7 +321,7 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
   {
     id: 'chemStates',
     type: 'chem',
-    labelKey: 'formula.categories.chemStates',
+    labelKey: 'formula_categories_chem_states',
     templates: [
       t('chemStates', 'solid', `${P}(\\mathrm{s})`, '\\mathrm{NaCl}(\\mathrm{s})'),
       t('chemStates', 'liquid', `${P}(\\mathrm{l})`, '\\mathrm{H}_2\\mathrm{O}(\\mathrm{l})'),
@@ -336,7 +336,7 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
   {
     id: 'chemIsotopes',
     type: 'chem',
-    labelKey: 'formula.categories.chemIsotopes',
+    labelKey: 'formula_categories_chem_isotopes',
     templates: [
       t('chemIsotopes', 'isotope', `{\\,}^{${P}}_{${P}}\\mathrm{${P}}`, '{\\,}^{14}_{6}\\mathrm{C}'),
       t('chemIsotopes', 'massNumber', `{\\,}^{${P}}\\mathrm{${P}}`, '{\\,}^{14}\\mathrm{C}'),
@@ -354,7 +354,7 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
   {
     id: 'chemPatterns',
     type: 'chem',
-    labelKey: 'formula.categories.chemPatterns',
+    labelKey: 'formula_categories_chem_patterns',
     templates: [
       t('chemPatterns', 'water', '\\mathrm{H}_2\\mathrm{O}'),
       t('chemPatterns', 'co2', '\\mathrm{CO}_2'),

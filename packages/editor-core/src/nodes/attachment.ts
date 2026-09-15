@@ -125,7 +125,7 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
       link.download = attrs.name;
       link.rel = 'noopener noreferrer';
       link.textContent = attrs.name;
-      link.title = this.options.t('file.download');
+      link.title = this.options.t('file_download');
 
       const meta = document.createElement('span');
       meta.className = 'rte-attachment__meta';

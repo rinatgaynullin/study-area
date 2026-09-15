@@ -128,7 +128,7 @@ export const AudioNode = Node.create<AudioOptions>({
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'rte-audio__toggle';
-      button.setAttribute('aria-label', t('audio.play'));
+      button.setAttribute('aria-label', t('audio_play'));
       button.textContent = '▶';
 
       const waveform = document.createElement('div');
@@ -180,11 +180,11 @@ export const AudioNode = Node.create<AudioOptions>({
 
       const onPlay = () => {
         button.textContent = '❚❚';
-        button.setAttribute('aria-label', t('audio.pause'));
+        button.setAttribute('aria-label', t('audio_pause'));
       };
       const onPause = () => {
         button.textContent = '▶';
-        button.setAttribute('aria-label', t('audio.play'));
+        button.setAttribute('aria-label', t('audio_play'));
       };
       const onEnded = () => {
         onPause();

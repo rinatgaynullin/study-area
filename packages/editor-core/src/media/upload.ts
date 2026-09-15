@@ -84,7 +84,7 @@ export class UploadPipeline {
       this.fail(
         new RichEditorError(
           'unsupported-type',
-          t('errors.unsupportedType', { type: file.type || file.name }),
+          t('error_unsupported_type', { type: file.type || file.name }),
         ),
       );
       return null;
@@ -95,7 +95,7 @@ export class UploadPipeline {
       this.fail(
         new RichEditorError(
           'file-too-large',
-          t('errors.fileTooLarge', {
+          t('error_file_too_large', {
             name: file.name,
             size: formatBytes(file.size),
             max: formatBytes(max),
@@ -123,7 +123,7 @@ export class UploadPipeline {
       };
     } catch (cause) {
       this.fail(
-        new RichEditorError('upload-failed', t('errors.uploadFailed', { name: file.name }), cause),
+        new RichEditorError('upload-failed', t('error_upload_failed', { name: file.name }), cause),
       );
       return null;
     }

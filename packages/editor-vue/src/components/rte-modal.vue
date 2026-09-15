@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import RteIcon from './RteIcon.vue';
+import RteIcon from './rte-icon.vue';
 
 const props = withDefaults(
   defineProps<{ modelValue: boolean; title: string; closeLabel?: string; wide?: boolean }>(),
