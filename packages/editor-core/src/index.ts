@@ -1,4 +1,6 @@
 export { RichEditorCore, prepareIncomingHtml } from './editor';
+export type { PrepareIncomingHtmlOptions } from './editor';
+export { decodeWirisMathml, upgradeLegacyHtml } from './legacy';
 
 export {
   DEFAULT_LIMITS,

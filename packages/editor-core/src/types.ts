@@ -109,6 +109,12 @@ export interface RichEditorCoreOptions {
   formulaScale?: number;
   /** Extra TipTap extensions appended to the built-in set. */
   extensions?: unknown[];
+  /**
+   * Включает разбор разметки старого редактора (Froala + Wiris). Выключено по
+   * умолчанию: хостам без legacy-данных незачем платить разбором документа на
+   * каждом `setHTML`.
+   */
+  legacy?: boolean;
   onChange?: (html: string) => void;
   onSelectionUpdate?: (editor: Editor) => void;
   onTransaction?: (editor: Editor) => void;
