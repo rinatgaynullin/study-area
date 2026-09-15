@@ -1,0 +1,148 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f0f1f4;
+  color: #1d1d1d;
+}
+
+.demo {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.demo__header h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+
+.demo__subtitle {
+  margin: 0;
+  color: #5a5a5a;
+  font-size: 15px;
+}
+
+.demo__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid #d9dade;
+  border-radius: 8px;
+}
+
+.demo__controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #5a5a5a;
+}
+
+.demo__controls select,
+.demo__controls button {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d9dade;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  color: #1d1d1d;
+  cursor: pointer;
+}
+
+.demo__check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  height: 34px;
+}
+
+.demo__note {
+  margin: 0;
+  padding: 10px 12px;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #6d4c00;
+}
+
+.demo__editor--mobile {
+  max-width: 390px;
+}
+
+.demo__output,
+.demo__log {
+  background: #fff;
+  border: 1px solid #d9dade;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.demo__tabs {
+  display: flex;
+  border-bottom: 1px solid #d9dade;
+}
+
+.demo__tabs button {
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  color: #5a5a5a;
+  border-bottom: 2px solid transparent;
+}
+
+.demo__tab--active {
+  color: #1976d2;
+  border-bottom-color: #1976d2 !important;
+  font-weight: 600;
+}
+
+.demo__preview {
+  padding: 16px;
+}
+
+.demo__source {
+  margin: 0;
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 320px;
+  overflow: auto;
+  background: #fafafa;
+}
+
+.demo__log {
+  padding: 12px 16px;
+}
+
+.demo__log h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.demo__log ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #444;
+  max-height: 160px;
+  overflow: auto;
+}
