@@ -55,6 +55,68 @@ test.describe('document', () => {
   });
 });
 
+test.describe('pasting HTML into the editor', () => {
+  async function applySample(page: Page, sample: string): Promise<void> {
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page.getByRole('button', { name: sample }).click();
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+    await expect(page.locator('.demo__input-report')).toBeVisible();
+  }
+
+  test('strips everything executable from hostile markup', async ({ page }) => {
+    await openDemo(page);
+
+    const dialogs: string[] = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push(dialog.message());
+      void dialog.dismiss();
+    });
+
+    await applySample(page, 'Небезопасный HTML');
+    const html = await page.locator(EDITOR).innerHTML();
+
+    expect(html).toContain('Безопасный текст остаётся');
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/<iframe/i);
+    expect(html).not.toMatch(/<form|<input/i);
+    expect(html).not.toMatch(/javascript:/i);
+    expect(html).not.toMatch(/annotation-xml/i);
+    // Event handlers: match only a real attribute, so `contenteditable` does
+    // not read as a false positive.
+    expect(html).not.toMatch(/\son[a-z]+\s*=/i);
+
+    // A safe link survives, and gains the opener protection.
+    expect(html).toContain('https://example.com');
+    expect(html).toContain('noopener noreferrer');
+
+    expect(dialogs, 'no payload should have executed').toEqual([]);
+  });
+
+  test('turns raw MathML into editable formulas', async ({ page }) => {
+    await openDemo(page);
+    await applySample(page, 'MathML из другого редактора');
+
+    await expect(page.locator(`${FORMULA} svg`)).toHaveCount(3);
+    await expect(page.locator(`${FORMULA}[data-formula-type="chem"]`)).toHaveCount(1);
+    // The MathML must not leak into the document as text.
+    await expect(page.locator(EDITOR)).not.toContainText('mfrac');
+
+    await page.locator(FORMULA).first().click();
+    await expect(page.locator('.rte-modal__panel')).toBeVisible();
+  });
+
+  test('applies arbitrary typed HTML', async ({ page }) => {
+    await openDemo(page);
+
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page.locator('.demo__textarea').fill('<h2>Заголовок</h2><p><strong>жирный</strong></p>');
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+
+    await expect(page.locator(`${EDITOR} h2`)).toHaveText('Заголовок');
+    await expect(page.locator(`${EDITOR} strong`)).toHaveText('жирный');
+  });
+});
+
 test.describe('formula editing', () => {
   test('click opens the editor with the stored formula and saving updates it', async ({ page }) => {
     await openDemo(page);
@@ -96,7 +158,8 @@ test.describe('formula editing', () => {
     await page.locator('.rte-formula-editor__category', { hasText: 'Типовые формулы' }).click();
     await page.locator('.rte-formula-editor__template').first().click();
 
-    await page.getByRole('button', { name: 'Вставить' }).click();
+    // Exact: the demo also has a "Вставить HTML" tab, which this would match.
+    await page.getByRole('button', { name: 'Вставить', exact: true }).click();
     await expect(page.locator('.rte-modal__panel')).toBeHidden();
 
     await expect(page.locator(`${FORMULA}[data-formula-type="chem"]`)).toHaveCount(3);
