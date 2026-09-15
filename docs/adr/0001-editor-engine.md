@@ -55,3 +55,39 @@ views in `@rich-editor/core` instead, which:
   `packages/editor-core/src/index.ts`.
 - If TipTap were ever abandoned, the schema and node views port to plain
   ProseMirror without a rewrite, since that is what they already are underneath.
+
+## Addendum — licence audit, 2026-09-15
+
+The question "is TipTap paid?" was raised, so the dependency was audited rather
+than argued about. Findings, against the versions in the lockfile:
+
+- All **32** installed `@tiptap/*` packages (v3.31.3) declare `MIT`, and
+  `@tiptap/core/LICENSE.md` and `@tiptap/starter-kit/LICENSE.md` carry the full
+  MIT text, © Tiptap GmbH 2025.
+- None of them contains a licence-key check or any Pro gating.
+- The extensions this project installs — StarterKit, table, image, text-align,
+  text-style/color, highlight, subscript, superscript, placeholder — are all in
+  that MIT set.
+- What Tiptap charges for is its **hosted platform**: Collaboration, Comments,
+  Snapshots/version history, AI and the conversion services. In 2025 they moved
+  in the open-source direction, relicensing ten formerly-Pro extensions as MIT.
+  This project uses none of the paid products and makes no network calls to
+  Tiptap.
+
+So the MIT-only constraint in the brief is satisfied, and no migration is
+required on licensing grounds.
+
+Had one been required, the target would be **plain ProseMirror**, not another
+wrapper: every `prosemirror-*` package is already in the tree (MIT, pulled in
+through `@tiptap/pm`), so it adds no new dependency surface. The cost is not
+trivial, and is recorded here so it need not be re-derived:
+
+- ~1,060 lines across six core files to rewrite, plus ~510 lines of Vue to
+  re-point (~50 command call sites in `RichEditor.vue` and `toolbarState.ts`).
+- The three node views port nearly verbatim — they are already plain DOM
+  ProseMirror node views — but StarterKit's 22 built-ins would be hand-rolled,
+  and `ListKeymap` and `TrailingNode` have no `prosemirror-*` equivalent.
+- Two unavoidable public API breaks: the `Editor` type re-export chain at the
+  end of `packages/editor-core/src/index.ts`, and the
+  `RichEditorCoreOptions.extensions` escape hatch that lets hosts inject their
+  own TipTap extensions.
