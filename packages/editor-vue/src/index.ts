@@ -26,6 +26,7 @@ export {
   type ToolbarState,
 } from './composables/toolbarState';
 export { useEditorI18n } from './composables/useEditorI18n';
+export { MATHLIVE_STRINGS, mathliveRu } from './i18n/mathlive';
 export { clearPreviewCache, renderLatexPreview } from './composables/useFormulaPreview';
 
 // Re-exported so hosts need only this package for typing adapters and messages.

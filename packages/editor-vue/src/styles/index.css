@@ -539,6 +539,14 @@
   font-size: 20px;
 }
 
+/* The dialog has its own template gallery, so MathLive's on-screen keyboard is
+   redundant here. `mathVirtualKeyboardPolicy: 'manual'` stops it opening on
+   focus; this hides the toggle that would still open it by hand. MathLive
+   exposes the button as a shadow part, so no style injection is needed. */
+.rte-formula-editor__field::part(virtual-keyboard-toggle) {
+  display: none;
+}
+
 .rte-formula-editor__hint {
   margin: 6px 0 0;
   font-size: 12px;

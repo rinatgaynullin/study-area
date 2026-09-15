@@ -392,6 +392,7 @@ defineExpose({
       :t="t"
       :payload="formulaPayload"
       :fonts-directory="mathliveFontsDirectory"
+      :locale="locale"
       @save="saveFormula"
       @remove="removeFormula"
     />

@@ -12,6 +12,7 @@ import {
 import RteModal from '../RteModal.vue';
 import RteIcon from '../RteIcon.vue';
 import { renderLatexPreview } from '../../composables/useFormulaPreview';
+import { MATHLIVE_STRINGS } from '../../i18n/mathlive';
 
 const props = withDefaults(
   defineProps<{
@@ -20,8 +21,10 @@ const props = withDefaults(
     payload: FormulaPayload | null;
     /** Where MathLive should load its fonts from; `null` uses already-loaded CSS. */
     fontsDirectory?: string | null;
+    /** Language for MathLive's own context menu and tooltips. */
+    locale?: string;
   }>(),
-  { fontsDirectory: null },
+  { fontsDirectory: null, locale: 'ru' },
 );
 
 const emit = defineEmits<{
@@ -34,6 +37,22 @@ const host = ref<HTMLElement | null>(null);
 const mathfield = shallowRef<HTMLElement & { value: string; insert: (s: string, o?: unknown) => void; focus: () => void } | null>(null);
 const loading = ref(false);
 const failed = ref(false);
+
+/** MathLive holds its locale on the class, so the loaded constructor is kept. */
+type MathfieldCtor = { locale: string };
+const mathfieldCtor = shallowRef<MathfieldCtor | null>(null);
+
+function applyLocale(ctor: MathfieldCtor): void {
+  mathfieldCtor.value = ctor;
+  ctor.locale = props.locale;
+}
+
+watch(
+  () => props.locale,
+  () => {
+    if (mathfieldCtor.value) applyLocale(mathfieldCtor.value);
+  },
+);
 
 const type = ref<FormulaType>('math');
 const latex = ref('');
@@ -61,7 +80,19 @@ async function ensureMathfield(): Promise<void> {
       MathfieldElement.fontsDirectory = props.fontsDirectory;
     }
 
-    const field = new MathfieldElement({ defaultMode: 'math' });
+    // MathLive ships no Russian translation, so its menu would stay English.
+    // The setter merges, and `localize()` falls back ru-RU → ru → en, so a
+    // language-only key covers every region.
+    MathfieldElement.strings = MATHLIVE_STRINGS;
+    applyLocale(MathfieldElement);
+
+    const field = new MathfieldElement({
+      defaultMode: 'math',
+      // The dialog is a desktop-style form with a template gallery; MathLive's
+      // own on-screen keyboard duplicates it and covers the preview. 'manual'
+      // stops it opening on focus — the toggle button is hidden in CSS.
+      mathVirtualKeyboardPolicy: 'manual',
+    });
     field.className = 'rte-formula-editor__field';
     field.addEventListener('input', () => {
       latex.value = field.value;

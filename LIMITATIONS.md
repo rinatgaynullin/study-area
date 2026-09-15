@@ -44,6 +44,23 @@ and script elements are padded to their required arity — but content the
 converter dropped cannot be recovered. Every shipped template is verified
 against the real pipeline by an automated test.
 
+## MathLive's own UI is only partly translatable
+
+MathLive bundles translations for de, en, es, fr, it, ja and pl — not Russian.
+`packages/editor-vue/src/i18n/mathlive.ts` supplies the missing Russian table
+and merges it in via `MathfieldElement.strings`, covering all 83 prose keys of
+MathLive's context menu and tooltips. Two consequences:
+
+- The 13 `menu.insert.*-template` entries are LaTeX fragments rather than prose,
+  so they stay as MathLive ships them.
+- The table is pinned to MathLive's key names by a test. If an upgrade renames a
+  key, that test fails rather than the menu silently reverting to English.
+
+The on-screen keyboard is switched off in the formula dialog
+(`mathVirtualKeyboardPolicy: 'manual'`, plus the toggle hidden through
+`::part(virtual-keyboard-toggle)`), because the dialog's own template gallery
+covers the same ground and the keyboard obscures the preview.
+
 ## Formula round-trip fidelity
 
 Formulas authored here round-trip exactly: the LaTeX travels inside the MathML
