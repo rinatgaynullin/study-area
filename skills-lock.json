@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "skills": {
+    "umschool-frontend-styleguide": {
+      "source": "git@gitlab.umschool.dev:umschool/frontend/documentation.git",
+      "sourceUrl": "git@gitlab.umschool.dev:umschool/frontend/documentation.git",
+      "sourceType": "git",
+      "skillPath": "skills/umschool-frontend-styleguide/SKILL.md",
+      "computedHash": "2312890d78706be6b7d8be47ac63cbfc4882e3bd3038cf4ffb585448dcc65c64"
+    }
+  }
+}

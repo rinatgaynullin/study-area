@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Styleguide"
+  short_description: "Локальные правила frontend-разработки"
+  default_prompt: "Используй $umschool-frontend-styleguide, чтобы реализовать или проверить frontend-код по правилам текущего репозитория."
