@@ -3,6 +3,8 @@ export { default as RichEditor } from './components/rich-editor.vue';
 export { default as EditorToolbar } from './components/editor-toolbar.vue';
 export { default as RteIcon } from './components/rte-icon.vue';
 export { default as RteModal } from './components/rte-modal.vue';
+export { default as RtePopover } from './components/rte-popover.vue';
+export { default as LinkPopover } from './components/link-popover.vue';
 export { default as FormulaDialog } from './components/dialogs/formula-dialog.vue';
 export { default as AudioRecorderDialog } from './components/dialogs/audio-recorder-dialog.vue';
 
@@ -22,6 +24,7 @@ export {
 } from './composables/toolbar-state';
 export { useEditorI18n } from './composables/use-editor-i18n';
 export { MATHLIVE_STRINGS, mathliveRu } from './i18n/mathlive';
+export { DEFAULT_LINK_STYLES, type LinkStyle } from './link-styles';
 export { clearPreviewCache, renderLatexPreview } from './composables/use-formula-preview';
 
 // Re-exported so hosts need only this package for typing adapters and messages.

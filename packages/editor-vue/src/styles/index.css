@@ -730,3 +730,44 @@
     transition: none;
   }
 }
+
+/* Панель у элемента: ссылка под курсором, размеры картинки и т. п. */
+.rte-popover {
+  position: fixed;
+  z-index: var(--rte-z-modal, 1000);
+  background: var(--rte-color-bg, #fff);
+  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border-radius: var(--rte-radius, 4px);
+  box-shadow: var(--rte-shadow, 0 2px 8px rgba(0, 0, 0, 0.15));
+  padding: 10px;
+  font-family: var(--rte-font-family, inherit);
+  font-size: 13px;
+  color: var(--rte-color-text, #414141);
+}
+
+.rte-link-popover {
+  display: grid;
+  gap: 8px;
+  min-width: 280px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.rte-link-popover__field {
+  display: grid;
+  gap: 3px;
+}
+
+.rte-link-popover__label {
+  color: var(--rte-color-muted, #6b6b6b);
+  font-size: 12px;
+}
+
+.rte-link-popover__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rte-link-popover__spacer {
+  flex: 1;
+}

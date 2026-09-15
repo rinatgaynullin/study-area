@@ -17,12 +17,14 @@ import {
 
 import EditorToolbar from './editor-toolbar.vue';
 import LinkDialog from './dialogs/link-dialog.vue';
+import LinkPopover from './link-popover.vue';
 import TableDialog from './dialogs/table-dialog.vue';
 import FormulaDialog from './dialogs/formula-dialog.vue';
 import AudioRecorderDialog from './dialogs/audio-recorder-dialog.vue';
 import { useEditorI18n } from '../composables/use-editor-i18n';
 import { emptyToolbarState, readToolbarState, type ToolbarState } from '../composables/toolbar-state';
 import { resolveToolbar, type ToolbarConfig } from '../toolbar/presets';
+import { DEFAULT_LINK_STYLES, type LinkStyle } from '../link-styles';
 
 const props = withDefaults(
   defineProps<{
@@ -38,6 +40,8 @@ const props = withDefaults(
     placeholder?: string;
     /** Scales MathJax output relative to the surrounding text. */
     formulaScale?: number;
+    /** Варианты оформления ссылки, доступные в поповере. */
+    linkStyles?: LinkStyle[];
     /**
      * Разбирать разметку старого редактора (Froala + Wiris).
      *
@@ -57,6 +61,7 @@ const props = withDefaults(
     toolbar: 'full',
     formulaScale: 1,
     legacy: false,
+    linkStyles: () => DEFAULT_LINK_STYLES,
     mathliveFontsDirectory: null,
     minHeight: '220px',
   },
@@ -85,6 +90,11 @@ const isFormulaVisible = ref(false);
 const isRecorderVisible = ref(false);
 const formulaPayload = ref<FormulaPayload | null>(null);
 
+const isLinkPopoverVisible = ref(false);
+const linkAnchor = ref<DOMRect | null>(null);
+const linkText = ref('');
+const linkClass = ref('');
+
 const { t } = useEditorI18n(toRef(props, 'locale'), toRef(props, 'messages'));
 const groups = computed(() => resolveToolbar(props.toolbar));
 const limits = computed(() => core.value?.getLimits());
@@ -93,7 +103,9 @@ const limits = computed(() => core.value?.getLimits());
 let lastEmitted = '';
 
 function syncState(): void {
-  if (core.value) state.value = readToolbarState(core.value.editor);
+  if (!core.value) return;
+  state.value = readToolbarState(core.value.editor);
+  syncLinkPopover();
 }
 
 onMounted(() => {
@@ -277,6 +289,72 @@ function applyLink(payload: { href: string; targetBlank: boolean }): void {
     .run();
 }
 
+/**
+ * Открывает поповер, когда курсор оказался внутри ссылки, и закрывает, когда
+ * вышел. Опираемся на настоящий DOM-элемент ссылки: `coordsAtPos` даёт позицию
+ * каретки, а панель должна стоять у всей ссылки целиком.
+ */
+function syncLinkPopover(): void {
+  const instance = core.value;
+  if (!instance) return;
+
+  const { editor } = instance;
+  if (!editor.isEditable || !editor.isActive('link')) {
+    isLinkPopoverVisible.value = false;
+    linkAnchor.value = null;
+    return;
+  }
+
+  const element = editor.view.domAtPos(editor.state.selection.from).node;
+  const anchorElement =
+    element instanceof HTMLElement
+      ? element.closest('a')
+      : (element.parentElement?.closest('a') ?? null);
+
+  if (!anchorElement) {
+    isLinkPopoverVisible.value = false;
+    return;
+  }
+
+  const attributes = editor.getAttributes('link');
+  linkAnchor.value = anchorElement.getBoundingClientRect();
+  linkText.value = anchorElement.textContent ?? '';
+  linkClass.value = (attributes.class as string) ?? '';
+  isLinkPopoverVisible.value = true;
+}
+
+/**
+ * Применяет правки из поповера.
+ *
+ * Подпись меняется заменой содержимого всей марки: иначе новый текст встанет
+ * рядом со старым, а не вместо него.
+ */
+function applyLinkEdit(payload: { href: string; text: string; linkClass: string }): void {
+  const instance = core.value;
+  if (!instance) return;
+
+  const attrs = {
+    href: payload.href,
+    target: instance.editor.getAttributes('link').target ?? '_blank',
+    class: payload.linkClass || null,
+  };
+
+  const command = chain().extendMarkRange('link');
+  const nextText = payload.text.trim();
+
+  if (nextText && nextText !== linkText.value.trim()) {
+    command.insertContent({
+      type: 'text',
+      text: nextText,
+      marks: [{ type: 'link', attrs }],
+    });
+  } else {
+    command.setLink(attrs);
+  }
+
+  command.run();
+}
+
 function removeLink(): void {
   chain().extendMarkRange('link').unsetLink().run();
 }
@@ -386,6 +464,18 @@ defineExpose({
       class="rte-hidden-input"
       :accept="TEXT_FILE_ACCEPT"
       @change="onFilePicked"
+    />
+
+    <LinkPopover
+      v-model="isLinkPopoverVisible"
+      :t="t"
+      :anchor="linkAnchor"
+      :href="state.linkHref"
+      :text="linkText"
+      :link-class="linkClass"
+      :styles="linkStyles"
+      @apply="applyLinkEdit"
+      @remove="removeLink"
     />
 
     <LinkDialog

@@ -45,6 +45,9 @@ export interface PrepareIncomingHtmlOptions {
   legacy?: boolean;
 }
 
+/** Ниже этого размера картинку уже не за что ухватить. */
+const IMAGE_MIN_SIZE = 40;
+
 /** Sanitizes and upgrades HTML arriving from outside the editor. */
 export function prepareIncomingHtml(
   html: string,
@@ -148,6 +151,15 @@ export class RichEditorCore {
         inline: this.options.legacy ?? false,
         allowBase64: true,
         HTMLAttributes: { class: 'rte-image' },
+        // Ручки по углам, как в старом редакторе. Пропорции держим всегда:
+        // растянутая по одной оси картинка — почти всегда промах мышью, а не
+        // намерение.
+        resize: {
+          enabled: true,
+          alwaysPreserveAspectRatio: true,
+          minWidth: IMAGE_MIN_SIZE,
+          minHeight: IMAGE_MIN_SIZE,
+        },
       }),
       Placeholder.configure({
         placeholder: this.options.placeholder ?? t('editor_placeholder'),

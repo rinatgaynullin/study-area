@@ -321,3 +321,68 @@
 .rte-content .ProseMirror-gapcursor::after {
   border-top-color: var(--rte-color-text, #1d1d1d);
 }
+
+/*
+ * Ручки изменения размера картинки. Разметку строит ResizableNodeView из
+ * @tiptap/core, здесь только оформление: контейнер, обёртка и по ручке на
+ * каждый угол размечены data-атрибутами.
+ */
+.rte-content [data-resize-container] {
+  max-width: 100%;
+}
+
+.rte-content [data-resize-wrapper] {
+  max-width: 100%;
+}
+
+.rte-content [data-resize-handle] {
+  width: var(--rte-resize-handle-size, 10px);
+  height: var(--rte-resize-handle-size, 10px);
+  background: var(--rte-color-primary, #1976d2);
+  border: 1px solid var(--rte-color-on-primary, #fff);
+  border-radius: var(--rte-radius-sm, 3px);
+  /* Ручки видны только когда картинка выбрана: иначе они перекрывают контент
+     при простом чтении документа. */
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.rte-content [data-resize-container]:hover [data-resize-handle],
+.rte-content [data-resize-state='true'] [data-resize-handle],
+.rte-content .ProseMirror-selectednode [data-resize-handle],
+.rte-content [data-resize-container]:has(.ProseMirror-selectednode) [data-resize-handle] {
+  opacity: 1;
+}
+
+.rte-content [data-resize-handle='top-left'] {
+  cursor: nwse-resize;
+}
+
+.rte-content [data-resize-handle='top-right'] {
+  cursor: nesw-resize;
+}
+
+.rte-content [data-resize-handle='bottom-left'] {
+  cursor: nesw-resize;
+}
+
+.rte-content [data-resize-handle='bottom-right'] {
+  cursor: nwse-resize;
+}
+
+/* Во время перетаскивания выделение текста только мешает. */
+.rte-content [data-resize-state='true'] {
+  user-select: none;
+}
+
+/*
+ * Варианты оформления ссылок. Класс ставится маркой, поэтому переживает
+ * экспорт и читается вьюером без участия редактора.
+ */
+.rte-content a.rte-link--strong {
+  font-weight: 700;
+}
+
+.rte-content a.rte-link--muted {
+  color: var(--rte-color-muted, #6b6b6b);
+}

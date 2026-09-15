@@ -106,6 +106,7 @@ Emits `rendered` once pending formulas have been drawn.
 | `modelValue` | `string` | `''` | Document HTML. Sanitized on the way in |
 | `locale` | `string` | `'ru'` | Active locale |
 | `messages` | `Record<string, Messages>` | — | Translations by locale |
+| `linkStyles` | `LinkStyle[]` | three built-ins | Style choices offered in the link popover |
 | `uploadImage` / `uploadAudio` / `uploadFile` | `UploadAdapter` | — | Omit for the local blob-URL pipeline |
 | `limits` | `Partial<EditorLimits>` | see below | Size and duration caps |
 | `editable` | `boolean` | `true` | `false` hides the toolbar and locks the document |
@@ -164,6 +165,34 @@ const toolbar = [
 
 A `collapsible` group made only of plain buttons folds into a `⋯` menu when the
 toolbar is too narrow.
+
+## Images and links
+
+**Images resize by dragging** any of the four corner handles. The aspect ratio is
+always preserved — a picture stretched on one axis is almost always a slipped
+mouse rather than an intention. The result is stored as `width`/`height` on the
+`<img>`, so it survives export and renders the same in the read-only viewer.
+
+**Links get a popover** when the caret lands inside one: edit the URL, edit the
+visible text, pick a style, open the link, or unlink. A popover rather than a
+modal, because working on a link is several small edits in a row and the
+surrounding paragraph has to stay visible.
+
+Style choices are configurable; each writes a class onto the link mark, so it
+survives export and needs no editor to render:
+
+```ts
+import type { LinkStyle } from '@rich-editor/vue';
+
+const linkStyles: LinkStyle[] = [
+  { labelKey: 'link_style_default', className: '' },
+  { labelKey: 'link_style_strong', className: 'rte-link--strong' },
+  { labelKey: 'my_brand_style', className: 'brand-link' },
+];
+```
+
+`labelKey` is resolved through the same translator as the rest of the UI, so a
+custom entry needs a matching key in your locale table.
 
 ## Upload adapters
 
