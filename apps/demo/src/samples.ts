@@ -9,6 +9,10 @@ export interface HtmlSample {
   html: string;
 }
 
+/** Пустой GIF: в образцах важна разметка вокруг картинки, а не она сама. */
+const PIXEL =
+  'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
 export const HTML_SAMPLES: HtmlSample[] = [
   {
     id: 'mathml',
@@ -35,7 +39,9 @@ export const HTML_SAMPLES: HtmlSample[] = [
 <p><span class="fr-class-code">inline code</span>, <span class="fr-class-transparency">полупрозрачный текст</span>.</p>
 <table class="fr-dashed-borders"><thead><tr><th>Величина</th><th>Значение</th></tr></thead><tbody><tr><td>Ускорение</td><td class="fr-highlighted">9.81</td></tr><tr><td>Масса</td><td class="fr-thick">2 кг</td></tr></tbody></table>
 <p><a href="theory.pdf" class="fr-file">Теория.pdf</a> и <a href="https://example.com" class="fr-green fr-strong">ссылка Froala</a>.</p>
-<p class="fr-text-bordered">Абзац в рамке сверху и снизу.</p>`,
+<p class="fr-text-bordered">Абзац в рамке сверху и снизу.</p>
+<p><img class="fr-dib" src="${PIXEL}" alt="по центру"> <img class="fr-dii fr-rounded" src="${PIXEL}" alt="скруглённая"> <img class="fr-dii fr-bordered" src="${PIXEL}" alt="в рамке"> <img class="fr-dii fr-shadow" src="${PIXEL}" alt="с тенью"></p>
+<span class="fr-img-caption fr-dib" style="width: 120px;"><span class="fr-img-wrap"><img src="${PIXEL}" alt="схема"><span class="fr-inner">Рис. 1. Подпись</span></span></span>`,
   },
   {
     id: 'inline-styles',

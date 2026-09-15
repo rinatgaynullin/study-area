@@ -22,7 +22,7 @@ const editable = ref(true);
 const mobilePreview = ref(false);
 const isLegacyEnabled = ref(false);
 const toolbarPreset = ref<'full' | 'standard' | 'minimal'>('full');
-const outputTab = ref<'preview' | 'source' | 'input'>('preview');
+const outputTab = ref<'preview' | 'source' | 'input' | 'raw'>('preview');
 const log = ref<string[]>([]);
 
 const draftHtml = ref('');
@@ -271,6 +271,13 @@ async function reloadSample(): Promise<void> {
         >
           Вставить HTML
         </button>
+        <button
+          type="button"
+          :class="{ 'demo__tab--active': outputTab === 'raw' }"
+          @click="outputTab = 'raw'"
+        >
+          Вьюер без редактора
+        </button>
       </div>
 
       <!-- Read-only viewer: no toolbar, no ProseMirror, no MathLive. Formulas
@@ -283,6 +290,16 @@ async function reloadSample(): Promise<void> {
         :legacy="isLegacyEnabled"
       />
       <pre v-else-if="outputTab === 'source'" class="demo__source">{{ html }}</pre>
+
+      <!-- Исходный HTML прямо во вьюере, минуя схему редактора. Это тот путь,
+           которым продакшен показывает legacy-контент: классы доживают до DOM,
+           и его оформляет compat-слой. -->
+      <RichContent
+        v-else-if="outputTab === 'raw'"
+        class="demo__preview demo__preview--raw"
+        :html="draftHtml || html"
+        :legacy="isLegacyEnabled"
+      />
 
       <div v-else class="demo__input">
         <p class="demo__input-lead">

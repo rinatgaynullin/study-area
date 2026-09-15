@@ -6,7 +6,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import TextAlign from '@tiptap/extension-text-align';
 import { TableKit } from '@tiptap/extension-table';
-import { Color } from '@tiptap/extension-text-style';
+import { Color, FontSize } from '@tiptap/extension-text-style';
 import { Placeholder } from '@tiptap/extensions';
 
 import {
@@ -24,7 +24,7 @@ import {
 import { createI18n, type I18n } from './i18n';
 import { sanitizeHtml } from './security/sanitize';
 import { inlineMathMLToFormulaNodes } from './formula/import';
-import { TextStyleWithFontSize } from './extensions/text-style-with-font-size';
+import { StrictTextStyle } from './extensions/strict-text-style';
 import { LegacyHighlight } from './legacy/legacy-highlight';
 import { upgradeLegacyHtml } from './legacy/upgrade-legacy-html';
 import { whenFormulasReady } from './formula/mathjax';
@@ -125,8 +125,13 @@ export class RichEditorCore {
         },
         codeBlock: { HTMLAttributes: { class: 'rte-code-block' } },
       }),
-      TextStyleWithFontSize,
+      StrictTextStyle,
       Color,
+      // Размер шрифта из инлайнового стиля. Без него разметка старого
+      // редактора теряет кегль: текст в 72px отрисовывается базовым.
+      // Не привязано к legacy-режиму намеренно — иначе один документ выглядел
+      // бы по-разному в зависимости от флага.
+      FontSize,
       // В legacy-режиме подсветка приходит инлайновым стилем, а не <mark>.
       (this.options.legacy ? LegacyHighlight : Highlight).configure({ multicolor: true }),
       Subscript,

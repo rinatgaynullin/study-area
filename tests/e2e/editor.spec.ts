@@ -379,3 +379,78 @@ test.describe('инлайновое оформление', () => {
     expect(asLegacy).toEqual(asNew);
   });
 });
+
+test.describe('compat-стили применяются в браузере', () => {
+  /**
+   * Проверяем вид через computed-стили, а не через пиксельный снимок.
+   * Playwright 1.58 ставит сборку Chromium 1243, а в среде разработки может
+   * стоять другая — baseline, снятый на одной сборке, разойдётся с CI из-за
+   * растеризации шрифтов. Computed-стили от сборки не зависят и проверяют
+   * ровно то, что задаёт compat-слой.
+   */
+  async function openLegacyViewer(page: import('@playwright/test').Page) {
+    await openDemo(page);
+    await page.getByRole('checkbox', { name: 'Legacy-контент (Froala)' }).check();
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page.getByRole('button', { name: 'Legacy-контент Froala' }).click();
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+
+    // Вьюер рендерит исходный HTML без ProseMirror — классы там доживают до
+    // DOM, поэтому compat-стили проверяем именно на нём. Вкладка с экспортом
+    // редактора для этого не годится: схема классы снимает.
+    await page.getByRole('button', { name: 'Вьюер без редактора' }).click();
+    const viewer = page.locator('.demo__preview--raw.rte-legacy');
+    await expect(viewer).toBeVisible();
+    return viewer;
+  }
+
+  const styleOf = (locator: import('@playwright/test').Locator, property: string) =>
+    locator.evaluate(
+      (element, name) => getComputedStyle(element).getPropertyValue(name),
+      property,
+    );
+
+  test('раскладка и оформление картинок', async ({ page }) => {
+    const viewer = await openLegacyViewer(page);
+
+    // fr-dib блочная и по центру, fr-dii в строке — это и есть модель Froala.
+    expect(await styleOf(viewer.locator('img.fr-dib').first(), 'display')).toBe('block');
+    expect(await styleOf(viewer.locator('img.fr-dii').first(), 'display')).toBe('inline-block');
+
+    // Скругление только у fr-rounded: собственное правило редактора скругляло
+    // бы все картинки подряд.
+    expect(await styleOf(viewer.locator('img.fr-rounded'), 'border-radius')).not.toBe('0px');
+    expect(await styleOf(viewer.locator('img.fr-dib').first(), 'border-radius')).toBe('0px');
+
+    expect(await styleOf(viewer.locator('img.fr-bordered'), 'border-top-style')).toBe('solid');
+    expect(await styleOf(viewer.locator('img.fr-shadow'), 'box-shadow')).not.toBe('none');
+  });
+
+  test('таблицы, текстовые классы и подпись', async ({ page }) => {
+    const viewer = await openLegacyViewer(page);
+
+    expect(
+      await styleOf(viewer.locator('table.fr-dashed-borders td').first(), 'border-top-style'),
+    ).toBe('dashed');
+    expect(await styleOf(viewer.locator('td.fr-thick'), 'border-top-width')).toBe('2px');
+    expect(await styleOf(viewer.locator('td.fr-highlighted'), 'border-top-style')).toBe('double');
+
+    expect(await styleOf(viewer.locator('.fr-text-uppercase'), 'text-transform')).toBe('uppercase');
+    expect(await styleOf(viewer.locator('.fr-text-spaced'), 'letter-spacing')).toBe('1px');
+    expect(await styleOf(viewer.locator('.fr-class-transparency'), 'opacity')).toBe('0.5');
+    expect(await styleOf(viewer.locator('.fr-inner'), 'text-align')).toBe('center');
+  });
+
+  test('формулы не разрывают строку', async ({ page }) => {
+    const viewer = await openLegacyViewer(page);
+
+    // Формула Wiris стала узлом и стоит внутри абзаца с текстом.
+    const paragraph = viewer.locator('p').filter({ hasText: 'Решите уравнение' });
+    await expect(paragraph.locator('.rte-formula')).toHaveCount(1);
+    await expect(paragraph).toContainText('при указанных условиях.');
+
+    // Вывод MathJax внутри формулы остаётся инлайновым, несмотря на то что
+    // preflight у хоста мог бы сделать svg блочным.
+    expect(await styleOf(viewer.locator('.rte-formula svg').first(), 'display')).not.toBe('block');
+  });
+});

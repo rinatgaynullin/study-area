@@ -27,7 +27,7 @@ const HTML_ATTRS = [
   'data-formula', 'data-formula-type', 'data-mathml',
   'data-audio', 'data-duration', 'data-peaks', 'data-name', 'data-mime',
   'data-attachment', 'data-size', 'data-text-align', 'data-render-host',
-  'data-legacy-embed',
+  'data-legacy-embed', 'data-color',
   // Attributes carried by the embedded MathJax SVG.
   'viewBox', 'viewbox', 'xmlns', 'xmlns:xlink', 'xlink:href', 'd', 'transform',
   'fill', 'stroke', 'stroke-width', 'focusable', 'role', 'aria-hidden',
