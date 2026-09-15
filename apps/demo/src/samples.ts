@@ -20,6 +20,12 @@ export const HTML_SAMPLES: HtmlSample[] = [
 <p>Реакция: <math xmlns="http://www.w3.org/1998/Math/MathML" data-formula-type="chem"><mrow><mn>2</mn><msub><mi mathvariant="normal">H</mi><mn>2</mn></msub><mo>+</mo><msub><mi mathvariant="normal">O</mi><mn>2</mn></msub><mo>&#x2192;</mo><mn>2</mn><msub><mi mathvariant="normal">H</mi><mn>2</mn></msub><mi mathvariant="normal">O</mi></mrow></math></p>`,
   },
   {
+    id: 'system',
+    label: 'Система уравнений',
+    hint: 'Фигурная скобка (<mfenced>), таблица строк и корень внутри — сложный MathML из стороннего редактора.',
+    html: `<p>При каких значениях параметра а система уравнений</p><p><math xmlns="http://www.w3.org/1998/Math/MathML"><mfenced close="" open="{"><mtable columnalign="left"><mtr><mtd><mo>(</mo><mi>x</mi><msup><mi>y</mi><mn>2</mn></msup><mo>-</mo><mn>3</mn><mi>x</mi><mi>y</mi><mo>-</mo><mn>3</mn><mi>y</mi><mo>+</mo><mn>9</mn><mo>)</mo><msqrt><mn>3</mn><mo>-</mo><mi>x</mi></msqrt><mo>=</mo><mn>0</mn></mtd></mtr><mtr><mtd><mi>y</mi><mo>=</mo><mi>a</mi><mi>x</mi></mtd></mtr></mtable></mfenced></math></p><p>имеет ровно три различных решения?</p>`,
+  },
+  {
     id: 'hostile',
     label: 'Небезопасный HTML',
     hint: 'Скрипты, обработчики событий, javascript:-ссылки и фреймы вырезаются.',
