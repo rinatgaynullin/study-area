@@ -426,7 +426,6 @@
 }
 
 .rte-input {
-  width: 100%;
   height: 38px;
   padding: 0 10px;
   border: 1px solid var(--rte-color-border, #d5d5d5);
