@@ -3,7 +3,11 @@
 // который по соглашению содержит только реэкспорты.
 import '../styles/index.css';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { prepareIncomingHtml, renderMathML } from '@rich-editor/core';
+import {
+  DEFAULT_FORMULA_FONT_SIZE_PX,
+  prepareIncomingHtml,
+  renderMathML,
+} from '@rich-editor/core';
 
 /**
  * Read-only viewer for documents produced by `<RichEditor />`.
@@ -50,11 +54,15 @@ async function renderPendingFormulas(): Promise<void> {
         formula.querySelector<HTMLElement>('[data-render-host]') ??
         formula.appendChild(createRenderHost());
 
-      if (props.formulaScale !== 1) host.style.fontSize = `${props.formulaScale}em`;
-      // An SVG that travelled with the document needs no re-render.
-      if (host.childElementCount > 0) return;
+      // SVG, приехавший вместе с документом, уже нужного размера — если только
+      // хост не попросил другой масштаб: пиксели в разметке на font-size не
+      // реагируют, поэтому единственный способ его применить — перерисовать.
+      const isDefaultScale = props.formulaScale === 1;
+      if (host.childElementCount > 0 && isDefaultScale) return;
 
-      const svg = await renderMathML(formula.getAttribute('data-mathml') ?? '');
+      const svg = await renderMathML(formula.getAttribute('data-mathml') ?? '', {
+        fontSizePx: DEFAULT_FORMULA_FONT_SIZE_PX * props.formulaScale,
+      });
       if (svg) host.innerHTML = svg;
     }),
   );

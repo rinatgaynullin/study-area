@@ -1,4 +1,8 @@
-import { latexToMathML, renderMathML } from '@rich-editor/core';
+import {
+  DEFAULT_FORMULA_FONT_SIZE_PX,
+  latexToMathML,
+  renderMathML,
+} from '@rich-editor/core';
 import type { FormulaType } from '@rich-editor/core';
 
 const cache = new Map<string, string>();
@@ -23,7 +27,9 @@ export async function renderLatexPreview(
   const mathml = await latexToMathML(previewLatex, type);
   if (!mathml) return '';
 
-  const svg = await renderMathML(mathml);
+  const svg = await renderMathML(mathml, {
+    fontSizePx: DEFAULT_FORMULA_FONT_SIZE_PX * scale,
+  });
   cache.set(key, svg);
   return svg;
 }

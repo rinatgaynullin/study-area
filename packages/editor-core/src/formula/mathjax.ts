@@ -8,8 +8,48 @@ interface MathJaxDocument {
 interface Engine {
   doc: MathJaxDocument;
   outerHTML(node: unknown): string;
+  /** Переводит ex-размеры готового SVG в пиксели. */
+  freezeSizeInPixels(node: unknown, pxPerEm: number): void;
   /** Resolves MathJax's dynamic font loading, which it signals by throwing. */
   handleRetriesFor<T>(action: () => T): Promise<T>;
+}
+
+/**
+ * Отношение x-height к кеглю у шрифта, относительно которого фиксируется
+ * размер формулы.
+ *
+ * Именно так браузер и разрешает `ex`: 1ex — это x-height унаследованного
+ * шрифта. Значение измерено у шрифта контента по умолчанию (`--rte-font-family`
+ * при `--rte-font-size: 15px`): 1ex = 9px, то есть ровно 0.6.
+ *
+ * Опция `exFactor` у SVG-вывода тут не помощник: проверено, что она не меняет
+ * выдаваемое значение — одна и та же формула отдаёт `1.842ex` и при 0.5, и при
+ * 0.7, и при 1.0. Пересчитывать нужно по реальной метрике шрифта.
+ */
+const REFERENCE_EX_RATIO = 0.6;
+
+/**
+ * Кегль, относительно которого фиксируется размер формулы. Совпадает со
+ * значением `--rte-font-size` по умолчанию: формула должна читаться вровень с
+ * окружающим текстом.
+ */
+export const DEFAULT_FORMULA_FONT_SIZE_PX = 15;
+
+/**
+ * Переводит ex в пиксели тем же способом, каким MathJax их и получил.
+ *
+ * Это и есть суть правки. MathJax размечает SVG в ex, но браузерный ex
+ * считается по x-height унаследованного шрифта и от локального кегля — в
+ * ячейке таблицы, в списке, в заголовке он разный. Из-за этого одна и та же
+ * формула визуально скачет: измерено 16.6px в абзаце против 29.5px в h1.
+ *
+ * Коэффициент подобран так, чтобы в обычном абзаце формула осталась ровно
+ * того же размера, что и раньше: меняется только независимость от окружения,
+ * а не привычный вид. Так же ведёт себя картинка-формула Wiris, у которой px
+ * зашиты при генерации.
+ */
+function exToPx(ex: number, pxPerEm: number): string {
+  return `${Math.round(ex * REFERENCE_EX_RATIO * pxPerEm * 100) / 100}px`;
 }
 
 let engine: Promise<Engine> | null = null;
@@ -57,6 +97,26 @@ async function createEngine(): Promise<Engine> {
   return {
     doc,
     outerHTML: (node: unknown) => adaptor.outerHTML(node as never),
+    freezeSizeInPixels: (node: unknown, pxPerEm: number) => {
+      for (const svg of adaptor.tags(node as never, 'svg')) {
+        for (const attribute of ['width', 'height'] as const) {
+          const value = String(adaptor.getAttribute(svg, attribute) ?? '');
+          if (value.endsWith('ex')) {
+            adaptor.setAttribute(svg, attribute, exToPx(Number.parseFloat(value), pxPerEm));
+          }
+        }
+
+        // Смещение базовой линии живёт в style и страдает ровно так же.
+        const verticalAlign = String(adaptor.getStyle(svg, 'vertical-align') ?? '');
+        if (verticalAlign.endsWith('ex')) {
+          adaptor.setStyle(
+            svg,
+            'vertical-align',
+            exToPx(Number.parseFloat(verticalAlign), pxPerEm),
+          );
+        }
+      }
+    },
     handleRetriesFor: <T,>(action: () => T) =>
       mathjax.handleRetriesFor(action) as unknown as Promise<T>,
   };
@@ -82,25 +142,45 @@ function extractSvg(html: string): string {
 
 export interface RenderOptions {
   display?: boolean;
+  /**
+   * Кегль в пикселях, относительно которого фиксируется размер формулы.
+   * По умолчанию `DEFAULT_FORMULA_FONT_SIZE_PX`.
+   */
+  fontSizePx?: number;
+}
+
+/**
+ * Размер запечён в самом SVG, поэтому он часть результата — и часть ключа.
+ * Иначе формула, отрисованная для одного кегля, досталась бы другому.
+ */
+function cacheKey(mathml: string, fontSizePx: number): string {
+  return `${fontSizePx}|${mathml}`;
 }
 
 /** Synchronous cache read used during HTML serialization. */
-export function getCachedFormulaSvg(mathml: string): string | undefined {
-  return svgCache.get(normalizeMathML(mathml) || mathml);
+export function getCachedFormulaSvg(
+  mathml: string,
+  fontSizePx: number = DEFAULT_FORMULA_FONT_SIZE_PX,
+): string | undefined {
+  return svgCache.get(cacheKey(normalizeMathML(mathml) || mathml, fontSizePx));
 }
 
 /**
  * Renders MathML to a sanitized, self-contained SVG string. The input is
  * sanitized first, so a hostile `data-mathml` attribute can never reach MathJax.
  *
- * The SVG is sized in `ex` units, so callers scale a formula by changing the
- * font size of its host element rather than re-rendering it.
+ * Размер запекается в SVG в пикселях, поэтому формула выглядит одинаково в
+ * абзаце, в ячейке таблицы и в заголовке. Масштаб задаётся `fontSizePx` при
+ * рендере, а не кеглем элемента-хоста: пиксели на него не реагируют.
  */
 export async function renderMathML(mathml: string, options: RenderOptions = {}): Promise<string> {
   const safeMathml = normalizeMathML(mathml);
   if (!safeMathml) return '';
 
-  const cached = svgCache.get(safeMathml);
+  const fontSizePx = options.fontSizePx ?? DEFAULT_FORMULA_FONT_SIZE_PX;
+  const key = cacheKey(safeMathml, fontSizePx);
+
+  const cached = svgCache.get(key);
   if (cached !== undefined) return cached;
 
   const task = (async (): Promise<string> => {
@@ -113,6 +193,7 @@ export async function renderMathML(mathml: string, options: RenderOptions = {}):
       const node = await instance.handleRetriesFor(() =>
         instance.doc.convert(safeMathml, { display: options.display ?? false }),
       );
+      instance.freezeSizeInPixels(node, fontSizePx);
       svg = sanitizeSvg(extractSvg(instance.outerHTML(node)));
     } catch {
       // A failed render (e.g. a dynamic font chunk that will not load) must not
@@ -124,7 +205,7 @@ export async function renderMathML(mathml: string, options: RenderOptions = {}):
       const oldest = svgCache.keys().next();
       if (!oldest.done) svgCache.delete(oldest.value);
     }
-    svgCache.set(safeMathml, svg);
+    svgCache.set(key, svg);
     return svg;
   })();
 

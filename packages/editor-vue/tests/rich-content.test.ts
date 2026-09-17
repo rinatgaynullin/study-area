@@ -94,11 +94,14 @@ describe('read-only rendering', () => {
     expect(w.find('.rte-formula__render svg').exists()).toBe(true);
   });
 
-  it('scales formulas through the host font size', async () => {
+  it('масштабирует формулы через рендер, а не через кегль хоста', async () => {
     const mathml = await latexToMathML('z', 'math');
     const w = await mountContent(`<p>${formulaHtml(mathml)}</p>`, { formulaScale: 1.5 });
 
-    expect(w.find('.rte-formula__render').attributes('style')).toContain('font-size: 1.5em');
+    // Размер запечён в самом SVG: пиксели на font-size хоста не реагируют.
+    const host = w.find('.rte-formula__render');
+    expect(host.attributes('style') ?? '').not.toContain('font-size');
+    expect(host.html()).toMatch(/width="[\d.]+px"/);
   });
 
   it('keeps the native audio player so recordings stay playable', async () => {

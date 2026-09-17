@@ -601,3 +601,41 @@ test.describe('поповер ссылки', () => {
     await expect(page.locator(POPOVER)).toHaveCount(0);
   });
 });
+
+test.describe('размер формулы не зависит от окружения', () => {
+  const FORMULA_MATHML =
+    '<math xmlns="http://www.w3.org/1998/Math/MathML"><mfrac><mi>a</mi><mi>b</mi></mfrac></math>';
+
+  test('одна формула одинакова в абзаце, в ячейке и в заголовке', async ({ page }) => {
+    await openDemo(page);
+
+    await page.getByRole('button', { name: 'Вставить HTML' }).click();
+    await page.locator('.demo__textarea').fill(
+      `<p>абзац ${FORMULA_MATHML}</p>` +
+        `<table><tbody><tr><td>ячейка ${FORMULA_MATHML}</td></tr></tbody></table>` +
+        `<h1>заголовок ${FORMULA_MATHML}</h1>`,
+    );
+    await page.getByRole('button', { name: 'Применить в редактор' }).click();
+
+    const svgs = page.locator(`${EDITOR} .rte-formula svg`);
+    await expect(svgs).toHaveCount(3);
+
+    const widths = await svgs.evaluateAll((elements) =>
+      elements.map((element) => Math.round(element.getBoundingClientRect().width * 10) / 10),
+    );
+
+    // Заголовок вдвое крупнее абзаца; до правки формула в нём была почти вдвое
+    // шире, потому что браузерный ex считается от унаследованного кегля.
+    expect(new Set(widths).size, `ширины разошлись: ${widths.join(', ')}`).toBe(1);
+  });
+
+  test('размер запечён в пикселях, а не в ex', async ({ page }) => {
+    await openDemo(page);
+
+    const svg = page.locator(`${EDITOR} .rte-formula svg`).first();
+    const width = await svg.getAttribute('width');
+
+    expect(width).toMatch(/px$/);
+    expect(width).not.toMatch(/ex$/);
+  });
+});
