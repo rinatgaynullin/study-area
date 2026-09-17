@@ -54,6 +54,24 @@ test.describe('ванильный редактор', () => {
     await expect(page.locator('.rte-dropdown__panel:not([hidden])')).toHaveCount(0);
   });
 
+  test('панель меню не привязана к потоку документа: её не обрежет корень', async ({ page }) => {
+    await openVanilla(page);
+    await page.locator('.rte-toolbar button[aria-label="Заголовок"]').click();
+
+    const panel = page.locator('.rte-dropdown__panel:not([hidden])');
+    await expect(panel).toHaveCSS('position', 'fixed');
+    await expect(panel).toHaveAttribute('role', 'menu');
+  });
+
+  test('вьюер без фреймворка показывает документ редактора', async ({ page }) => {
+    await openVanilla(page);
+
+    const viewer = page.locator('#viewer.rte-content-root');
+    await expect(viewer).toContainText('Набран без фреймворка.');
+    await expect(viewer.locator('strong')).toHaveText('без');
+    await expect(viewer.locator('[contenteditable="true"]')).toHaveCount(0);
+  });
+
   test('открывает диалоги', async ({ page }) => {
     await openVanilla(page);
 

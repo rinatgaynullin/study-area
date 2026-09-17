@@ -15,6 +15,18 @@ export interface Popover extends UiComponent {
 export interface PopoverOptions {
   /** Зазор между якорем и панелью. */
   offset?: number;
+  /** Роль панели для читалки: диалог по умолчанию, меню — у дропдауна. */
+  role?: string;
+  /** Дополнительный класс на элементе панели — под собственное оформление. */
+  className?: string;
+  /** По горизонтали: центр под якорем или от его левого края (меню). */
+  align?: 'center' | 'start';
+  /**
+   * Что считать «внутри» при клике мимо панели. По умолчанию — сама панель;
+   * дропдаун добавляет свою кнопку, иначе клик по ней закрыл бы панель по
+   * mousedown, а следом открыл бы заново по click.
+   */
+  isInside?(target: Node): boolean;
   onClose?(): void;
 }
 
@@ -34,9 +46,10 @@ export function createPopover(options: PopoverOptions = {}): Popover {
   const body = el('div', { class: 'rte-popover__body' });
   const element = el('div', {
     class: 'rte-popover',
-    attrs: { role: 'dialog' },
+    attrs: { role: options.role ?? 'dialog' },
     children: [body],
   });
+  if (options.className) element.classList.add(options.className);
   element.hidden = true;
 
   let isVisible = false;
@@ -51,9 +64,10 @@ export function createPopover(options: PopoverOptions = {}): Popover {
     const { width, height } = element.getBoundingClientRect();
 
     // По горизонтали центрируем по якорю, но не даём вылезти за края окна.
-    const centred = anchor.left + anchor.width / 2 - width / 2;
+    const preferred =
+      options.align === 'start' ? anchor.left : anchor.left + anchor.width / 2 - width / 2;
     const maxLeft = Math.max(window.innerWidth - width - VIEWPORT_MARGIN, VIEWPORT_MARGIN);
-    element.style.left = `${Math.min(Math.max(centred, VIEWPORT_MARGIN), maxLeft)}px`;
+    element.style.left = `${Math.min(Math.max(preferred, VIEWPORT_MARGIN), maxLeft)}px`;
 
     // Снизу, если там есть место; иначе сверху — иначе панель уедет под экран.
     const below = anchor.bottom + offset;
@@ -72,7 +86,7 @@ export function createPopover(options: PopoverOptions = {}): Popover {
     const offs = [
       on(document, 'mousedown', (event) => {
         const target = event.target as Node | null;
-        if (target && element.contains(target)) return;
+        if (target && (options.isInside?.(target) ?? element.contains(target))) return;
         close();
       }),
       on(document, 'keydown', (event) => {
@@ -95,7 +109,9 @@ export function createPopover(options: PopoverOptions = {}): Popover {
       element.hidden = false;
       listenDocument();
     }
-    // Ждём кадр: до отрисовки у панели нет размеров, а они нужны для раскладки.
+    // Сразу — чтобы панель не мелькнула в углу; и ещё раз через кадр, когда
+    // подгрузится содержимое, от которого зависит её размер.
+    reposition(anchor);
     requestAnimationFrame(() => reposition(anchor));
   }
 

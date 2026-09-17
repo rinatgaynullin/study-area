@@ -87,5 +87,7 @@ Supporting choices:
 - The interface is imperative DOM. Rebuilding on locale change and on dropdown
   open is the cost of having no reactive layer; it is cheap at this size, and
   it is the reason no framework is needed.
-- The read-only viewer (`rich-content.vue`) stays a Vue component for now. It
-  is small and has no interface of its own; moving it is a separate decision.
+- The read-only viewer moved to the core the same day (`createRichContent`);
+  `rich-content.vue` is now a wrapper like `rich-editor.vue`. For that,
+  `prepareIncomingHtml` left `editor.ts` for its own module, so the viewer
+  does not import the editing stack.
