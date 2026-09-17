@@ -30,7 +30,11 @@ export async function renderLatexPreview(
   const svg = await renderMathML(mathml, {
     fontSizePx: DEFAULT_FORMULA_FONT_SIZE_PX * scale,
   });
-  cache.set(key, svg);
+
+  // Пустая строка означает «отрисовать не удалось» — например, MathJax ещё
+  // догружал шрифт. Кэшировать неудачу нельзя: превью осталось бы заглушкой
+  // навсегда, хотя со второй попытки отрисовалось бы.
+  if (svg) cache.set(key, svg);
   return svg;
 }
 

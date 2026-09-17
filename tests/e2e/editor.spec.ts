@@ -639,3 +639,55 @@ test.describe('размер формулы не зависит от окруже
     expect(width).not.toMatch(/ex$/);
   });
 });
+
+test.describe('превью шаблонов формул', () => {
+  const TEMPLATE = '.rte-formula-editor__template';
+
+  async function openFormulaDialog(page: Page): Promise<void> {
+    await page.locator('.rte-toolbar button[title="Математическая формула"]').click();
+    await page.locator(TEMPLATE).first().waitFor();
+  }
+
+  /** Сколько кнопок шаблонов показывают заглушку вместо формулы. */
+  async function countPlaceholders(page: Page): Promise<number> {
+    return page
+      .locator('.rte-formula-editor__template-preview')
+      .evaluateAll((elements) =>
+        elements.filter((element) => element.textContent?.trim() === '…').length,
+      );
+  }
+
+  test('отрисовываются при первом открытии', async ({ page }) => {
+    await openDemo(page);
+    await openFormulaDialog(page);
+
+    await expect.poll(() => countPlaceholders(page)).toBe(0);
+    await expect(page.locator(`${TEMPLATE} svg`).first()).toBeVisible();
+  });
+
+  test('остаются отрисованными при повторном открытии', async ({ page }) => {
+    await openDemo(page);
+
+    await openFormulaDialog(page);
+    await expect.poll(() => countPlaceholders(page)).toBe(0);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.rte-modal__panel')).toBeHidden();
+
+    // Раньше здесь все кнопки показывали «…»: кэш превью очищался при открытии,
+    // а watcher категории не срабатывал, потому что значение не менялось.
+    await openFormulaDialog(page);
+    await expect.poll(() => countPlaceholders(page)).toBe(0);
+  });
+
+  test('переживают переключение вкладок', async ({ page }) => {
+    await openDemo(page);
+    await openFormulaDialog(page);
+
+    await page.locator('.rte-formula-editor__tab', { hasText: 'Химия' }).click();
+    await expect.poll(() => countPlaceholders(page)).toBe(0);
+
+    await page.locator('.rte-formula-editor__tab', { hasText: 'Математика' }).click();
+    await expect.poll(() => countPlaceholders(page)).toBe(0);
+  });
+});

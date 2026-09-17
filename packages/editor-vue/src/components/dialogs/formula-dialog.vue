@@ -113,7 +113,10 @@ async function prepareField(): Promise<void> {
   type.value = payload?.type ?? 'math';
   activeCategory.value = categories.value[0]?.id ?? '';
   previewSvg.value = '';
-  templatePreviews.value = {};
+  // Кэш превью намеренно переживает закрытие: он зависит только от шаблона и
+  // типа формулы, а перерисовывать полтора десятка SVG на каждое открытие —
+  // заметная задержка на ровном месте.
+  void renderCategoryPreviews();
 
   await ensureMathfield();
 
@@ -141,20 +144,29 @@ watch([latex, type], async ([nextLatex, nextType]) => {
     : '';
 });
 
-watch([activeCategory, type], async () => {
+/**
+ * Рисует превью для видимой категории. Рендерить весь каталог расточительно:
+ * категорий полтора десятка, а видна одна.
+ *
+ * Вызывается явно, а не только из watcher: при повторном открытии диалога
+ * категория присваивается та же, что была, watcher на неизменившемся значении
+ * не срабатывает — и кнопки остаются с заглушками.
+ */
+async function renderCategoryPreviews(): Promise<void> {
   const category = categories.value.find((item) => item.id === activeCategory.value);
   if (!category) return;
 
-  // Previews render per visible category; rendering the whole catalog is wasteful.
   const rendered: Record<string, string> = { ...templatePreviews.value };
   await Promise.all(
     category.templates.map(async (template) => {
-      if (rendered[template.id] !== undefined) return;
+      if (rendered[template.id]) return;
       rendered[template.id] = await renderLatexPreview(template.preview, category.type);
     }),
   );
   templatePreviews.value = rendered;
-});
+}
+
+watch([activeCategory, type], () => void renderCategoryPreviews());
 
 watch(type, () => {
   activeCategory.value = categories.value[0]?.id ?? '';
