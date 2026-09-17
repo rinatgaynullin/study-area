@@ -29,8 +29,7 @@
     "typecheck": "vue-tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@rich-editor/core": "0.1.0",
-    "mathlive": "^0.110.0"
+    "@rich-editor/core": "0.1.0"
   },
   "peerDependencies": {
     "vue": "^3.4.0"

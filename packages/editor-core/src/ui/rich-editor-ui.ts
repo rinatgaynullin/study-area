@@ -6,6 +6,7 @@ import { createFormulaDialog } from './dialogs/formula-dialog';
 import { createLinkDialog } from './dialogs/link-dialog';
 import { createTableDialog } from './dialogs/table-dialog';
 import { createLinkPopover } from './link-popover';
+import { MODAL_CLOSE_EVENT } from './modal';
 import type { LinkStyle } from './link-styles';
 import { resolveToolbar, type ToolbarConfig } from './presets';
 import { createToolbar, type Toolbar } from './toolbar';
@@ -35,6 +36,12 @@ export interface RichEditorUi {
   /** Движок: документ, команды, загрузки. */
   readonly core: RichEditorCore;
   readonly element: HTMLElement;
+  /** Переключает режим чтения: вместе с движком прячет и тулбар. */
+  setEditable(editable: boolean): void;
+  /** Меняет язык и пересобирает тулбар: подписи приходят из переводчика. */
+  setLocale(locale: string): void;
+  /** Пересобирает тулбар после смены таблицы переводов. */
+  refreshLabels(): void;
   destroy(): void;
 }
 
@@ -77,6 +84,12 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     onTransaction: (editor) => {
       refresh();
       options.onTransaction?.(editor);
+    },
+    // Клик по формуле в документе открывает её редактор. Колбэк хоста при
+    // этом не теряется: он может вести собственный учёт правок.
+    onFormulaEdit: (payload) => {
+      formulaDialog.open(payload);
+      options.onFormulaEdit?.(payload);
     },
   });
 
@@ -177,6 +190,20 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
   refresh();
 
   disposer.add(
+    on(root, MODAL_CLOSE_EVENT, (event) => {
+      // Диалог открывают кнопкой тулбара или кликом по узлу, и сама по себе
+      // модалка вернула бы фокус туда же. Дом фокуса в редакторе — документ:
+      // иначе после «Отмены» Backspace не удалит выделенную формулу, а уйдёт
+      // в кнопку. Выделение при этом сохраняется: `focus()` без позиции его
+      // не трогает.
+      event.preventDefault();
+      // Без прокрутки: выделение было на виду, когда диалог открывали, и
+      // возвращать к нему экран не надо.
+      core.editor.commands.focus(null, { scrollIntoView: false });
+    }),
+  );
+
+  disposer.add(
     on(imageInput, 'change', () => {
       const file = imageInput.files?.[0];
       if (file) void core.insertImageFile(file);
@@ -195,9 +222,26 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     }),
   );
 
+  /** В режиме чтения тулбар не просто отключён, а скрыт — как и во Vue-версии. */
+  function applyEditable(editable: boolean): void {
+    root.classList.toggle('rte-root--readonly', !editable);
+    toolbar.element.hidden = !editable;
+  }
+
+  applyEditable(core.editor.isEditable);
+
   return {
     core,
     element: root,
+    setEditable: (editable: boolean) => {
+      core.setEditable(editable);
+      applyEditable(editable);
+    },
+    setLocale: (locale: string) => {
+      core.setLocale(locale);
+      toolbar.rebuild();
+    },
+    refreshLabels: () => toolbar.rebuild(),
     destroy: () => {
       disposer.dispose();
       toolbar.destroy();

@@ -8,7 +8,7 @@
  * (`menu.insert matrix`); `%@` — его подстановка. Записи `*-template` — это
  * LaTeX, а не текст, и намеренно отсутствуют: их MathLive берёт свои.
  */
-const mathliveRu: Record<string, string> = {
+export const mathliveRu: Record<string, string> = {
   // Экранная клавиатура
   'keyboard.tooltip.symbols': 'Символы',
   'keyboard.tooltip.greek': 'Греческие буквы',

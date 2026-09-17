@@ -21,6 +21,11 @@ export interface Toolbar extends UiComponent {
   /** Перечитывает состояние документа и обновляет подсветку и доступность. */
   syncState(): void;
   setDisabled(disabled: boolean): void;
+  /**
+   * Пересобирает кнопки. Нужен при смене локали: подписи и подсказки берутся
+   * из переводчика в момент отрисовки.
+   */
+  rebuild(): void;
 }
 
 interface RenderedItem {
@@ -187,6 +192,7 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
   return {
     element,
     syncState,
+    rebuild: render,
     setDisabled: (disabled: boolean) => {
       isDisabled = disabled;
       syncState();

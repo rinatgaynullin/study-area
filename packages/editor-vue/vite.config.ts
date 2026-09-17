@@ -15,7 +15,7 @@ export default defineConfig({
       cssFileName: 'styles',
     },
     rollupOptions: {
-      external: ['vue', '@rich-editor/core', /^@tiptap\//, 'mathlive', 'mathlive/ssr'],
+      external: ['vue', '@rich-editor/core', /^@tiptap\//],
       output: { globals: { vue: 'Vue' } },
     },
   },

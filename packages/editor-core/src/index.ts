@@ -17,9 +17,14 @@ export { createToolbar, type Toolbar, type ToolbarGroupConfig } from './ui/toolb
 export { SIMPLE_TOOLBAR_ITEMS } from './ui/toolbar-items';
 export { createPanelToolbarItems } from './ui/toolbar-panels';
 export { DEFAULT_LINK_STYLES, type LinkStyle } from './ui/link-styles';
-export { createModal, type Modal } from './ui/modal';
+export { createModal, MODAL_CLOSE_EVENT, type Modal } from './ui/modal';
 export { createPopover, type Popover } from './ui/popover';
 export { createDropdown, type Dropdown } from './ui/dropdown';
+export {
+  clearPreviewCache,
+  getCachedLatexPreview,
+  renderLatexPreview,
+} from './ui/dialogs/formula-preview';
 export type {
   DialogComponent,
   EditorFeature,
@@ -47,6 +52,7 @@ export {
 } from './types';
 
 export { createI18n, DEFAULT_LOCALE, en, ru, type I18n, type I18nOptions } from './i18n';
+export { MATHLIVE_STRINGS, mathliveRu, type MathliveStrings } from './i18n/mathlive';
 
 export { sanitizeHtml, sanitizeMathML, sanitizeSvg, resetSanitizers } from './security/sanitize';
 

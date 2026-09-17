@@ -1,6 +1,13 @@
 import { createDisposer, el, icon, on } from './dom';
 import type { DialogComponent } from './types';
 
+/**
+ * Событие закрытия модалки. Всплывает до оболочки редактора, чтобы та решила,
+ * куда вернуть фокус. `preventDefault()` в обработчике означает «фокусом
+ * занялись»: тогда модалка не отдаёт его обратно тому, с кого её открыли.
+ */
+export const MODAL_CLOSE_EVENT = 'rte:modal-close';
+
 export interface ModalOptions {
   title: string;
   closeLabel: string;
@@ -106,7 +113,12 @@ export function createModal(options: ModalOptions): Modal {
     if (!isVisible) return;
     isVisible = false;
     element.hidden = true;
-    lastFocused?.focus();
+
+    const restoreLastFocused = element.dispatchEvent(
+      new CustomEvent(MODAL_CLOSE_EVENT, { bubbles: true, cancelable: true }),
+    );
+    if (restoreLastFocused) lastFocused?.focus();
+
     options.onClose?.();
   }
 

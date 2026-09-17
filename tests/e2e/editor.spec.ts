@@ -3,6 +3,17 @@ import { expect, test, type Page } from '@playwright/test';
 const EDITOR = '.rte-root .rte-content';
 const FORMULA = `${EDITOR} .rte-formula`;
 
+/*
+ * Диалоги и поповеры ванильного интерфейса живут в DOM постоянно и скрываются
+ * атрибутом `hidden`, а не пересоздаются на каждое открытие. Поэтому «диалог
+ * открыт» проверяется по видимой модалке: сама по себе разметка есть всегда,
+ * и на странице с редактором её несколько.
+ */
+const OPEN_MODAL = '.rte-modal:not([hidden])';
+const MODAL_PANEL = `${OPEN_MODAL} .rte-modal__panel`;
+const MODAL_TITLE = `${OPEN_MODAL} .rte-modal__title`;
+const OPEN_POPOVER = '.rte-popover:not([hidden])';
+
 async function openDemo(page: Page): Promise<void> {
   await page.goto('/');
   // The sample document renders its formulas through MathJax on load.
@@ -51,7 +62,7 @@ test.describe('document', () => {
     await expect(viewer.locator('[contenteditable="true"]')).toHaveCount(0);
 
     await viewer.locator('.rte-formula').first().click();
-    await expect(page.locator('.rte-modal__panel')).toHaveCount(0);
+    await expect(page.locator(MODAL_PANEL)).toHaveCount(0);
   });
 });
 
@@ -102,7 +113,7 @@ test.describe('pasting HTML into the editor', () => {
     await expect(page.locator(EDITOR)).not.toContainText('mfrac');
 
     await page.locator(FORMULA).first().click();
-    await expect(page.locator('.rte-modal__panel')).toBeVisible();
+    await expect(page.locator(MODAL_PANEL)).toBeVisible();
   });
 
   test('applies arbitrary typed HTML', async ({ page }) => {
@@ -125,7 +136,7 @@ test.describe('formula editing', () => {
     const before = await formula.getAttribute('data-mathml');
 
     await formula.click();
-    await expect(page.locator('.rte-modal__panel')).toBeVisible();
+    await expect(page.locator(MODAL_PANEL)).toBeVisible();
 
     const field = page.locator('math-field').first();
     await expect(field).toBeAttached();
@@ -139,7 +150,7 @@ test.describe('formula editing', () => {
     await expect(page.locator('.rte-formula-editor__preview-box svg')).toBeVisible();
 
     await page.getByRole('button', { name: 'Сохранить' }).click();
-    await expect(page.locator('.rte-modal__panel')).toBeHidden();
+    await expect(page.locator(MODAL_PANEL)).toBeHidden();
 
     await expect
       .poll(() => page.locator(FORMULA).first().getAttribute('data-mathml'))
@@ -190,13 +201,13 @@ test.describe('formula editing', () => {
     await page.locator(`${EDITOR} p`).first().click();
     await page.locator('.rte-toolbar button[title="Химическая формула"]').click();
 
-    await expect(page.locator('.rte-modal__title')).toHaveText('Химическая формула');
+    await expect(page.locator(MODAL_TITLE)).toHaveText('Химическая формула');
     await page.locator('.rte-formula-editor__category', { hasText: 'Типовые формулы' }).click();
     await page.locator('.rte-formula-editor__template').first().click();
 
     // Exact: the demo also has a "Вставить HTML" tab, which this would match.
     await page.getByRole('button', { name: 'Вставить', exact: true }).click();
-    await expect(page.locator('.rte-modal__panel')).toBeHidden();
+    await expect(page.locator(MODAL_PANEL)).toBeHidden();
 
     await expect(page.locator(`${FORMULA}[data-formula-type="chem"]`)).toHaveCount(3);
   });
@@ -205,7 +216,7 @@ test.describe('formula editing', () => {
     await openDemo(page);
 
     await page.locator(FORMULA).first().click();
-    await expect(page.locator('.rte-modal__panel')).toBeVisible();
+    await expect(page.locator(MODAL_PANEL)).toBeVisible();
     await page.getByRole('button', { name: 'Удалить формулу' }).click();
 
     await expect(page.locator(FORMULA)).toHaveCount(3);
@@ -219,7 +230,7 @@ test.describe('formula editing', () => {
 
     await page.locator(FORMULA).nth(1).click();
     await page.getByRole('button', { name: 'Отмена' }).click();
-    await expect(page.locator('.rte-modal__panel')).toBeHidden();
+    await expect(page.locator(MODAL_PANEL)).toBeHidden();
 
     await page.keyboard.press('Backspace');
 
@@ -251,7 +262,7 @@ test.describe('toolbar', () => {
     await expect(page.locator('.rte-toolbar button[title="Voice message"]')).toBeVisible();
 
     await page.locator('.rte-toolbar button[title="Math formula"]').click();
-    await expect(page.locator('.rte-modal__title')).toHaveText('Math formula');
+    await expect(page.locator(MODAL_TITLE)).toHaveText('Math formula');
     await expect(page.locator('.rte-formula-editor__category').first()).toHaveText('Basics');
   });
 });
@@ -527,7 +538,7 @@ test.describe('изменение размера картинки', () => {
 });
 
 test.describe('поповер ссылки', () => {
-  const POPOVER = '.rte-link-popover';
+  const POPOVER = `${OPEN_POPOVER} .rte-link-popover`;
 
   async function insertLink(page: Page): Promise<void> {
     await openDemo(page);
@@ -672,7 +683,7 @@ test.describe('превью шаблонов формул', () => {
     await expect.poll(() => countPlaceholders(page)).toBe(0);
 
     await page.keyboard.press('Escape');
-    await expect(page.locator('.rte-modal__panel')).toBeHidden();
+    await expect(page.locator(MODAL_PANEL)).toBeHidden();
 
     // Раньше здесь все кнопки показывали «…»: кэш превью очищался при открытии,
     // а watcher категории не срабатывал, потому что значение не менялось.

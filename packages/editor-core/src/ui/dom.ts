@@ -60,6 +60,19 @@ export function on<K extends keyof HTMLElementEventMap>(
   type: K,
   listener: (event: HTMLElementEventMap[K]) => void,
   options?: AddEventListenerOptions,
+): Unsubscribe;
+/** Перегрузка для собственных событий компонентов — их нет в карте DOM. */
+export function on(
+  target: HTMLElement | Document | Window,
+  type: string,
+  listener: (event: Event) => void,
+  options?: AddEventListenerOptions,
+): Unsubscribe;
+export function on(
+  target: HTMLElement | Document | Window,
+  type: string,
+  listener: (event: never) => void,
+  options?: AddEventListenerOptions,
 ): Unsubscribe {
   target.addEventListener(type, listener as EventListener, options);
   return () => target.removeEventListener(type, listener as EventListener, options);
