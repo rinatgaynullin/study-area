@@ -22,6 +22,8 @@ const editable = ref(true);
 const mobilePreview = ref(false);
 const isLegacyEnabled = ref(false);
 const toolbarPreset = ref<'full' | 'standard' | 'minimal'>('full');
+/** Тема демо: тёмная — это те же токены `--rte-*` под классом, см. styles.css. */
+const theme = ref<'default' | 'dark'>('default');
 const outputTab = ref<'preview' | 'source' | 'input' | 'raw'>('preview');
 const log = ref<string[]>([]);
 
@@ -167,7 +169,7 @@ async function reloadSample(): Promise<void> {
 </script>
 
 <template>
-  <main class="demo">
+  <main class="demo" :class="{ 'demo--dark': theme === 'dark' }">
     <header class="demo__header">
       <h1>@rich-editor/vue</h1>
       <p class="demo__subtitle">
@@ -191,6 +193,14 @@ async function reloadSample(): Promise<void> {
           <option value="full">full</option>
           <option value="standard">standard</option>
           <option value="minimal">minimal</option>
+        </select>
+      </label>
+
+      <label>
+        Тема
+        <select v-model="theme">
+          <option value="default">По умолчанию</option>
+          <option value="dark">Тёмная (переопределение токенов)</option>
         </select>
       </label>
 

@@ -23,21 +23,21 @@
 
   /* Толщина рамки fr-bordered. Литерал по той же причине; цвет — общий. */
   --rte-legacy-image-border-width: 5px;
-  --rte-legacy-image-border-color: var(--rte-color-border, #d5d5d5);
+  --rte-legacy-image-border-color: var(--rte-color-border, #dedce3);
 
-  --rte-legacy-image-shadow: var(--rte-shadow, 0 2px 8px rgba(0, 0, 0, 0.15));
-  --rte-legacy-image-radius: var(--rte-radius-lg, 10px);
+  --rte-legacy-image-shadow: var(--rte-shadow, 0 3px 7px rgb(35 31 51 / 5%), 0 10px 24px rgb(35 31 51 / 8%));
+  --rte-legacy-image-radius: var(--rte-radius-lg, 12px);
 
-  --rte-legacy-table-header-bg: var(--rte-color-subtle-bg, #f5f5f5);
-  --rte-legacy-table-border-color: var(--rte-color-border, #d5d5d5);
-  --rte-legacy-table-accent-color: var(--rte-color-danger, #d32f2f);
+  --rte-legacy-table-header-bg: var(--rte-color-subtle-bg, #f5f5f7);
+  --rte-legacy-table-border-color: var(--rte-color-border, #dedce3);
+  --rte-legacy-table-accent-color: var(--rte-color-danger, #f23e3e);
   /* Утолщённая граница ячейки. Литерал: градаций толщины в новом языке нет. */
   --rte-legacy-table-thick-width: 2px;
 
-  --rte-legacy-code-bg: var(--rte-color-code-bg, #f5f5f5);
-  --rte-legacy-code-border-color: var(--rte-color-border, #d5d5d5);
-  --rte-legacy-muted-color: var(--rte-color-muted, #6b6b6b);
-  --rte-legacy-rule-color: var(--rte-color-text, #414141);
+  --rte-legacy-code-bg: var(--rte-color-code-bg, #f5f5f7);
+  --rte-legacy-code-border-color: var(--rte-color-border, #dedce3);
+  --rte-legacy-muted-color: var(--rte-color-muted, #898794);
+  --rte-legacy-rule-color: var(--rte-color-text, #221f2e);
 
   /* Фиксированный жёлтый маркер Froala. Литерал: это не подсветка выделения и
      не акцент темы, а конкретный цвет, с которым контент сохраняли. */
@@ -245,7 +245,7 @@
 .rte-content.rte-legacy .fr-class-code {
   background: var(--rte-legacy-code-bg);
   border: 1px solid var(--rte-legacy-code-border-color);
-  border-radius: var(--rte-radius-sm, 2px);
+  border-radius: var(--rte-radius-sm, 4px);
   font-family: var(--rte-font-mono, monospace);
   padding: 0.1em 0.3em;
 }
@@ -262,7 +262,7 @@
 }
 
 .rte-content.rte-legacy a.fr-green {
-  color: var(--rte-color-primary, #1976d2);
+  color: var(--rte-color-primary, #ff892e);
 }
 
 /* Служебные классы раскладки. */

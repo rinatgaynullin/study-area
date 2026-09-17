@@ -57,6 +57,12 @@ Class hooks (`.rte-toolbar`, `.rte-btn`, `.rte-modal__panel`, …) are stable an
 documented, so a host that needs more than variables can target them without
 patching the package.
 
+*Update 2026-09-17.* The defaults were re-based on the umschool design language
+and the token set was widened to everything a design system changes (type
+scale, control heights, dialog metrics, focus ring, overlay). The full list
+lives in `THEMING.md`, and `theme-tokens.test.ts` forbids colour, font, radius
+and shadow literals in the interface rules so the contract cannot erode.
+
 ## Consequences
 
 - No dependency on any UI framework; the Vue package's only runtime dependencies

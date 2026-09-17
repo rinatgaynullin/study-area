@@ -33,6 +33,15 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Changed
 
+- Default theme re-based on the umschool design language: Golos, 15/22 text,
+  8/10/12 px radii, orange accent, umschool shadows and overlay. The token
+  contract grew to cover everything a design system changes — UI font sizes
+  and weights, input and button heights, dialog widths and paddings, focus
+  ring, overlay, link colour, hover borders — and is documented in
+  `THEMING.md`; a test keeps the stylesheet on the tokens and the document in
+  sync. Hosts that override a subset of the old tokens keep working; hosts
+  that matched the old look pixel for pixel will see the new defaults.
+
 - Toolbar button `title` now includes the keyboard shortcut
   («Полужирный · Ctrl+B»); the accessible name (`aria-label`) is still the
   bare label. Select buttons by `aria-label`, not `title`.

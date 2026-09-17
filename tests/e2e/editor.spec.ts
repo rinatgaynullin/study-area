@@ -270,6 +270,19 @@ test.describe('toolbar', () => {
   });
 });
 
+test.describe('тема', () => {
+  test('переопределение токенов перекрашивает редактор и вьюер', async ({ page }) => {
+    await openDemo(page);
+    await expect(page.locator('.rte-root')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+
+    await page.selectOption('.demo__controls select >> nth=2', 'dark');
+
+    // Ни одного правила про редактор в демо нет — только токены под классом.
+    await expect(page.locator('.rte-root')).toHaveCSS('background-color', 'rgb(45, 44, 54)');
+    await expect(page.locator('.rte-content-root').first()).toHaveCSS('color', 'rgb(235, 235, 240)');
+  });
+});
+
 test.describe('responsive layout', () => {
   test('collapses secondary groups into the overflow menu when narrow', async ({ page }) => {
     await openDemo(page);

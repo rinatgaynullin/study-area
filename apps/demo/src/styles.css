@@ -237,3 +237,37 @@ body {
   max-height: 160px;
   overflow: auto;
 }
+
+/*
+ * Тёмная тема — доказательство, что интерфейс кастомизации полный: ни одного
+ * правила про редактор, только токены `--rte-*` под классом. Значения —
+ * тёмная палитра дизайн-системы umschool.
+ */
+.demo--dark {
+  color-scheme: dark;
+  background: #232229;
+  color: #ebebf0;
+}
+
+.demo--dark .rte-root,
+.demo--dark .rte-content-root {
+  --rte-color-primary: #ff8f39;
+  --rte-color-primary-hover: #ff722e;
+  --rte-color-primary-soft: #42393b;
+  --rte-color-text: #ebebf0;
+  --rte-color-muted: #7f7e8f;
+  --rte-color-placeholder: #7f7e8f;
+  --rte-color-link: #3a95ff;
+  --rte-color-bg: #2d2c36;
+  --rte-color-subtle-bg: #363542;
+  --rte-color-border: #4e4c5e;
+  --rte-color-border-hover: #6a697a;
+  --rte-color-danger: #f24b42;
+  --rte-color-danger-soft: #3d3130;
+  --rte-color-code-bg: #363542;
+  --rte-color-code-block-bg: #363542;
+  --rte-color-waveform: #4e4c5e;
+  --rte-color-overlay: rgb(38 36 46 / 75%);
+  --rte-shadow: 0 3px 7px rgb(17 17 20 / 20%), 0 10px 24px rgb(17 17 20 / 32%);
+  --rte-shadow-lg: 0 8px 24px rgb(17 17 20 / 24%), 0 32px 80px rgb(17 17 20 / 32%);
+}
