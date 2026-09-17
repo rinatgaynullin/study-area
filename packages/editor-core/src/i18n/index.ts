@@ -1,4 +1,5 @@
 import type { Messages, Translate } from '../types';
+import { en } from './en';
 import { ru } from './ru';
 
 export { ru } from './ru';
@@ -6,9 +7,16 @@ export { en } from './en';
 
 export const DEFAULT_LOCALE = 'ru';
 
+/**
+ * Встроенные таблицы. Русская — запасная для любого языка; английская
+ * включается по `locale: 'en'` без таблицы от хоста: обе уже в бандле, и
+ * молча оставлять интерфейс русским при явно запрошенном английском — ловушка.
+ */
+const BUILTIN: Record<string, Messages> = { ru, en };
+
 export interface I18nOptions {
   locale?: string;
-  /** Locale → message tree. Merged over the built-in Russian bundle. */
+  /** Язык → плоская таблица. Накладывается поверх встроенных таблиц. */
   messages?: Record<string, Messages>;
 }
 
@@ -32,25 +40,29 @@ function interpolate(template: string, params?: Record<string, string | number>)
 }
 
 /**
- * Minimal translator over flat `lower_snake` tables. Resolution order:
- * requested locale → built-in Russian → the key itself, so a partial
- * translation JSON degrades gracefully instead of rendering blanks.
+ * Минимальный переводчик над плоскими `lower_snake`-таблицами.
+ *
+ * Порядок поиска: таблица хоста для запрошенного языка → встроенная для него →
+ * таблица хоста для русского → встроенная русская → сам ключ. Частичный JSON
+ * от хоста поэтому деградирует до встроенного перевода, а не до пустых
+ * подписей, и русскую таблицу хост может переопределить через `messages.ru`.
  */
 export function createI18n(options: I18nOptions = {}): I18n {
   let locale = options.locale ?? DEFAULT_LOCALE;
   let messages = options.messages ?? {};
 
   const t: Translate = (key, params) => {
-    const fromLocale = lookup(messages[locale], key);
-    if (fromLocale !== undefined) return interpolate(fromLocale, params);
+    const chain = [
+      messages[locale],
+      BUILTIN[locale],
+      messages[DEFAULT_LOCALE],
+      BUILTIN[DEFAULT_LOCALE],
+    ];
 
-    // The built-in Russian bundle can itself be overridden by `messages.ru`.
-    const fromDefault =
-      locale === DEFAULT_LOCALE ? undefined : lookup(messages[DEFAULT_LOCALE], key);
-    if (fromDefault !== undefined) return interpolate(fromDefault, params);
-
-    const builtin = lookup(ru, key);
-    if (builtin !== undefined) return interpolate(builtin, params);
+    for (const table of chain) {
+      const value = lookup(table, key);
+      if (value !== undefined) return interpolate(value, params);
+    }
 
     return key;
   };

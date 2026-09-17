@@ -21,6 +21,21 @@ describe('i18n layer', () => {
     expect(i18n.t('formula_categories_fractions')).toBe('Fractions');
   });
 
+  it('ships English built in, without a table from the host', () => {
+    const i18n = createI18n({ locale: 'en' });
+
+    expect(i18n.t('toolbar_bold')).toBe('Bold');
+    expect(i18n.t('common_cancel')).toBe('Cancel');
+  });
+
+  it('lets a partial host table override built-in English, key by key', () => {
+    const i18n = createI18n({ locale: 'en', messages: { en: { toolbar_bold: 'Heavy' } } });
+
+    expect(i18n.t('toolbar_bold')).toBe('Heavy');
+    // Остальное берётся из встроенной английской таблицы, а не из русской.
+    expect(i18n.t('toolbar_italic')).toBe('Italic');
+  });
+
   it('accepts a partial translation and falls back to Russian for the rest', () => {
     const i18n = createI18n({
       locale: 'de',
