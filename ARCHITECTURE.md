@@ -128,6 +128,15 @@ abstraction over the DOM beyond a handful of helpers (`el`, `on`, `icon`).
   dialogs for one capability. `createRichEditor` installs the extensions into
   the engine, merges the items into the registry, appends unmentioned items as
   a trailing group, and mounts the dialogs next to the built-in ones.
+- **The toolbar measures itself.** Below `collapseBelow` every collapsible group
+  goes into the `⋯` menu at once; above it the toolbar folds groups from the
+  end one at a time until it no longer wraps, and unfolds them when width
+  returns. Buttons prevent `mousedown` default so the document never loses
+  focus or selection while the toolbar is used.
+- **A status line under the toolbar** shows uploads in flight (from the
+  pipeline's `onUpload` events) and the last error for a few seconds, so the
+  user learns why a file did not land without the host wiring notifications.
+  Hosts with their own notifications pass `statusLine: false`.
 - **Overlays stay in the DOM.** Dialogs and popovers are created once and hidden
   with the `hidden` attribute rather than re-created, so they keep no framework
   state and cost nothing while closed. The stylesheet has an explicit rule for
