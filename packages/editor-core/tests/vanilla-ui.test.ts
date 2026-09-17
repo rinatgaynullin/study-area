@@ -1,6 +1,8 @@
 import { Extension } from '@tiptap/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  IMAGE_ACCEPT,
+  TEXT_FILE_ACCEPT,
   createModal,
   createRichEditor,
   type EditorFeature,
@@ -115,6 +117,44 @@ describe('ванильная оболочка редактора', () => {
     expect(document.querySelector('.rte-root')).toBeNull();
     expect(document.querySelector('.rte-modal')).toBeNull();
     expect(document.querySelector('.rte-popover')).toBeNull();
+  });
+});
+
+describe('оверлеи', () => {
+  it('модалка затемняет страницу и закрывается кликом по подложке', () => {
+    mountEditor();
+    toolbarButton('Математическая формула').click();
+
+    const backdrop = openDialog()!.querySelector<HTMLElement>('.rte-modal__backdrop');
+    expect(backdrop).not.toBeNull();
+
+    backdrop!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(openDialog()).toBeNull();
+  });
+
+  it('смена локали переводит диалоги, а не только тулбар', () => {
+    const editor = mountEditor();
+    editor.setLocale('en');
+
+    toolbarButton('Link').click();
+    const dialog = openDialog()!;
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Link');
+    expect(dialog.querySelector('.rte-button--primary')?.textContent).toBe('Apply');
+  });
+
+  it('смена таблицы переводов тоже пересобирает диалоги', () => {
+    const editor = mountEditor();
+    editor.setMessages({ ru: { link_title: 'Гиперссылка' } });
+
+    toolbarButton('Ссылка').click();
+    expect(openDialog()?.querySelector('.rte-modal__title')?.textContent).toBe('Гиперссылка');
+  });
+
+  it('пикеры файлов принимают то же, что пайплайн загрузки', () => {
+    const editor = mountEditor();
+    const inputs = editor.element.querySelectorAll<HTMLInputElement>('input[type="file"]');
+
+    expect([...inputs].map((input) => input.accept)).toEqual([IMAGE_ACCEPT, TEXT_FILE_ACCEPT]);
   });
 });
 

@@ -138,19 +138,12 @@ watch(
   },
 );
 
-// Режим чтения и локаль меняют не только документ, но и тулбар, поэтому
-// идут через оболочку, а не напрямую в движок.
+// Всё, что меняет не только документ, но и интерфейс — режим чтения, язык,
+// переводы, пределы записи, — идёт через оболочку, а не напрямую в движок.
 watch(() => props.editable, (editable) => ui.value?.setEditable(editable));
 watch(() => props.locale, (locale) => ui.value?.setLocale(locale));
-watch(
-  () => props.messages,
-  (messages) => {
-    ui.value?.core.setMessages(messages);
-    ui.value?.refreshLabels();
-  },
-  { deep: true },
-);
-watch(() => props.limits, (limits) => limits && ui.value?.core.setLimits(limits), { deep: true });
+watch(() => props.messages, (messages) => ui.value?.setMessages(messages), { deep: true });
+watch(() => props.limits, (limits) => limits && ui.value?.setLimits(limits), { deep: true });
 
 defineExpose({
   getHTML: () => ui.value?.core.getHTML() ?? '',

@@ -78,3 +78,67 @@ test.describe('ванильный редактор', () => {
     await expect(page.locator(`${EDITOR} table`)).toBeVisible();
   });
 });
+
+/** Страница отдаёт редактор наружу, чтобы тесты могли дёргать его API. */
+interface VanillaWindow {
+  vanillaEditor: { setEditable(editable: boolean): void; setLocale(locale: string): void };
+}
+
+/*
+ * Видимость интерфейса. Ванильный UI прячет элементы атрибутом `hidden`, а
+ * тот проигрывает любому авторскому `display`, если стили не оговаривают
+ * обратное. Юнит-тесты в jsdom этого не видят — там нет стилей, — поэтому
+ * скрытие проверяется здесь, в браузере, по факту отрисовки.
+ */
+test.describe('видимость интерфейса', () => {
+  test('режим чтения прячет тулбар', async ({ page }) => {
+    await openVanilla(page);
+
+    await page.evaluate(() => (window as unknown as VanillaWindow).vanillaEditor.setEditable(false));
+    await expect(page.locator('.rte-toolbar')).toBeHidden();
+    await expect(page.locator(`${EDITOR}[contenteditable="false"]`)).toBeVisible();
+
+    await page.evaluate(() => (window as unknown as VanillaWindow).vanillaEditor.setEditable(true));
+    await expect(page.locator('.rte-toolbar')).toBeVisible();
+  });
+
+  test('диалог записи показывает кнопки только своей фазы', async ({ page }) => {
+    await openVanilla(page);
+    await page.locator('.rte-toolbar button[title="Голосовое сообщение"]').click();
+
+    const controls = page.locator('.rte-modal:not([hidden]) .rte-recorder__controls button');
+    await expect(controls.filter({ visible: true })).toHaveCount(1);
+    await expect(controls.filter({ hasText: /^Записать$/ })).toBeVisible();
+    await expect(controls.filter({ hasText: 'Пауза' })).toBeHidden();
+    await expect(controls.filter({ hasText: 'Записать заново' })).toBeHidden();
+  });
+
+  test('при вставке новой формулы кнопки удаления нет', async ({ page }) => {
+    await openVanilla(page);
+    await page.locator('.rte-toolbar button[title="Математическая формула"]').click();
+
+    const dialog = page.locator('.rte-modal:not([hidden])');
+    await expect(dialog.getByRole('button', { name: 'Вставить' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Удалить формулу' })).toBeHidden();
+  });
+
+  test('модалка затемняет страницу и закрывается кликом по подложке', async ({ page }) => {
+    await openVanilla(page);
+    await page.locator('.rte-toolbar button[title="Таблица"]').click();
+    await page.locator('.rte-dropdown__panel .rte-menu__item').first().click();
+
+    const backdrop = page.locator('.rte-modal:not([hidden]) .rte-modal__backdrop');
+    await expect(backdrop).toBeVisible();
+
+    await backdrop.click({ position: { x: 8, y: 8 } });
+    await expect(page.locator('.rte-modal:not([hidden])')).toHaveCount(0);
+  });
+
+  test('смена локали переводит диалоги, а не только тулбар', async ({ page }) => {
+    await openVanilla(page);
+    await page.evaluate(() => (window as unknown as VanillaWindow).vanillaEditor.setLocale('en'));
+
+    await page.locator('.rte-toolbar button[title="Link"]').click();
+    await expect(page.locator('.rte-modal:not([hidden]) .rte-modal__title')).toHaveText('Link');
+  });
+});

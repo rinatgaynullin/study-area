@@ -136,9 +136,15 @@ abstraction over the DOM beyond a handful of helpers (`el`, `on`, `icon`).
   `rte:modal-close`; the shell handles it and focuses the editor, so keyboard
   actions on the selection keep working after a dialog. A host dialog built
   with `createModal` gets the same behaviour.
-- **Labels are read when rendered.** Locale changes rebuild the toolbar
-  (`setLocale`, `refreshLabels`); dropdown panels are rebuilt on every open so
-  they reflect the current selection without tracking state.
+- **Labels are read when built.** A locale or message change rebuilds the
+  toolbar and the overlays (`setLocale`, `setMessages`, `refreshLabels`);
+  closed overlays hold no state, so rebuilding them is cheaper than a reactive
+  layer. Dropdown panels are rebuilt on every open so they reflect the current
+  selection without tracking state.
+- **Hidden means hidden.** Visibility is toggled with the `hidden` attribute,
+  and one stylesheet rule (`.rte-root [hidden] { display: none !important }`)
+  makes it win over every `display` the UI sets — the browser's own
+  `[hidden]` rule would lose to them.
 
 ## Upload adapters
 

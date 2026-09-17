@@ -69,16 +69,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function openRecorder(options: Record<string, unknown> = {}): HTMLElement {
-  host = document.createElement('div');
-  document.body.appendChild(host);
-  ui = createRichEditor({ element: host, ...options });
-
+function openDialog(): HTMLElement {
   [...document.querySelectorAll<HTMLButtonElement>('.rte-toolbar button')]
     .find((button) => button.title === ru.toolbar_audio)!
     .click();
 
   return document.querySelector<HTMLElement>('.rte-modal:not([hidden])')!;
+}
+
+function openRecorder(options: Record<string, unknown> = {}): HTMLElement {
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  ui = createRichEditor({ element: host, ...options });
+  return openDialog();
 }
 
 function control(dialog: HTMLElement, label: string): HTMLButtonElement {
@@ -88,6 +91,26 @@ function control(dialog: HTMLElement, label: string): HTMLButtonElement {
   if (!found) throw new Error(`Нет кнопки «${label}»`);
   return found;
 }
+
+describe('диалог записи и пределы редактора', () => {
+  it('видит пределы, изменённые после создания редактора', async () => {
+    const dialog = openRecorder({ limits: { maxAudioDurationSec: 30 } });
+    expect(dialog.querySelector('.rte-recorder__limit')?.textContent).toContain('30');
+    dialog.querySelector<HTMLButtonElement>('.rte-modal__close')!.click();
+
+    // Хост поменял пределы у живого редактора — снимок при создании диалога
+    // оставил бы здесь 30 и остановил бы запись не там, где обещано.
+    ui!.setLimits({ maxAudioDurationSec: 7 });
+
+    const reopened = openDialog();
+    expect(reopened.querySelector('.rte-recorder__limit')?.textContent).toContain('7');
+
+    control(reopened, ru.audio_record).click();
+    await vi.advanceTimersByTimeAsync(7400);
+    await vi.runAllTimersAsync();
+    expect(control(reopened, ru.audio_insert).disabled).toBe(false);
+  });
+});
 
 describe('диалог записи на пределах', () => {
   it('на пределе длительности сам финализирует дубль', async () => {
