@@ -445,27 +445,26 @@ Keys are flat and `lower_snake`, prefixed by context: `toolbar_`, `table_`,
 
 ## Theming
 
-Override CSS variables — globally, per instance, or per theme:
+Every colour, font, radius, shadow and control size resolves through a CSS
+variable on `.rte-root` and `.rte-content-root`, so restyling the editor to a
+design system is a matter of overriding variables — the stylesheet is never
+patched. The defaults follow the umschool design language; a dark theme is the
+same variables under a class the host toggles (see the demo's `.demo--dark`).
 
 ```css
 .rte-root,
 .rte-content-root {
-  --rte-color-primary: #6750a4;
+  --rte-color-primary: #396fdb;
   --rte-color-bg: #1e1e21;
   --rte-color-text: #eceff4;
-  --rte-color-border: #3a3a40;
-  --rte-radius: 10px;
-  --rte-btn-size: 36px;
-  --rte-font-size: 16px;
+  --rte-radius: 6px;
+  --rte-font-family: Inter, sans-serif;
 }
 ```
 
-| Group | Variables |
-| --- | --- |
-| Palette | `--rte-color-primary`, `--rte-color-on-primary`, `--rte-color-text`, `--rte-color-muted`, `--rte-color-placeholder`, `--rte-color-bg`, `--rte-color-subtle-bg`, `--rte-color-border`, `--rte-color-danger`, `--rte-color-selection`, `--rte-color-code-bg`, `--rte-color-code-block-bg`, `--rte-color-formula-hover`, `--rte-color-waveform` |
-| Toolbar | `--rte-toolbar-bg`, `--rte-toolbar-padding`, `--rte-toolbar-gap`, `--rte-btn-size`, `--rte-btn-hover-bg`, `--rte-btn-active-bg`, `--rte-btn-active-color` |
-| Shape & type | `--rte-radius-sm`, `--rte-radius`, `--rte-radius-lg`, `--rte-font-family`, `--rte-font-mono`, `--rte-font-size`, `--rte-line-height`, `--rte-content-padding`, `--rte-block-gap`, `--rte-shadow`, `--rte-z-modal` |
-| Media | `--rte-audio-max-width`, `--rte-audio-padding`, `--rte-formula-padding` |
+The full list — what each variable controls and its default — is in
+[THEMING.md](THEMING.md). Class hooks (`.rte-toolbar`, `.rte-btn`,
+`.rte-modal__panel`, …) are stable for hosts that need more than variables.
 
 ### Legacy content (Froala)
 
@@ -624,6 +623,7 @@ unset locally, which keeps `npm run dev` and the Playwright suite on `/`.
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — package split, data flow, plugin boundaries
+- [THEMING.md](THEMING.md) — every CSS variable, what it controls, its default
 - [LIMITATIONS.md](LIMITATIONS.md) — what v1 does not do, and why
 - [CHANGELOG.md](CHANGELOG.md) — what changed, including breaking changes
 - [docs/adr/](docs/adr/) — the decisions and their trade-offs
