@@ -6,9 +6,9 @@ import { ru } from '../src/i18n/ru';
 
 /**
  * Ключи, которые код собирает из префикса и переменной, а не пишет буквально:
- * действия над таблицей и выравнивание.
+ * действия над таблицей, выравнивание и статус загрузки по виду файла.
  */
-const DYNAMIC_PREFIXES = ['table_', 'toolbar_align_'];
+const DYNAMIC_PREFIXES = ['table_', 'toolbar_align_', 'upload_'];
 
 const SOURCE_ROOTS = ['../src', '../../editor-vue/src'].map((path) =>
   fileURLToPath(new URL(path, import.meta.url)),

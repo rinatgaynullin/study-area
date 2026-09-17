@@ -24,7 +24,7 @@ async function mountEditor(props: Record<string, unknown> = {}) {
 
 /** Toolbar buttons are addressed by their localized tooltip, as a user would. */
 function button(w: VueWrapper, label: string) {
-  const found = w.findAll('.rte-toolbar button').find((el) => el.attributes('title') === label);
+  const found = w.findAll('.rte-toolbar button').find((el) => el.attributes('aria-label') === label);
   if (!found) throw new Error(`No toolbar button labelled "${label}"`);
   return found;
 }
