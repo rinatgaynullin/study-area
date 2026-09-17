@@ -3,7 +3,7 @@
 // который по соглашению содержит только реэкспорты.
 import '../styles/index.css';
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
-import { createRichContent, type RichContent } from '@rich-editor/core';
+import { createRichContent, type EditorTheme, type RichContent } from '@rich-editor/core';
 
 /**
  * Обёртка над ванильным вьюером `createRichContent`.
@@ -20,8 +20,10 @@ const props = withDefaults(
     formulaScale?: number;
     /** Разбирать разметку старого редактора (Froala + Wiris). */
     legacy?: boolean;
+    /** Тема: светлая, тёмная или как в системе. */
+    theme?: EditorTheme;
   }>(),
-  { html: '', formulaScale: 1, legacy: false },
+  { html: '', formulaScale: 1, legacy: false, theme: 'light' },
 );
 
 const emit = defineEmits<{ (event: 'rendered'): void }>();
@@ -36,6 +38,7 @@ onMounted(() => {
     html: props.html,
     formulaScale: props.formulaScale,
     legacy: props.legacy,
+    theme: props.theme,
     onRendered: () => emit('rendered'),
   });
 });
@@ -46,9 +49,9 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => [props.html, props.formulaScale, props.legacy] as const,
-  ([html, formulaScale, legacy]) => {
-    void viewer.value?.update({ html, formulaScale, legacy });
+  () => [props.html, props.formulaScale, props.legacy, props.theme] as const,
+  ([html, formulaScale, legacy, theme]) => {
+    void viewer.value?.update({ html, formulaScale, legacy, theme });
   },
 );
 
