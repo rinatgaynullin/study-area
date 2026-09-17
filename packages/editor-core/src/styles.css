@@ -7,8 +7,8 @@
 .rte-content {
   font-family: var(--rte-font-family, inherit);
   font-size: var(--rte-font-size, 15px);
-  line-height: var(--rte-line-height, 1.6);
-  color: var(--rte-color-text, #1d1d1d);
+  line-height: var(--rte-line-height, 1.47);
+  color: var(--rte-color-text, #221f2e);
   outline: none;
   word-break: break-word;
 }
@@ -52,22 +52,22 @@
 .rte-content blockquote {
   margin: 0;
   padding-left: 1em;
-  border-left: 3px solid var(--rte-color-border, #d5d5d5);
-  color: var(--rte-color-muted, #6b6b6b);
+  border-left: 3px solid var(--rte-color-border, #dedce3);
+  color: var(--rte-color-muted, #898794);
 }
 
 .rte-content code {
   font-family: var(--rte-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 0.9em;
-  background: var(--rte-color-code-bg, rgb(0 0 0 / 6%));
-  border-radius: var(--rte-radius-sm, 3px);
+  background: var(--rte-color-code-bg, #f5f5f7);
+  border-radius: var(--rte-radius-sm, 4px);
   padding: 0.15em 0.35em;
 }
 
 .rte-content pre {
   font-family: var(--rte-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  background: var(--rte-color-code-block-bg, #f4f4f5);
-  border-radius: var(--rte-radius, 4px);
+  background: var(--rte-color-code-block-bg, #f5f5f7);
+  border-radius: var(--rte-radius, 8px);
   padding: 0.75em 1em;
   overflow-x: auto;
   margin: 0;
@@ -81,18 +81,19 @@
 
 .rte-content hr {
   border: none;
-  border-top: 1px solid var(--rte-color-border, #d5d5d5);
+  border-top: 1px solid var(--rte-color-border, #dedce3);
   margin: 1.25em 0;
 }
 
 .rte-content a {
-  color: var(--rte-color-primary, #1976d2);
+  /* Ссылка — свой токен: в дизайн-системе она не акцентного цвета. */
+  color: var(--rte-color-link, #396fdb);
   text-decoration: underline;
   cursor: pointer;
 }
 
 .rte-content mark {
-  border-radius: var(--rte-radius-sm, 3px);
+  border-radius: var(--rte-radius-sm, 4px);
   padding: 0 0.1em;
 }
 
@@ -107,7 +108,7 @@
 
 .rte-content th,
 .rte-content td {
-  border: 1px solid var(--rte-color-border, #d5d5d5);
+  border: 1px solid var(--rte-color-border, #dedce3);
   padding: 0.4em 0.6em;
   vertical-align: top;
   position: relative;
@@ -115,7 +116,7 @@
 }
 
 .rte-content th {
-  background: var(--rte-color-subtle-bg, #f4f4f5);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
   font-weight: 600;
   text-align: left;
 }
@@ -124,7 +125,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--rte-color-selection, rgb(25 118 210 / 12%));
+  background: var(--rte-color-selection, #fff1e0);
   pointer-events: none;
 }
 
@@ -134,7 +135,7 @@
   top: 0;
   bottom: 0;
   width: 4px;
-  background: var(--rte-color-primary, #1976d2);
+  background: var(--rte-color-primary, #ff892e);
   pointer-events: none;
 }
 
@@ -143,12 +144,12 @@
 .rte-content img {
   max-width: 100%;
   height: auto;
-  border-radius: var(--rte-radius, 4px);
+  border-radius: var(--rte-radius, 8px);
   display: block;
 }
 
 .rte-content img.ProseMirror-selectednode {
-  outline: 2px solid var(--rte-color-primary, #1976d2);
+  outline: 2px solid var(--rte-color-primary, #ff892e);
 }
 
 /* ---------------------------------------------------------------- formulas */
@@ -157,7 +158,7 @@
   display: inline-block;
   vertical-align: middle;
   padding: 0 var(--rte-formula-padding, 2px);
-  border-radius: var(--rte-radius-sm, 3px);
+  border-radius: var(--rte-radius-sm, 4px);
   cursor: pointer;
   user-select: none;
   line-height: 1;
@@ -165,13 +166,13 @@
 }
 
 .rte-formula:hover {
-  background: var(--rte-color-formula-hover, rgb(25 118 210 / 10%));
+  background: var(--rte-color-formula-hover, #fff1e0);
 }
 
 .rte-formula--selected,
 .rte-formula.ProseMirror-selectednode {
-  background: var(--rte-color-formula-hover, rgb(25 118 210 / 10%));
-  box-shadow: 0 0 0 2px var(--rte-color-primary, #1976d2);
+  background: var(--rte-color-formula-hover, #fff1e0);
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
 }
 
 .rte-formula__render {
@@ -191,14 +192,14 @@
   flex-direction: column;
   gap: 4px;
   padding: var(--rte-audio-padding, 10px 12px);
-  background: var(--rte-color-subtle-bg, #f4f4f5);
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius-lg, 8px);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-lg, 12px);
   max-width: var(--rte-audio-max-width, 420px);
 }
 
 .rte-audio.ProseMirror-selectednode {
-  box-shadow: 0 0 0 2px var(--rte-color-primary, #1976d2);
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
 }
 
 .rte-audio__controls {
@@ -214,7 +215,7 @@
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  background: var(--rte-color-primary, #1976d2);
+  background: var(--rte-color-primary, #ff892e);
   color: var(--rte-color-on-primary, #fff);
   font-size: 12px;
   line-height: 1;
@@ -237,24 +238,24 @@
   flex: 1 1 auto;
   min-width: 2px;
   border-radius: 1px;
-  background: var(--rte-color-waveform, #b9bcc2);
+  background: var(--rte-color-waveform, #dedce3);
   transition: background-color 80ms linear;
 }
 
 .rte-audio__bar--played {
-  background: var(--rte-color-primary, #1976d2);
+  background: var(--rte-color-primary, #ff892e);
 }
 
 .rte-audio__time {
   flex: 0 0 auto;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--rte-color-muted, #6b6b6b);
+  color: var(--rte-color-muted, #898794);
 }
 
 .rte-audio__name {
   font-size: 12px;
-  color: var(--rte-color-muted, #6b6b6b);
+  color: var(--rte-color-muted, #898794);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -277,14 +278,14 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--rte-color-subtle-bg, #f4f4f5);
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius-lg, 8px);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-lg, 12px);
   max-width: 100%;
 }
 
 .rte-attachment.ProseMirror-selectednode {
-  box-shadow: 0 0 0 2px var(--rte-color-primary, #1976d2);
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
 }
 
 .rte-attachment__icon {
@@ -293,7 +294,7 @@
 }
 
 .rte-attachment__link {
-  color: var(--rte-color-primary, #1976d2);
+  color: var(--rte-color-primary, #ff892e);
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -303,7 +304,7 @@
 .rte-attachment__meta {
   flex: 0 0 auto;
   font-size: 12px;
-  color: var(--rte-color-muted, #6b6b6b);
+  color: var(--rte-color-muted, #898794);
 }
 
 /* ------------------------------------------------------------- placeholder */
@@ -313,13 +314,13 @@
   float: left;
   height: 0;
   pointer-events: none;
-  color: var(--rte-color-placeholder, #9a9a9a);
+  color: var(--rte-color-placeholder, #898794);
 }
 
 /* ------------------------------------------------------------- gapcursor */
 
 .rte-content .ProseMirror-gapcursor::after {
-  border-top-color: var(--rte-color-text, #1d1d1d);
+  border-top-color: var(--rte-color-text, #221f2e);
 }
 
 /*
@@ -338,9 +339,9 @@
 .rte-content [data-resize-handle] {
   width: var(--rte-resize-handle-size, 10px);
   height: var(--rte-resize-handle-size, 10px);
-  background: var(--rte-color-primary, #1976d2);
+  background: var(--rte-color-primary, #ff892e);
   border: 1px solid var(--rte-color-on-primary, #fff);
-  border-radius: var(--rte-radius-sm, 3px);
+  border-radius: var(--rte-radius-sm, 4px);
   /* Ручки видны только когда картинка выбрана: иначе они перекрывают контент
      при простом чтении документа. */
   opacity: 0;
@@ -384,7 +385,7 @@
 }
 
 .rte-content a.rte-link--muted {
-  color: var(--rte-color-muted, #6b6b6b);
+  color: var(--rte-color-muted, #898794);
 }
 
 /* ===================================================================
@@ -393,6 +394,12 @@
  * Переехало сюда из Vue-пакета вместе с самим интерфейсом. UI ядра
  * ванильный, и стили к нему должны приезжать из того же пакета — иначе
  * ванильный редактор без Vue остаётся без внешнего вида.
+ *
+ * Токены — единственный интерфейс кастомизации (THEMING.md). Цвет, шрифт,
+ * радиус, тень и размер контрола в правилах ниже берутся только из них;
+ * тест theme-tokens это сторожит. Значения по умолчанию повторяют язык
+ * дизайн-системы umschool, а другой UI подключается переопределением
+ * токенов на `.rte-root` и `.rte-content-root` — без правки этого файла.
  * =================================================================== */
 
 /*
@@ -401,42 +408,86 @@
  */
 .rte-root,
 .rte-content-root {
-  /* palette */
-  --rte-color-primary: #1976d2;
+  /* Палитра */
+  --rte-color-primary: #ff892e;
+  --rte-color-primary-hover: #f56600;
+  --rte-color-primary-soft: #fff1e0;
   --rte-color-on-primary: #ffffff;
-  --rte-color-text: #1d1d1d;
-  --rte-color-muted: #6b6b6b;
-  --rte-color-placeholder: #9a9a9a;
+  --rte-color-text: #221f2e;
+  --rte-color-muted: #898794;
+  --rte-color-placeholder: #898794;
+  --rte-color-link: #396fdb;
   --rte-color-bg: #ffffff;
-  --rte-color-subtle-bg: #f4f4f5;
-  --rte-color-border: #d5d5d5;
-  --rte-color-danger: #c62828;
-  --rte-color-code-bg: rgb(0 0 0 / 6%);
-  --rte-color-code-block-bg: #f4f4f5;
-  --rte-color-selection: rgb(25 118 210 / 12%);
-  --rte-color-formula-hover: rgb(25 118 210 / 10%);
-  --rte-color-waveform: #b9bcc2;
+  --rte-color-subtle-bg: #f5f5f7;
+  --rte-color-border: #dedce3;
+  --rte-color-border-hover: #afadb8;
+  --rte-color-danger: #f23e3e;
+  --rte-color-danger-soft: #ffebeb;
+  --rte-color-code-bg: #f5f5f7;
+  --rte-color-code-block-bg: #f5f5f7;
+  --rte-color-selection: var(--rte-color-primary-soft);
+  --rte-color-formula-hover: var(--rte-color-primary-soft);
+  --rte-color-waveform: #dedce3;
+  --rte-color-overlay: rgb(34 31 46 / 45%);
 
-  /* toolbar */
-  --rte-toolbar-bg: #ffffff;
-  --rte-toolbar-gap: 2px;
-  --rte-toolbar-padding: 4px 6px;
-  --rte-btn-size: 32px;
-  --rte-btn-hover-bg: rgb(0 0 0 / 6%);
-  --rte-btn-active-bg: rgb(25 118 210 / 12%);
-  --rte-btn-active-color: var(--rte-color-primary);
-
-  /* shape and type */
-  --rte-radius-sm: 3px;
-  --rte-radius: 4px;
-  --rte-radius-lg: 8px;
-  --rte-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  /* Типографика */
+  --rte-font-family: Golos, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   --rte-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --rte-font-size: 15px;
-  --rte-line-height: 1.6;
-  --rte-content-padding: 12px 14px;
-  --rte-shadow: 0 4px 16px rgb(0 0 0 / 14%);
-  --rte-z-modal: 1000;
+  --rte-line-height: 1.47;
+  --rte-ui-font-size: 15px;
+  --rte-ui-font-size-sm: 14px;
+  --rte-ui-font-size-xs: 13px;
+  --rte-ui-font-weight: 500;
+  --rte-title-font-size: 18px;
+  --rte-title-font-weight: 600;
+  --rte-display-font-size: 24px;
+  --rte-formula-input-font-size: 20px;
+
+  /* Форма, тени, слои */
+  --rte-radius-sm: 4px;
+  --rte-radius: 8px;
+  --rte-radius-lg: 12px;
+  --rte-radius-pill: 999px;
+  --rte-input-radius: 10px;
+  --rte-shadow: 0 3px 7px rgb(35 31 51 / 5%), 0 10px 24px rgb(35 31 51 / 8%);
+  --rte-shadow-lg: 0 8px 24px rgb(35 31 51 / 8%), 0 32px 80px rgb(35 31 51 / 16%);
+  --rte-focus-ring: 2px solid var(--rte-color-primary);
+  --rte-z-modal: 2000;
+
+  /* Тулбар */
+  --rte-toolbar-bg: var(--rte-color-bg);
+  --rte-toolbar-gap: 2px;
+  --rte-toolbar-padding: 4px 6px;
+  --rte-btn-size: 36px;
+  --rte-btn-hover-bg: var(--rte-color-subtle-bg);
+  --rte-btn-active-bg: var(--rte-color-primary-soft);
+  --rte-btn-active-color: var(--rte-color-primary);
+
+  /* Контролы диалогов */
+  --rte-input-height: 44px;
+  --rte-input-padding-x: 11px;
+  --rte-input-focus-shadow: none;
+  --rte-button-height: 44px;
+  --rte-button-padding-x: 24px;
+  --rte-button-hover-bg: var(--rte-color-subtle-bg);
+
+  /* Модалки, поповеры, меню */
+  --rte-modal-width: 480px;
+  --rte-modal-width-wide: 860px;
+  --rte-modal-padding-x: 32px;
+  --rte-modal-padding-y: 16px;
+  --rte-popover-padding: 12px;
+  --rte-menu-item-padding: 8px 12px;
+  --rte-menu-min-width: 180px;
+
+  /* Контент и медиа */
+  --rte-content-padding: 12px 16px;
+  --rte-block-gap: 0.75em;
+  --rte-formula-padding: 2px;
+  --rte-audio-max-width: 420px;
+  --rte-audio-padding: 10px 12px;
+  --rte-resize-handle-size: 10px;
 
   color: var(--rte-color-text);
   font-family: var(--rte-font-family);
@@ -446,7 +497,8 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--rte-color-border);
-  border-radius: var(--rte-radius);
+  /* Редактор целиком — поле ввода, поэтому радиус поля, а не карточки. */
+  border-radius: var(--rte-input-radius);
   background: var(--rte-color-bg);
   overflow: hidden;
 }
@@ -497,7 +549,7 @@
   color: var(--rte-color-text);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--rte-ui-font-size-xs);
   line-height: 1;
   transition: background-color 120ms ease, color 120ms ease;
   -webkit-tap-highlight-color: transparent;
@@ -508,7 +560,7 @@
 }
 
 .rte-btn:focus-visible {
-  outline: 2px solid var(--rte-color-primary);
+  outline: var(--rte-focus-ring);
   outline-offset: -2px;
 }
 
@@ -523,7 +575,7 @@
 }
 
 .rte-btn__text {
-  font-weight: 600;
+  font-weight: var(--rte-title-font-weight);
   padding: 0 2px;
   min-width: 2.5em;
 }
@@ -545,19 +597,18 @@
   display: inline-flex;
 }
 
-
 .rte-menu__item {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: var(--rte-menu-item-padding);
   border: none;
   border-radius: var(--rte-radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--rte-ui-font-size-sm);
   text-align: left;
   cursor: pointer;
 }
@@ -567,13 +618,13 @@
 }
 
 .rte-menu__item:focus-visible {
-  outline: 2px solid var(--rte-color-primary);
+  outline: var(--rte-focus-ring);
   outline-offset: -2px;
 }
 
 .rte-menu__item--active {
   color: var(--rte-color-primary);
-  font-weight: 600;
+  font-weight: var(--rte-title-font-weight);
 }
 
 .rte-menu__item:disabled {
@@ -610,7 +661,7 @@
 .rte-colors__swatch {
   width: 28px;
   height: 28px;
-  border: 1px solid rgb(0 0 0 / 12%);
+  border: 1px solid var(--rte-color-border);
   border-radius: var(--rte-radius-sm);
   cursor: pointer;
   padding: 0;
@@ -626,7 +677,7 @@
   justify-content: space-between;
   gap: 8px;
   margin-top: 8px;
-  font-size: 13px;
+  font-size: var(--rte-ui-font-size-xs);
 }
 
 .rte-colors__reset {
@@ -637,7 +688,7 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--rte-ui-font-size-xs);
   cursor: pointer;
   padding: 4px;
   border-radius: var(--rte-radius-sm);
@@ -669,7 +720,7 @@
 /* Строка под тулбаром: идущие загрузки и последняя ошибка. */
 .rte-status {
   padding: 4px 12px;
-  font-size: 13px;
+  font-size: var(--rte-ui-font-size-xs);
   color: var(--rte-color-muted);
   background: var(--rte-color-subtle-bg);
   border-bottom: 1px solid var(--rte-color-border);
@@ -710,35 +761,35 @@
 .rte-modal {
   position: fixed;
   inset: 0;
-  z-index: var(--rte-z-modal, 1000);
+  z-index: var(--rte-z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  font-family: var(--rte-font-family, system-ui, sans-serif);
+  font-family: var(--rte-font-family);
 }
 
 .rte-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgb(0 0 0 / 45%);
+  background: var(--rte-color-overlay);
 }
 
 .rte-modal__panel {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(440px, 100%);
+  width: min(var(--rte-modal-width), 100%);
   max-height: min(90vh, 860px);
-  background: var(--rte-color-bg, #fff);
-  color: var(--rte-color-text, #1d1d1d);
-  border-radius: var(--rte-radius-lg, 8px);
-  box-shadow: var(--rte-shadow, 0 4px 16px rgb(0 0 0 / 14%));
+  background: var(--rte-color-bg);
+  color: var(--rte-color-text);
+  border-radius: var(--rte-radius-lg);
+  box-shadow: var(--rte-shadow-lg);
   overflow: hidden;
 }
 
 .rte-modal__panel--wide {
-  width: min(860px, 100%);
+  width: min(var(--rte-modal-width-wide), 100%);
 }
 
 .rte-modal__header {
@@ -746,42 +797,47 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--rte-color-border, #d5d5d5);
+  padding: var(--rte-modal-padding-y) var(--rte-modal-padding-x);
+  border-bottom: 1px solid var(--rte-color-border);
 }
 
 .rte-modal__title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--rte-title-font-size);
+  font-weight: var(--rte-title-font-weight);
 }
 
 .rte-modal__close {
   display: inline-flex;
   padding: 6px;
   border: none;
-  border-radius: var(--rte-radius, 4px);
+  border-radius: var(--rte-radius);
   background: transparent;
   color: inherit;
   cursor: pointer;
 }
 
 .rte-modal__close:hover {
-  background: var(--rte-btn-hover-bg, rgb(0 0 0 / 6%));
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-modal__close:focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: -2px;
 }
 
 .rte-modal__body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 16px;
+  padding: var(--rte-modal-padding-y) var(--rte-modal-padding-x);
 }
 
 .rte-modal__footer {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--rte-color-border, #d5d5d5);
+  padding: var(--rte-modal-padding-y) var(--rte-modal-padding-x);
+  border-top: 1px solid var(--rte-color-border);
 }
 
 .rte-modal__spacer {
@@ -807,74 +863,106 @@
 .rte-field__label {
   display: block;
   margin-bottom: 4px;
-  font-size: 13px;
-  color: var(--rte-color-muted, #6b6b6b);
+  font-size: var(--rte-ui-font-size);
+  color: var(--rte-color-text);
 }
 
 .rte-field__error {
   margin: 0 0 12px;
-  color: var(--rte-color-danger, #c62828);
-  font-size: 13px;
+  color: var(--rte-color-danger);
+  font-size: var(--rte-ui-font-size-xs);
 }
 
 .rte-input {
-  height: 38px;
-  padding: 0 10px;
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius, 4px);
-  background: var(--rte-color-bg, #fff);
+  height: var(--rte-input-height);
+  padding: 0 var(--rte-input-padding-x);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-input-radius);
+  background: var(--rte-color-bg);
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--rte-ui-font-size);
+  caret-color: var(--rte-color-text);
+}
+
+.rte-input::placeholder {
+  color: var(--rte-color-placeholder);
+}
+
+.rte-input:hover:not(:focus) {
+  border-color: var(--rte-color-border-hover);
 }
 
 .rte-input:focus {
   outline: none;
-  border-color: var(--rte-color-primary, #1976d2);
-  box-shadow: 0 0 0 2px var(--rte-color-selection, rgb(25 118 210 / 12%));
+  border-color: var(--rte-color-primary);
+  box-shadow: var(--rte-input-focus-shadow);
 }
 
 .rte-checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--rte-ui-font-size-sm);
   cursor: pointer;
+}
+
+/* Нативный чекбокс красится в акцент: своей отрисовки у него нет. */
+.rte-checkbox input {
+  accent-color: var(--rte-color-primary);
 }
 
 .rte-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius, 4px);
-  background: var(--rte-color-bg, #fff);
+  height: var(--rte-button-height);
+  padding: 0 var(--rte-button-padding-x);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--rte-ui-font-size);
+  font-weight: var(--rte-ui-font-weight);
   cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .rte-button:hover:not(:disabled) {
-  background: var(--rte-btn-hover-bg, rgb(0 0 0 / 6%));
+  background: var(--rte-button-hover-bg);
+  border-color: var(--rte-color-border-hover);
+}
+
+.rte-button:focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: 2px;
 }
 
 .rte-button:disabled {
-  opacity: 0.45;
-  cursor: default;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .rte-button--primary {
-  background: var(--rte-color-primary, #1976d2);
-  border-color: var(--rte-color-primary, #1976d2);
-  color: var(--rte-color-on-primary, #fff);
+  background: var(--rte-color-primary);
+  border-color: var(--rte-color-primary);
+  color: var(--rte-color-on-primary);
+}
+
+.rte-button--primary:hover:not(:disabled) {
+  background: var(--rte-color-primary-hover);
+  border-color: var(--rte-color-primary-hover);
 }
 
 .rte-button--danger {
-  color: var(--rte-color-danger, #c62828);
-  border-color: currentColor;
+  color: var(--rte-color-danger);
+  border-color: var(--rte-color-danger);
+}
+
+.rte-button--danger:hover:not(:disabled) {
+  background: var(--rte-color-danger-soft);
+  border-color: var(--rte-color-danger);
 }
 
 /* --------------------------------------------------------- formula editor */
@@ -888,7 +976,7 @@
 .rte-formula-editor__tabs {
   display: flex;
   gap: 4px;
-  border-bottom: 1px solid var(--rte-color-border, #d5d5d5);
+  border-bottom: 1px solid var(--rte-color-border);
 }
 
 .rte-formula-editor__tab {
@@ -899,35 +987,36 @@
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--rte-color-muted, #6b6b6b);
+  color: var(--rte-color-muted);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--rte-ui-font-size-sm);
+  font-weight: var(--rte-ui-font-weight);
   cursor: pointer;
 }
 
 .rte-formula-editor__tab--active {
-  color: var(--rte-color-primary, #1976d2);
-  border-bottom-color: var(--rte-color-primary, #1976d2);
-  font-weight: 600;
+  color: var(--rte-color-primary);
+  border-bottom-color: var(--rte-color-primary);
+  font-weight: var(--rte-title-font-weight);
 }
 
 .rte-formula-editor__status {
   margin: 0;
-  font-size: 13px;
-  color: var(--rte-color-muted, #6b6b6b);
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-muted);
 }
 
 .rte-formula-editor__host {
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius, 4px);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-input-radius);
   padding: 10px 12px;
   min-height: 56px;
-  background: var(--rte-color-bg, #fff);
+  background: var(--rte-color-bg);
 }
 
 .rte-formula-editor__field {
   width: 100%;
-  font-size: 20px;
+  font-size: var(--rte-formula-input-font-size);
 }
 
 /* The dialog has its own template gallery, so MathLive's on-screen keyboard is
@@ -940,15 +1029,15 @@
 
 .rte-formula-editor__hint {
   margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--rte-color-muted, #6b6b6b);
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-muted);
 }
 
 .rte-formula-editor__section-title {
   margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--rte-color-muted, #6b6b6b);
+  font-size: var(--rte-ui-font-size-xs);
+  font-weight: var(--rte-title-font-weight);
+  color: var(--rte-color-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -962,19 +1051,24 @@
 
 .rte-formula-editor__category {
   padding: 5px 10px;
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: 999px;
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius-pill);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--rte-ui-font-size-xs);
   cursor: pointer;
 }
 
+.rte-formula-editor__category:hover:not(.rte-formula-editor__category--active) {
+  border-color: var(--rte-color-border-hover);
+  background: var(--rte-color-subtle-bg);
+}
+
 .rte-formula-editor__category--active {
-  background: var(--rte-color-primary, #1976d2);
-  border-color: var(--rte-color-primary, #1976d2);
-  color: var(--rte-color-on-primary, #fff);
+  background: var(--rte-color-primary);
+  border-color: var(--rte-color-primary);
+  color: var(--rte-color-on-primary);
 }
 
 .rte-formula-editor__gallery {
@@ -992,16 +1086,16 @@
   justify-content: center;
   min-height: 46px;
   padding: 6px;
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius, 4px);
-  background: var(--rte-color-bg, #fff);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  background: var(--rte-color-bg);
   cursor: pointer;
   overflow: hidden;
 }
 
 .rte-formula-editor__template:hover {
-  border-color: var(--rte-color-primary, #1976d2);
-  background: var(--rte-color-selection, rgb(25 118 210 / 12%));
+  border-color: var(--rte-color-primary);
+  background: var(--rte-color-selection);
 }
 
 .rte-formula-editor__template-preview svg {
@@ -1014,15 +1108,15 @@
   align-items: center;
   min-height: 56px;
   padding: 10px 12px;
-  border: 1px dashed var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius, 4px);
-  background: var(--rte-color-subtle-bg, #f4f4f5);
+  border: 1px dashed var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  background: var(--rte-color-subtle-bg);
   overflow-x: auto;
 }
 
 .rte-formula-editor__empty {
-  color: var(--rte-color-placeholder, #9a9a9a);
-  font-size: 13px;
+  color: var(--rte-color-placeholder);
+  font-size: var(--rte-ui-font-size-xs);
 }
 
 /* ---------------------------------------------------------------- recorder */
@@ -1041,13 +1135,13 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--rte-color-subtle-bg, #f4f4f5);
-  color: var(--rte-color-muted, #6b6b6b);
+  background: var(--rte-color-subtle-bg);
+  color: var(--rte-color-muted);
 }
 
 .rte-recorder__indicator--live {
-  background: var(--rte-color-danger, #c62828);
-  color: #fff;
+  background: var(--rte-color-danger);
+  color: var(--rte-color-on-primary);
   /* Scales with live input level, so the user sees the mic is picking up. */
   transform: scale(var(--rte-level, 1));
   transition: transform 100ms ease-out;
@@ -1060,14 +1154,14 @@
 }
 
 .rte-recorder__time {
-  font-size: 24px;
+  font-size: var(--rte-display-font-size);
   font-variant-numeric: tabular-nums;
 }
 
 .rte-recorder__limit,
 .rte-recorder__hint {
-  font-size: 13px;
-  color: var(--rte-color-muted, #6b6b6b);
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-muted);
   margin: 0;
 }
 
@@ -1086,9 +1180,10 @@
 
 @media (max-width: 640px) {
   .rte-root {
-    --rte-btn-size: 36px;
+    --rte-btn-size: 40px;
     --rte-font-size: 16px;
     --rte-content-padding: 10px 12px;
+    --rte-modal-padding-x: 20px;
   }
 
   .rte-toolbar {
@@ -1105,7 +1200,7 @@
   .rte-modal__panel--wide {
     width: 100%;
     max-height: 92vh;
-    border-radius: var(--rte-radius-lg, 8px) var(--rte-radius-lg, 8px) 0 0;
+    border-radius: var(--rte-radius-lg) var(--rte-radius-lg) 0 0;
   }
 
   .rte-formula-editor__gallery {
@@ -1116,6 +1211,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .rte-btn,
+  .rte-button,
   .rte-recorder__indicator--live,
   .rte-audio__bar {
     transition: none;
@@ -1125,15 +1221,15 @@
 /* Панель у элемента: ссылка под курсором, размеры картинки и т. п. */
 .rte-popover {
   position: fixed;
-  z-index: var(--rte-z-modal, 1000);
-  background: var(--rte-color-bg, #fff);
-  border: 1px solid var(--rte-color-border, #d5d5d5);
-  border-radius: var(--rte-radius, 4px);
-  box-shadow: var(--rte-shadow, 0 2px 8px rgba(0, 0, 0, 0.15));
-  padding: 10px;
-  font-family: var(--rte-font-family, inherit);
-  font-size: 13px;
-  color: var(--rte-color-text, #414141);
+  z-index: var(--rte-z-modal);
+  background: var(--rte-color-bg);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius-lg);
+  box-shadow: var(--rte-shadow);
+  padding: var(--rte-popover-padding);
+  font-family: var(--rte-font-family);
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-text);
 }
 
 /*
@@ -1141,7 +1237,7 @@
  * `overflow: hidden` корня обрезать длинное меню у низкого редактора.
  */
 .rte-popover.rte-dropdown__panel {
-  min-width: 180px;
+  min-width: var(--rte-menu-min-width);
   max-height: 60vh;
   overflow-y: auto;
   padding: 4px;
@@ -1160,8 +1256,8 @@
 }
 
 .rte-link-popover__label {
-  color: var(--rte-color-muted, #6b6b6b);
-  font-size: 12px;
+  color: var(--rte-color-muted);
+  font-size: var(--rte-ui-font-size-xs);
 }
 
 .rte-link-popover__actions {
