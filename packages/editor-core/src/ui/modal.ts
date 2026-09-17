@@ -53,7 +53,11 @@ export function createModal(options: ModalOptions): Modal {
     ],
   });
 
-  const element = el('div', { class: 'rte-modal', children: [panel] });
+  // Подложка — отдельный элемент, а не фон оверлея: так клик по ней отличим
+  // от клика по панели, а затемнение страницы не зависит от того, что ещё
+  // лежит в контейнере.
+  const backdrop = el('div', { class: 'rte-modal__backdrop' });
+  const element = el('div', { class: 'rte-modal', children: [backdrop, panel] });
   element.hidden = true;
 
   let isVisible = false;
@@ -127,7 +131,7 @@ export function createModal(options: ModalOptions): Modal {
   // Клик по подложке закрывает, клик по панели — нет.
   disposer.add(
     on(element, 'mousedown', (event) => {
-      if (event.target === element) close();
+      if (event.target === element || event.target === backdrop) close();
     }),
   );
 
