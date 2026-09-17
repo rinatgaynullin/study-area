@@ -64,6 +64,14 @@ describe('вьюер без фреймворка', () => {
     expect(view.element.querySelector('.rte-formula__render svg')?.id).toBe('precomputed');
   });
 
+  it('тема ставится опцией и меняется через update', async () => {
+    const view = await mountViewer('<p>x</p>', { theme: 'dark' });
+    expect(view.element.classList.contains('rte-theme-dark')).toBe(true);
+
+    await view.update({ theme: 'light' });
+    expect(view.element.classList.contains('rte-theme-dark')).toBe(false);
+  });
+
   it('update подменяет документ и переключает legacy-класс', async () => {
     const view = await mountViewer('<p>первый</p>');
     await view.update({ html: '<p>второй</p>', legacy: true });

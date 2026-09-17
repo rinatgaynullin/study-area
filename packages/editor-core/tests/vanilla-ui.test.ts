@@ -158,6 +158,16 @@ describe('оверлеи', () => {
   });
 });
 
+describe('тема', () => {
+  it('опция theme ставит класс на корень, setTheme его переключает', () => {
+    const editor = mountEditor({ theme: 'dark' });
+    expect(editor.element.classList.contains('rte-theme-dark')).toBe(true);
+
+    editor.setTheme('light');
+    expect(editor.element.classList.contains('rte-theme-dark')).toBe(false);
+  });
+});
+
 describe('строка статуса', () => {
   it('показывает идущую загрузку и последнюю ошибку', async () => {
     let finish!: (result: { url: string }) => void;

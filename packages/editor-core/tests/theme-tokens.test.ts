@@ -21,8 +21,21 @@ const TOKEN_BLOCK = (() => {
   return STYLES.slice(start, STYLES.indexOf('}', start));
 })();
 
-/** Правила интерфейса — всё после блока объявлений. */
-const CHROME = STYLES.slice(STYLES.indexOf('}', STYLES.indexOf('.rte-root,\n.rte-content-root {')));
+/** Блок тёмной темы: переопределяет токены под классом. */
+const DARK_BLOCK = (() => {
+  const start = STYLES.indexOf('.rte-theme-dark .rte-root,');
+  expect(start).toBeGreaterThan(-1);
+  return STYLES.slice(start, STYLES.indexOf('}', start));
+})();
+
+/**
+ * Правила интерфейса — всё после блока объявлений, без блоков, которые только
+ * задают значения токенов (тёмная тема, мобильные переопределения): литералы
+ * там и есть значения по умолчанию.
+ */
+const CHROME = STYLES.slice(
+  STYLES.indexOf('}', STYLES.indexOf('.rte-root,\n.rte-content-root {')),
+).replace(/\{[^{}]*--rte-[a-z0-9-]+:[^{}]*\}/g, '{}');
 
 const declared = new Set([...TOKEN_BLOCK.matchAll(/^\s*(--rte-[a-z0-9-]+):/gm)].map((m) => m[1]));
 const legacyDeclared = new Set(
@@ -75,6 +88,12 @@ describe('токены темы', () => {
       literal('box-shadow').filter((value) => !value.startsWith('0 0 0 2px var(')),
       'тень',
     ).toEqual([]);
+  });
+
+  it('тёмная тема переопределяет только объявленные токены', () => {
+    const overridden = [...DARK_BLOCK.matchAll(/^\s*(--rte-[a-z0-9-]+):/gm)].map((m) => m[1]);
+    expect(overridden.length).toBeGreaterThan(10);
+    expect(overridden.filter((name) => !declared.has(name))).toEqual([]);
   });
 
   it('THEMING.md описывает ровно объявленные токены', () => {

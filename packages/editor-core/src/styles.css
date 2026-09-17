@@ -93,6 +93,10 @@
 }
 
 .rte-content mark {
+  /* Подсветка — светлая пастель из палитры, поэтому текст на ней тёмный и
+     в тёмной теме: иначе он сливается с маркером. !important нужен, потому
+     что расширение Highlight пишет в тег инлайновый `color: inherit`. */
+  color: var(--rte-color-on-highlight, #221f2e) !important;
   border-radius: var(--rte-radius-sm, 4px);
   padding: 0 0.1em;
 }
@@ -429,6 +433,7 @@
   --rte-color-formula-hover: var(--rte-color-primary-soft);
   --rte-color-waveform: #dedce3;
   --rte-color-overlay: rgb(34 31 46 / 45%);
+  --rte-color-on-highlight: #221f2e;
 
   /* Типографика */
   --rte-font-family: Golos, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
@@ -491,6 +496,46 @@
 
   color: var(--rte-color-text);
   font-family: var(--rte-font-family);
+}
+
+/* Вьюер несёт поверхность сам: под тёмной темой светлый текст на фоне хоста
+   был бы нечитаем. Хост, которому нужна прозрачность, ставит
+   `--rte-color-bg: transparent` на своём экземпляре. */
+.rte-content-root {
+  background: var(--rte-color-bg);
+}
+
+/*
+ * Тёмная тема — те же токены под классом; значения — тёмная палитра
+ * дизайн-системы umschool. Класс ставится на сам элемент редактора или вьюера
+ * либо на любого предка (например, на <html> рядом с темой хоста); опция
+ * `theme` у createRichEditor и createRichContent ставит его сама.
+ * `color-scheme` красит нативные контролы — чекбокс, поле цвета, скроллбар.
+ */
+.rte-theme-dark .rte-root,
+.rte-root.rte-theme-dark,
+.rte-theme-dark .rte-content-root,
+.rte-content-root.rte-theme-dark {
+  color-scheme: dark;
+  --rte-color-primary: #ff8f39;
+  --rte-color-primary-hover: #ff722e;
+  --rte-color-primary-soft: #42393b;
+  --rte-color-text: #ebebf0;
+  --rte-color-muted: #7f7e8f;
+  --rte-color-placeholder: #7f7e8f;
+  --rte-color-link: #3a95ff;
+  --rte-color-bg: #2d2c36;
+  --rte-color-subtle-bg: #363542;
+  --rte-color-border: #4e4c5e;
+  --rte-color-border-hover: #6a697a;
+  --rte-color-danger: #f24b42;
+  --rte-color-danger-soft: #3d3130;
+  --rte-color-code-bg: #363542;
+  --rte-color-code-block-bg: #363542;
+  --rte-color-waveform: #4e4c5e;
+  --rte-color-overlay: rgb(38 36 46 / 75%);
+  --rte-shadow: 0 3px 7px rgb(17 17 20 / 20%), 0 10px 24px rgb(17 17 20 / 32%);
+  --rte-shadow-lg: 0 8px 24px rgb(17 17 20 / 24%), 0 32px 80px rgb(17 17 20 / 32%);
 }
 
 .rte-root {
