@@ -1,6 +1,10 @@
 import type { Messages } from '../types';
 
-/** Optional English bundle. Import and pass via `messages` to enable `locale="en"`. */
+/**
+ * Встроенная английская таблица: `locale: 'en'` включает её без участия
+ * хоста. Экспортируется, чтобы хост мог дополнить или переопределить её через
+ * `messages.en` и чтобы было с чего начинать перевод на другой язык.
+ */
 export const en: Messages = {
   toolbar_bold: 'Bold',
   toolbar_italic: 'Italic',

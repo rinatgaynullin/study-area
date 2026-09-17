@@ -1,37 +1,68 @@
 export { default as RichContent } from './components/rich-content.vue';
 export { default as RichEditor } from './components/rich-editor.vue';
-export { default as EditorToolbar } from './components/editor-toolbar.vue';
 export { default as RteIcon } from './components/rte-icon.vue';
-export { default as RteModal } from './components/rte-modal.vue';
-export { default as RtePopover } from './components/rte-popover.vue';
-export { default as LinkPopover } from './components/link-popover.vue';
-export { default as FormulaDialog } from './components/dialogs/formula-dialog.vue';
-export { default as AudioRecorderDialog } from './components/dialogs/audio-recorder-dialog.vue';
 
-export { ICONS, type IconName } from './components/icons';
+export { useEditorI18n } from './composables/use-editor-i18n';
+
+/*
+ * Интерфейс редактора — тулбар, диалоги, поповеры — целиком живёт в ядре и
+ * собран на голом DOM; Vue-обёртка его монтирует. Поэтому прежние
+ * Vue-компоненты интерфейса (`EditorToolbar`, `RteModal`, `RtePopover`,
+ * `LinkPopover`, `FormulaDialog`, `AudioRecorderDialog`) заменены
+ * фабриками из `@rich-editor/core` и реэкспортируются отсюда, чтобы хосту
+ * по-прежнему хватало одного пакета.
+ */
 export {
+  createRichEditor,
+  createToolbar,
+  createModal,
+  createPopover,
+  createDropdown,
   TOOLBAR_PRESETS,
   resolveToolbar,
+  SIMPLE_TOOLBAR_ITEMS,
+  createPanelToolbarItems,
+  DEFAULT_LINK_STYLES,
+  MATHLIVE_STRINGS,
+  mathliveRu,
+  clearPreviewCache,
+  renderLatexPreview,
+  type Dropdown,
+  type LinkStyle,
+  type MathliveStrings,
+  type Modal,
+  type Popover,
+  type RichEditorUi,
+  type RichEditorUiOptions,
+  type Toolbar,
   type ToolbarConfig,
-  type ToolbarGroup,
-  type ToolbarItemId,
+  type ToolbarGroupConfig,
+  type ToolbarItemDescriptor,
   type ToolbarPreset,
-} from './toolbar/presets';
-export {
-  emptyToolbarState,
-  readToolbarState,
-  type ToolbarState,
-} from './composables/toolbar-state';
-export { useEditorI18n } from './composables/use-editor-i18n';
-export { MATHLIVE_STRINGS, mathliveRu } from './i18n/mathlive';
-export { DEFAULT_LINK_STYLES, type LinkStyle } from './link-styles';
-export { clearPreviewCache, renderLatexPreview } from './composables/use-formula-preview';
+  type DialogComponent,
+  type EditorUiContext,
+  type UiComponent,
+} from '@rich-editor/core';
 
-// Re-exported so hosts need only this package for typing adapters and messages.
+/** @deprecated Переименована в `ToolbarGroupConfig`. */
+export type { ToolbarGroupConfig as ToolbarGroup } from '@rich-editor/core';
+
+/**
+ * Идентификатор пункта тулбара.
+ *
+ * Раньше это был закрытый союз литералов: набор кнопок был зашит в пакет.
+ * Реестр пунктов открыт — хост передаёт свои через `toolbarItems`, — поэтому
+ * идентификатор больше не ограничен встроенным списком.
+ */
+export type ToolbarItemId = string;
+
+// Реэкспорт ядра, чтобы для типизации адаптеров и сообщений хватало одного пакета.
 export {
   DEFAULT_LIMITS,
   RichEditorCore,
   RichEditorError,
+  ICONS,
+  type IconName,
   en as enMessages,
   ru as ruMessages,
   buildMathML,

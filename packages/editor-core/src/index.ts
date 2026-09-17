@@ -2,6 +2,37 @@ export { RichEditorCore, prepareIncomingHtml } from './editor';
 export type { PrepareIncomingHtmlOptions } from './editor';
 export { decodeWirisMathml, upgradeLegacyHtml } from './legacy';
 export { DEFAULT_FORMULA_FONT_SIZE_PX } from './formula/mathjax';
+export { ICONS, type IconName } from './ui/icons';
+
+// Ванильный интерфейс: редактор целиком, без фреймворка.
+export { createRichEditor } from './ui/rich-editor-ui';
+export type { RichEditorUi, RichEditorUiOptions } from './ui/rich-editor-ui';
+export {
+  TOOLBAR_PRESETS,
+  resolveToolbar,
+  type ToolbarConfig,
+  type ToolbarPreset,
+} from './ui/presets';
+export { createToolbar, type Toolbar, type ToolbarGroupConfig } from './ui/toolbar';
+export { SIMPLE_TOOLBAR_ITEMS } from './ui/toolbar-items';
+export { createPanelToolbarItems } from './ui/toolbar-panels';
+export { DEFAULT_LINK_STYLES, type LinkStyle } from './ui/link-styles';
+export { createModal, MODAL_CLOSE_EVENT, type Modal } from './ui/modal';
+export { createPopover, type Popover } from './ui/popover';
+export { createDropdown, type Dropdown } from './ui/dropdown';
+export {
+  clearPreviewCache,
+  getCachedLatexPreview,
+  renderLatexPreview,
+} from './ui/dialogs/formula-preview';
+export type {
+  DialogComponent,
+  EditorFeature,
+  EditorUiContext,
+  FeatureBuildOptions,
+  ToolbarItemDescriptor,
+  UiComponent,
+} from './ui/types';
 
 export {
   DEFAULT_LIMITS,
@@ -22,6 +53,7 @@ export {
 } from './types';
 
 export { createI18n, DEFAULT_LOCALE, en, ru, type I18n, type I18nOptions } from './i18n';
+export { MATHLIVE_STRINGS, mathliveRu, type MathliveStrings } from './i18n/mathlive';
 
 export { sanitizeHtml, sanitizeMathML, sanitizeSvg, resetSanitizers } from './security/sanitize';
 
@@ -76,6 +108,7 @@ export {
   VoiceRecorder,
   isRecordingSupported,
   pickAudioMimeType,
+  type RecorderLimit,
   type RecorderState,
   type RecordingResult,
   type VoiceRecorderOptions,

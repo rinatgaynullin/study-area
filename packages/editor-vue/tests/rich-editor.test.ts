@@ -33,6 +33,11 @@ function html(w: VueWrapper): string {
   return (w.vm as unknown as { getHTML(): string }).getHTML();
 }
 
+/** Текст элемента внутри открытого диалога: скрытые тоже остаются в DOM. */
+function openDialogText(selector: string): string {
+  return document.querySelector(`.rte-modal:not([hidden]) ${selector}`)?.textContent ?? '';
+}
+
 describe('mounting', () => {
   it('renders the toolbar and the editable surface', async () => {
     const w = await mountEditor();
@@ -45,7 +50,9 @@ describe('mounting', () => {
   it('hides the toolbar when not editable', async () => {
     const w = await mountEditor({ editable: false });
 
-    expect(w.find('.rte-toolbar').exists()).toBe(false);
+    // Ванильная оболочка прячет тулбар атрибутом, а не пересоздаёт разметку:
+    // так режим чтения переключается без перестройки редактора.
+    expect(w.find('.rte-toolbar').attributes('hidden')).toBeDefined();
     expect(w.find('.rte-root--readonly').exists()).toBe(true);
   });
 
@@ -183,9 +190,9 @@ describe('toolbar commands', () => {
     (w.vm as unknown as { focus(): void }).focus();
 
     await button(w, 'Таблица').trigger('click');
-    await w.find('.rte-dropdown__panel .rte-menu__item').trigger('click');
+    await w.find('.rte-dropdown__panel:not([hidden]) .rte-menu__item').trigger('click');
 
-    const dialog = document.querySelector('.rte-modal__panel');
+    const dialog = document.querySelector('.rte-modal:not([hidden]) .rte-modal__panel');
     expect(dialog).not.toBeNull();
 
     dialog!.querySelector<HTMLButtonElement>('.rte-button--primary')!.click();
@@ -290,14 +297,14 @@ describe('formula dialog', () => {
 
     await button(w, 'Математическая формула').trigger('click');
     await nextTick();
-    expect(document.querySelector('.rte-modal__title')?.textContent).toContain('Математическая');
+    expect(openDialogText('.rte-modal__title')).toContain('Математическая');
 
-    document.querySelector<HTMLButtonElement>('.rte-modal__close')!.click();
+    document.querySelector<HTMLButtonElement>('.rte-modal:not([hidden]) .rte-modal__close')!.click();
     await nextTick();
 
     await button(w, 'Химическая формула').trigger('click');
     await nextTick();
-    expect(document.querySelector('.rte-modal__title')?.textContent).toContain('Химическая');
+    expect(openDialogText('.rte-modal__title')).toContain('Химическая');
   });
 
   it('opens with the clicked formula and saves the updated MathML', async () => {
@@ -316,9 +323,9 @@ describe('formula dialog', () => {
     node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     await nextTick();
 
-    expect(document.querySelector('.rte-modal__panel')).not.toBeNull();
+    expect(document.querySelector('.rte-modal:not([hidden]) .rte-modal__panel')).not.toBeNull();
     // The dialog is bound to the clicked node, so saving updates it in place.
-    expect(document.querySelector('.rte-button--danger')?.textContent).toContain('Удалить формулу');
+    expect(openDialogText('.rte-button--danger')).toContain('Удалить формулу');
   });
 });
 

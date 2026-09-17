@@ -1,21 +1,25 @@
 # @rich-editor/vue
 
-Rich text editor for Vue 3 with **math and chemistry formulas** (MathML +
-MathJax), images, voice messages, text attachments and i18n. Toolbar and editing
-feel modelled on Quasar's QEditor; formula editing modelled on Wiris MathType —
-built entirely on MIT / Apache-2.0 dependencies.
+Rich text editor with **math and chemistry formulas** (MathML + MathJax), images,
+voice messages, text attachments and i18n. A framework-free core with a Vue 3
+wrapper. Toolbar and editing feel modelled on Quasar's QEditor; formula editing
+modelled on Wiris MathType — built entirely on MIT / Apache-2.0 dependencies.
 
 - **MathML is the canonical format.** Formulas are stored as MathML in the HTML,
   rendered by MathJax, reopened in a visual editor by clicking them, and deleted
   only as a whole.
 - **HTML in, HTML out.** `v-model` is a plain HTML string.
-- **Russian by default**, any other locale via a flat JSON table.
+- **Framework-free UI.** Toolbar, dialogs and popovers are plain DOM in the core;
+  the Vue package is a thin wrapper, and another framework can wrap the same UI.
+- **Assembled from features.** Presets, custom toolbar items, or whole features
+  (extensions + toolbar items + dialogs) in one declaration.
+- **Russian and English built in**, any other locale via a flat JSON table.
 - **Restyle without forking** — every value is a CSS variable.
 
 ```
-packages/editor-core   @rich-editor/core   framework-agnostic engine
-packages/editor-vue    @rich-editor/vue    the Vue 3 components  ← install this
-apps/demo                                  runnable demo
+packages/editor-core   @rich-editor/core   the editor: engine, schema, plugins and the UI
+packages/editor-vue    @rich-editor/vue    Vue 3 wrapper over the core UI  ← install this for Vue
+apps/demo                                  runnable demo (Vue page + a no-framework page)
 ```
 
 > The `@rich-editor` npm scope is a placeholder — rename it before publishing.
@@ -110,7 +114,9 @@ Emits `rendered` once pending formulas have been drawn.
 | `uploadImage` / `uploadAudio` / `uploadFile` | `UploadAdapter` | — | Omit for the local blob-URL pipeline |
 | `limits` | `Partial<EditorLimits>` | see below | Size and duration caps |
 | `editable` | `boolean` | `true` | `false` hides the toolbar and locks the document |
-| `toolbar` | `'full' \| 'standard' \| 'minimal' \| ToolbarGroup[]` | `'full'` | Preset or explicit configuration |
+| `toolbar` | `'full' \| 'standard' \| 'minimal' \| ToolbarGroupConfig[]` | `'full'` | Preset or explicit configuration |
+| `toolbarItems` | `Record<string, ToolbarItemDescriptor>` | — | Extra toolbar items on top of the built-in set; read once at creation |
+| `features` | `EditorFeature[]` | — | Extra features — extensions, toolbar items, dialogs; read once at creation |
 | `placeholder` | `string` | localized | Empty-document hint |
 | `formulaScale` | `number` | `1` | Formula size relative to the text |
 | `mathliveFontsDirectory` | `string \| null` | `null` | See *Formula fonts* |
@@ -165,6 +171,70 @@ const toolbar = [
 
 A `collapsible` group made only of plain buttons folds into a `⋯` menu when the
 toolbar is too narrow.
+
+### Custom items
+
+Item ids are open: the built-in ones are listed above, and you can add your own.
+An item is one descriptor — icon, label key, command, active state — so adding a
+button does not mean editing several maps:
+
+```ts
+import type { ToolbarItemDescriptor } from '@rich-editor/vue';
+
+const toolbarItems: Record<string, ToolbarItemDescriptor> = {
+  stamp: {
+    id: 'stamp',
+    icon: 'check',                 // any name from the built-in icon set
+    labelKey: 'my_stamp',          // resolved through the same translator as the rest
+    kind: 'button',
+    run: ({ editor }) => editor.chain().focus().insertContent('✔ ').run(),
+  },
+};
+```
+
+```vue
+<RichEditor :toolbar="[{ id: 'mine', items: ['bold', 'stamp'] }]" :toolbar-items="toolbarItems" />
+```
+
+An entry in `toolbarItems` with a built-in id replaces that built-in item, so
+the same mechanism re-wires an existing button.
+
+### Features
+
+A feature bundles what one capability needs — schema extensions, toolbar items
+and dialogs — in a single declaration, so the editor is assembled from a list of
+capabilities rather than patched in several places:
+
+```ts
+import type { EditorFeature } from '@rich-editor/vue';
+
+const callout: EditorFeature = {
+  id: 'callout',
+  // `t` is the editor's translator, available already while extensions are built.
+  extensions: ({ t }) => [CalloutNode.configure({ label: t('callout_label') })],
+  toolbarItems: () => [
+    {
+      id: 'callout',
+      icon: 'blockquote',
+      labelKey: 'callout_label',
+      kind: 'button',
+      isActive: (editor) => editor.isActive('callout'),
+      run: ({ editor }) => editor.chain().focus().toggleCallout().run(),
+    },
+  ],
+};
+```
+
+```vue
+<RichEditor :features="[callout]" />
+```
+
+Items a feature contributes appear as their own group at the end of the toolbar
+unless your toolbar configuration places them explicitly. `dialogs(context)` may
+return components built with `createModal` or `createPopover`; they are mounted
+next to the built-in dialogs and destroyed with the editor. `toolbarItems`
+entries take precedence over feature items, so a host can still re-wire a single
+button of a feature it did not write.
 
 ## Images and links
 
@@ -317,8 +387,9 @@ MathJax needs nothing: glyph outlines are inlined into every rendered SVG.
 
 ## i18n
 
-Russian is built in. Add a locale by passing a flat JSON table — a **partial**
-table is fine, missing keys fall back to Russian.
+Russian and English are built in: `locale="en"` switches the whole UI without any
+table. Add another locale by passing a flat JSON table — a **partial** table is
+fine, missing keys fall back to Russian.
 
 ```vue
 <script setup lang="ts">
@@ -341,8 +412,10 @@ import en from './locales/en.json';
 }
 ```
 
-`{name}`-style placeholders are interpolated. A complete English bundle ships as
-an export:
+`{name}`-style placeholders are interpolated. A table passed for a built-in
+locale is merged over it key by key, so `messages: { en: { toolbar_bold: 'Heavy' } }`
+changes one string and keeps the rest English. The English bundle is also
+exported, as a starting point for another language:
 
 ```ts
 import { enMessages } from '@rich-editor/vue';
@@ -462,11 +535,38 @@ Details and rationale: [ADR 0004](docs/adr/0004-formula-html-contract.md).
 
 ## Using the core without Vue
 
+The whole editor — toolbar, dialogs, popovers — is built in `@rich-editor/core`
+on plain DOM. Any page or framework can mount it:
+
 ```ts
-import { RichEditorCore } from '@rich-editor/core';
+import { createRichEditor } from '@rich-editor/core';
 import '@rich-editor/core/styles.css';
 
-const editor = new RichEditorCore({
+const editor = createRichEditor({
+  element: document.querySelector('#editor')!,
+  content: '<p>Привет</p>',
+  toolbar: 'standard',
+  onChange: (html) => console.log(html),
+});
+
+editor.core.getHTML();
+editor.setLocale('en');
+editor.destroy();
+```
+
+`createRichEditor` takes the same options as the Vue component's props —
+`toolbar`, `toolbarItems`, `features`, `linkStyles`, `limits`, the upload
+adapters — plus the core callbacks (`onChange`, `onError`, …). The Vue package is
+exactly this call wrapped in a component; a wrapper for another framework is the
+same few dozen lines. `npm run dev` serves it at `/vanilla.html`.
+
+For a headless integration — your own UI on top of the engine — use
+`RichEditorCore` directly:
+
+```ts
+import { RichEditorCore } from '@rich-editor/core';
+
+const core = new RichEditorCore({
   element: document.querySelector('#editor')!,
   content: '<p>Привет</p>',
   onChange: (html) => console.log(html),
@@ -474,14 +574,14 @@ const editor = new RichEditorCore({
 });
 ```
 
-You supply the toolbar and dialogs; the schema, node views, sanitization,
-formula pipeline, uploads and recorder all work as they do under Vue.
+The schema, node views, sanitization, formula pipeline, uploads and recorder work
+the same either way.
 
 ## Development
 
 ```bash
 npm install
-npm run dev          # demo at http://localhost:5173
+npm run dev          # demo at http://localhost:5173, no-framework page at /vanilla.html
 npm test             # unit, integration and component tests
 npm run test:e2e     # Playwright, desktop + mobile
 npm run build        # build both packages

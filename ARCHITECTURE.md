@@ -3,31 +3,32 @@
 ## Packages
 
 ```
-packages/editor-core   @rich-editor/core   framework-agnostic engine, schema, plugins
-packages/editor-vue    @rich-editor/vue    the public Vue 3 components (main entry point)
-apps/demo              demo SPA
-tests/e2e              Playwright specs
+packages/editor-core   @rich-editor/core   the editor: engine, schema, plugins and the UI
+packages/editor-vue    @rich-editor/vue    thin Vue 3 wrapper: props, v-model, events
+apps/demo              demo SPA (Vue) plus vanilla.html, which loads only the core
+tests/e2e              Playwright specs for both pages
 ```
 
-`@rich-editor/vue` is what applications install. `@rich-editor/core` is a real
-package, not an internal folder: it contains no Vue and can drive an editor on
-its own.
+`@rich-editor/core` is the editor. It contains no framework code and assembles
+the whole thing — toolbar, editing surface, dialogs, popovers — with one call,
+`createRichEditor`. `@rich-editor/vue` is what Vue applications install: a
+component that mounts that call and adds what only a framework can, reactive
+props, `v-model` and events (ADR 0008).
 
-The split follows one rule: **anything that must work without Vue lives in the
-core.** That includes the document schema, the node views, sanitization, the
-MathML/MathJax pipeline, upload handling, the recorder and i18n. Vue owns the
-toolbar, the dialogs and the reactive bindings.
+The split follows one rule: **the UI is built once, on plain DOM, in the core.**
+A wrapper for another framework is the same few dozen lines as the Vue one and
+cannot drift from it, because it does not rebuild the interface.
 
 ```
 ┌──────────────────────── @rich-editor/vue ────────────────────────┐
-│  rich-editor.vue         rich-content.vue    (public components) │
-│  EditorToolbar  dialogs (link, table, formula, recorder)         │
-│  composables: i18n binding, toolbar state, formula previews      │
-│  styles/index.css — the single stylesheet, theme variables       │
+│  rich-editor.vue   mounts createRichEditor · props · v-model     │
+│  rich-content.vue  read-only viewer                              │
+│  styles/index.css  re-exports the core stylesheet                │
 └───────────────────────────────┬──────────────────────────────────┘
-                                │ RichEditorCore
+                                │ createRichEditor
 ┌───────────────────────────────▼──────────────────────────────────┐
 │                       @rich-editor/core                          │
+│  ui/              shell · toolbar · dialogs · popovers · presets │
 │  editor.ts        TipTap wiring, commands, file routing          │
 │  nodes/           formula · audio · attachment (DOM node views)  │
 │  formula/         MathML ⇄ LaTeX · MathJax renderer · templates  │
@@ -35,6 +36,7 @@ toolbar, the dialogs and the reactive bindings.
 │  security/        HTML · MathML · SVG sanitizers                 │
 │  legacy/          Froala import · Wiris decoder (opt-in)         │
 │  i18n/            ru (default) + en, flat lower_snake tables     │
+│  styles.css       content styles, theme variables, UI chrome     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,8 +75,8 @@ for callers that need the guarantee (an export button, a save handler).
 
 ```
 toolbar / click on formula
-  → onFormulaEdit({ mathml, type, pos })        core → host
-  → FormulaDialog: mathmlToLatex() → MathLive
+  → onFormulaEdit({ mathml, type, pos })        node view → shell (and the host's callback)
+  → ui/dialogs/formula-dialog: mathmlToLatex() → MathLive
   → save: latexToMathML() → annotated MathML
   → insertFormula() / updateFormulaAt()
   → node view: renderMathML() → sanitized SVG → render host
@@ -112,6 +114,32 @@ They are also where two browser realities are handled:
 - `ignoreMutation: () => true`, because the asynchronously injected SVG is not
   part of the ProseMirror document and must not be read back as an edit.
 
+## The UI layer
+
+`ui/` is the editor's interface on plain DOM, with no framework and no
+abstraction over the DOM beyond a handful of helpers (`el`, `on`, `icon`).
+
+- **One descriptor per toolbar item.** `ToolbarItemDescriptor` holds the icon,
+  label key, command, active and disabled state of an item. The toolbar is
+  rendered from a registry of descriptors and a list of ids, so a button is
+  defined in one place and the set of buttons is configuration: a preset, an
+  explicit group list, extra items, or replacements for built-in ones.
+- **Features.** `EditorFeature` bundles schema extensions, toolbar items and
+  dialogs for one capability. `createRichEditor` installs the extensions into
+  the engine, merges the items into the registry, appends unmentioned items as
+  a trailing group, and mounts the dialogs next to the built-in ones.
+- **Overlays stay in the DOM.** Dialogs and popovers are created once and hidden
+  with the `hidden` attribute rather than re-created, so they keep no framework
+  state and cost nothing while closed. The stylesheet has an explicit rule for
+  hidden overlays, because `hidden` alone does not beat `display: flex`.
+- **Focus goes back to the document.** A closing modal dispatches
+  `rte:modal-close`; the shell handles it and focuses the editor, so keyboard
+  actions on the selection keep working after a dialog. A host dialog built
+  with `createModal` gets the same behaviour.
+- **Labels are read when rendered.** Locale changes rebuild the toolbar
+  (`setLocale`, `refreshLabels`); dropdown panels are rebuilt on every open so
+  they reflect the current selection without tracking state.
+
 ## Upload adapters
 
 `UploadPipeline` validates (kind, size), then either calls the host's adapter or
@@ -124,12 +152,13 @@ so any storage backend fits without the editor knowing anything about it.
 
 ## i18n
 
-A translator over flat `lower_snake` tables with a three-step fallback:
-requested locale → built-in Russian → the key itself. A partial translation JSON
-therefore degrades to Russian rather than to blanks. Keys carry their context as
-a prefix (`toolbar_bold`, `formula_title_math`) instead of nesting, so the table
-stays flat and hard to duplicate into. Russian is bundled; English ships as an optional
-export and as `apps/demo/src/locales/en.json` demonstrating the file format.
+A translator over flat `lower_snake` tables. Lookup order: the host's table for
+the requested locale → the built-in table for it → the host's Russian → built-in
+Russian → the key itself. A partial translation JSON therefore degrades to a
+built-in translation rather than to blanks. Keys carry their context as a prefix
+(`toolbar_bold`, `formula_title_math`) instead of nesting, so the table stays
+flat and hard to duplicate into. Russian and English are bundled;
+`apps/demo/src/locales/en.json` demonstrates the file format for another locale.
 
 ## Read-only rendering
 
@@ -143,8 +172,9 @@ loads at all.
 | Layer | Tool | Covers |
 | --- | --- | --- |
 | Unit / integration | Vitest + jsdom | MathML round-trip, sanitization, uploads, recorder limits with a mocked `MediaRecorder`, i18n, the whole template catalogue |
-| Component | Vitest + `@vue/test-utils` | toolbar commands, `v-model`, dialogs, locale switching, read-only viewer |
-| End to end | Playwright, desktop + mobile | formula click-to-edit, atomic deletion, export, responsive toolbar |
+| UI shell | Vitest + jsdom | assembly without a framework, read-only mode, locale switching, focus return, features, the recorder dialog at its limits |
+| Vue wrapper | Vitest + `@vue/test-utils` | toolbar commands through the component, `v-model`, dialogs, locale switching, read-only viewer |
+| End to end | Playwright, desktop + mobile | formula click-to-edit, atomic deletion, export, responsive toolbar; `vanilla.html` proves the core runs with no framework at all |
 
 `npm test` runs the first three; `npm run test:e2e` runs Playwright against the
 demo. `npm run ci` runs typecheck, tests and build.

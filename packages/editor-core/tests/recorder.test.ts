@@ -25,19 +25,38 @@ class MockMediaRecorder extends EventTarget {
     MockMediaRecorder.instances.push(this);
   }
 
+  /** Как настоящий MediaRecorder: вызов не из того состояния — исключение. */
+  private assertState(expected: MockMediaRecorder['state'], method: string): void {
+    if (this.state !== expected) {
+      throw new DOMException(`${method}() in state ${this.state}`, 'InvalidStateError');
+    }
+  }
+
   start(): void {
+    this.assertState('inactive', 'start');
     this.state = 'recording';
   }
 
   pause(): void {
+    this.assertState('recording', 'pause');
     this.state = 'paused';
   }
 
   resume(): void {
+    this.assertState('paused', 'resume');
     this.state = 'recording';
   }
 
   stop(): void {
+    if (this.state === 'inactive') {
+      throw new DOMException('stop() in state inactive', 'InvalidStateError');
+    }
+    this.state = 'inactive';
+    this.dispatchEvent(new Event('stop'));
+  }
+
+  /** Браузер остановил запись сам: трек оборвался. Наш stop() не вызывался. */
+  endedByBrowser(): void {
     this.state = 'inactive';
     this.dispatchEvent(new Event('stop'));
   }
@@ -165,6 +184,29 @@ describe('recording lifecycle', () => {
     expect(result.duration).toBeLessThan(3);
   });
 
+  it('survives the browser ending the recording on its own', async () => {
+    const onError = vi.fn();
+    const recorder = createRecorder({ onError });
+
+    await recorder.start();
+    MockMediaRecorder.instances[0].emitChunk(40);
+    // Трек оборвался: микрофон отключили или отозвали разрешение. Настоящий
+    // MediaRecorder переходит в inactive без нашего участия, и pause()/stop()
+    // на нём бросают InvalidStateError.
+    MockMediaRecorder.instances[0].endedByBrowser();
+
+    // Пауза по пределу не должна упасть в таймере, где её никто не поймает.
+    await vi.advanceTimersByTimeAsync(5400);
+    expect(recorder.getState()).toBe('paused');
+
+    // А stop() отдаёт то, что успело записаться, и освобождает микрофон.
+    const result = await recorder.stop();
+    expect(result.blob.size).toBe(40);
+    expect(recorder.getState()).toBe('stopped');
+    expect(tracks[0].stop).toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('releases the microphone when cancelled', async () => {
     const recorder = createRecorder();
     await recorder.start();
@@ -186,6 +228,35 @@ describe('configured limits', () => {
     // The recorder pauses itself at the cap rather than running past it.
     expect(recorder.getState()).toBe('paused');
     expect(recorder.getElapsed()).toBeLessThan(3);
+  });
+
+  it('reports which limit stopped the recording', async () => {
+    const onLimit = vi.fn();
+    const recorder = createRecorder({ maxDurationSec: 1, maxSizeBytes: 100, onLimit });
+
+    await recorder.start();
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(onLimit).toHaveBeenCalledWith('duration');
+
+    // Пауза по пределу и пауза руками для рекордера одно и то же состояние —
+    // различить их вызывающий может только по этому колбэку.
+    const another = createRecorder({ maxSizeBytes: 100, onLimit });
+    await another.start();
+    MockMediaRecorder.instances[1].emitChunk(150);
+    expect(onLimit).toHaveBeenLastCalledWith('size');
+  });
+
+  it('finalizes a take stopped right inside onLimit', async () => {
+    // Диалог финализирует дубль прямо из колбэка предела. К этому моменту
+    // MediaRecorder уже должен стоять на паузе, иначе stop() наложится на
+    // pause() и один из них бросит InvalidStateError.
+    const recorder = createRecorder({ maxDurationSec: 1, onLimit: () => void recorder.stop() });
+
+    await recorder.start();
+    await vi.advanceTimersByTimeAsync(1200);
+    await vi.runAllTimersAsync();
+
+    expect(recorder.getState()).toBe('stopped');
   });
 
   it('honours a duration limit raised through options', async () => {

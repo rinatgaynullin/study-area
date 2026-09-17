@@ -1,43 +1,17 @@
-export type ToolbarItemId =
-  | 'undo'
-  | 'redo'
-  | 'heading'
-  | 'bold'
-  | 'italic'
-  | 'underline'
-  | 'strike'
-  | 'subscript'
-  | 'superscript'
-  | 'textColor'
-  | 'highlight'
-  | 'clearFormat'
-  | 'align'
-  | 'bulletList'
-  | 'orderedList'
-  | 'blockquote'
-  | 'code'
-  | 'codeBlock'
-  | 'horizontalRule'
-  | 'link'
-  | 'table'
-  | 'image'
-  | 'audio'
-  | 'file'
-  | 'formulaMath'
-  | 'formulaChem';
+import type { ToolbarGroupConfig } from './toolbar';
 
-export interface ToolbarGroup {
-  id: string;
-  items: ToolbarItemId[];
-  /** Moved into the overflow menu when the toolbar runs out of room. */
-  collapsible?: boolean;
-}
-
+/**
+ * Готовые наборы пунктов тулбара.
+ *
+ * Пресет — это удобная отправная точка, а не потолок: `createRichEditor`
+ * принимает и произвольный список групп, и пресет с точечными правками.
+ * Группировка повторяет QEditor из Quasar: история, текст, абзац, вставка.
+ */
 export type ToolbarPreset = 'full' | 'standard' | 'minimal';
-export type ToolbarConfig = ToolbarPreset | ToolbarGroup[];
 
-/** Grouping mirrors Quasar's QEditor: history, text, paragraph, insert. */
-export const TOOLBAR_PRESETS: Record<ToolbarPreset, ToolbarGroup[]> = {
+export type ToolbarConfig = ToolbarPreset | ToolbarGroupConfig[];
+
+export const TOOLBAR_PRESETS: Record<ToolbarPreset, ToolbarGroupConfig[]> = {
   full: [
     { id: 'history', items: ['undo', 'redo'], collapsible: true },
     { id: 'heading', items: ['heading'] },
@@ -66,7 +40,7 @@ export const TOOLBAR_PRESETS: Record<ToolbarPreset, ToolbarGroup[]> = {
   ],
 };
 
-export function resolveToolbar(config: ToolbarConfig | undefined): ToolbarGroup[] {
+export function resolveToolbar(config: ToolbarConfig | undefined): ToolbarGroupConfig[] {
   if (!config) return TOOLBAR_PRESETS.full;
   if (typeof config === 'string') return TOOLBAR_PRESETS[config] ?? TOOLBAR_PRESETS.full;
   return config;

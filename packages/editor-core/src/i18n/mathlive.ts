@@ -1,21 +1,21 @@
 /**
- * Russian strings for MathLive's own UI — its context menu, toolbar tooltips
- * and virtual keyboard.
+ * Русские строки для собственного интерфейса MathLive — его контекстного меню,
+ * подсказок панели и экранной клавиатуры.
  *
- * MathLive bundles translations for de, en, es, fr, it, ja and pl only, so
- * without this map its menu stays English even under `locale="ru"`. Keys match
- * MathLive's own identifiers exactly, spaces included (`menu.insert matrix`);
- * `%@` is its placeholder. The `*-template` entries are LaTeX, not prose, and
- * are deliberately absent so MathLive keeps its own.
+ * MathLive поставляется с переводами только для de, en, es, fr, it, ja и pl,
+ * поэтому без этой таблицы меню остаётся английским даже при `locale = 'ru'`.
+ * Ключи в точности повторяют идентификаторы самого MathLive, включая пробелы
+ * (`menu.insert matrix`); `%@` — его подстановка. Записи `*-template` — это
+ * LaTeX, а не текст, и намеренно отсутствуют: их MathLive берёт свои.
  */
 export const mathliveRu: Record<string, string> = {
-  // Virtual keyboard
+  // Экранная клавиатура
   'keyboard.tooltip.symbols': 'Символы',
   'keyboard.tooltip.greek': 'Греческие буквы',
   'keyboard.tooltip.numeric': 'Цифры',
   'keyboard.tooltip.alphabetic': 'Латинские буквы',
 
-  // Toolbar tooltips
+  // Подсказки панели
   'tooltip.copy to clipboard': 'Копировать в буфер обмена',
   'tooltip.cut to clipboard': 'Вырезать в буфер обмена',
   'tooltip.paste from clipboard': 'Вставить из буфера обмена',
@@ -24,7 +24,7 @@ export const mathliveRu: Record<string, string> = {
   'tooltip.menu': 'Меню',
   'tooltip.toggle virtual keyboard': 'Экранная клавиатура',
 
-  // Matrices and arrays
+  // Матрицы и массивы
   'menu.insert matrix': 'Вставить матрицу',
   'menu.borders': 'Границы',
   'menu.array.add row above': 'Добавить строку выше',
@@ -36,13 +36,13 @@ export const mathliveRu: Record<string, string> = {
   'menu.array.delete column': 'Удалить столбец',
   'menu.array.delete columns': 'Удалить выбранные столбцы',
 
-  // Mode
+  // Режим ввода
   'menu.mode': 'Режим',
   'menu.mode-math': 'Математика',
   'menu.mode-text': 'Текст',
   'menu.mode-latex': 'LaTeX',
 
-  // Insert
+  // Вставка
   'menu.insert': 'Вставить',
   'menu.insert.abs': 'Модуль числа',
   'menu.insert.nth-root': 'Корень n-й степени',
@@ -60,7 +60,7 @@ export const mathliveRu: Record<string, string> = {
   'menu.insert.imaginary-part': 'Мнимая часть',
   'menu.insert.conjugate': 'Сопряжённое число',
 
-  // Font style
+  // Начертание
   'menu.font-style': 'Начертание',
   'tooltip.bold': 'Полужирный',
   'tooltip.italic': 'Курсив',
@@ -77,13 +77,13 @@ export const mathliveRu: Record<string, string> = {
   'menu.color': 'Цвет текста',
   'menu.background-color': 'Цвет фона',
 
-  // Computation
+  // Вычисления
   'menu.evaluate': 'Вычислить',
   'menu.simplify': 'Упростить',
   'menu.solve': 'Решить',
   'menu.solve-for': 'Решить относительно %@',
 
-  // Clipboard
+  // Буфер обмена
   'menu.cut': 'Вырезать',
   'menu.copy': 'Копировать',
   'menu.copy-as-latex': 'Копировать как LaTeX',
@@ -93,7 +93,7 @@ export const mathliveRu: Record<string, string> = {
   'menu.paste': 'Вставить',
   'menu.select-all': 'Выделить всё',
 
-  // Colours
+  // Цвета
   'color.red': 'Красный',
   'color.orange': 'Оранжевый',
   'color.yellow': 'Жёлтый',
@@ -112,7 +112,18 @@ export const mathliveRu: Record<string, string> = {
   'color.white': 'Белый',
 };
 
-/** Locales this package supplies to MathLive on top of the ones it bundles. */
-export const MATHLIVE_STRINGS: Record<string, Record<string, string>> = {
+/** Таблицы строк MathLive по языкам: код языка → ключ MathLive → перевод. */
+export interface MathliveStrings {
+  [locale: string]: Record<string, string>;
+}
+
+/**
+ * Локали, которые пакет добавляет MathLive поверх встроенных.
+ *
+ * Сеттер MathLive не заменяет таблицу целиком, а дополняет её, а `localize()`
+ * ищет по цепочке ru-RU → ru → en, поэтому ключа языка без региона достаточно
+ * для всех региональных вариантов.
+ */
+export const MATHLIVE_STRINGS: MathliveStrings = {
   ru: mathliveRu,
 };

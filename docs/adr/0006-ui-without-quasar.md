@@ -39,7 +39,7 @@ Reasons:
 
 ### Icons
 
-Icons are inline SVG built from primitives (`packages/editor-vue/src/components/icons.ts`),
+Icons are inline SVG built from primitives (`packages/editor-core/src/ui/icons.ts`),
 inheriting `currentColor`. No icon font, no external asset, no network request,
 and nothing for the consumer to install or configure.
 

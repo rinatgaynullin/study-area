@@ -107,8 +107,12 @@ export interface RichEditorCoreOptions {
   uploadFile?: UploadAdapter;
   /** Scale applied to MathJax SVG output; 1 keeps MathJax's own sizing. */
   formulaScale?: number;
-  /** Extra TipTap extensions appended to the built-in set. */
-  extensions?: unknown[];
+  /**
+   * Дополнительные расширения TipTap поверх встроенных. Функцией — когда
+   * расширению при сборке нужен переводчик: он появляется только вместе с
+   * редактором, раньше отдать его некому.
+   */
+  extensions?: unknown[] | ((context: { t: Translate }) => unknown[]);
   /**
    * Включает разбор разметки старого редактора (Froala + Wiris). Выключено по
    * умолчанию: хостам без legacy-данных незачем платить разбором документа на
