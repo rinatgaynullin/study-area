@@ -1,5 +1,11 @@
+import { Extension } from '@tiptap/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createRichEditor, en, type RichEditorUi } from '../src/index';
+import {
+  createModal,
+  createRichEditor,
+  type EditorFeature,
+  type RichEditorUi,
+} from '../src/index';
 
 /**
  * Тесты ванильной оболочки — того самого редактора, который обёртки под
@@ -109,5 +115,74 @@ describe('ванильная оболочка редактора', () => {
     expect(document.querySelector('.rte-root')).toBeNull();
     expect(document.querySelector('.rte-modal')).toBeNull();
     expect(document.querySelector('.rte-popover')).toBeNull();
+  });
+});
+
+describe('возможности поверх встроенных', () => {
+  it('подключает возможность одним объявлением: расширение, пункт, диалог', () => {
+    const plain = mountEditor();
+    const builtInDialogs = document.querySelectorAll('.rte-modal').length;
+    plain.destroy();
+    ui = undefined;
+
+    const seenAtBuild: string[] = [];
+    const feature: EditorFeature = {
+      id: 'shout',
+      extensions: ({ t }) => {
+        // Переводчик доступен уже при сборке, а не только в рантайме.
+        seenAtBuild.push(t('toolbar_bold'));
+        return [Extension.create({ name: 'shoutProbe' })];
+      },
+      toolbarItems: () => [
+        {
+          id: 'shout',
+          icon: 'bold',
+          labelKey: 'shout_label',
+          kind: 'button',
+          run: ({ editor }) => void editor.chain().focus().insertContent('!').run(),
+        },
+      ],
+      dialogs: (context) => [
+        createModal({ title: context.t('shout_label'), closeLabel: context.t('common_close') }),
+      ],
+    };
+
+    const editor = mountEditor({
+      features: [feature],
+      messages: { ru: { shout_label: 'Крикнуть' } },
+    });
+
+    expect(seenAtBuild).toEqual(['Полужирный']);
+    expect(
+      editor.core.editor.extensionManager.extensions.some((item) => item.name === 'shoutProbe'),
+    ).toBe(true);
+
+    // Пункт не упомянут в пресете — встал отдельной группой в конце.
+    const groups = editor.element.querySelectorAll('.rte-toolbar__group');
+    expect(groups[groups.length - 1].querySelector('button')?.title).toBe('Крикнуть');
+
+    toolbarButton('Крикнуть').click();
+    expect(editor.core.getHTML()).toContain('!');
+
+    expect(document.querySelectorAll('.rte-modal').length).toBe(builtInDialogs + 1);
+    editor.destroy();
+    ui = undefined;
+    expect(document.querySelector('.rte-modal')).toBeNull();
+  });
+
+  it('ставит пункт возможности туда, где его перечислил хост', () => {
+    const feature: EditorFeature = {
+      id: 'shout',
+      toolbarItems: () => [{ id: 'shout', icon: 'bold', labelKey: 'toolbar_bold', kind: 'button' }],
+    };
+
+    const editor = mountEditor({
+      features: [feature],
+      toolbar: [{ id: 'mine', items: ['shout', 'italic'] }],
+    });
+
+    const groups = editor.element.querySelectorAll('.rte-toolbar__group');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].querySelectorAll('button')).toHaveLength(2);
   });
 });

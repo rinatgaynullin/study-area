@@ -5,6 +5,7 @@ import '../styles/index.css';
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import {
   createRichEditor,
+  type EditorFeature,
   type EditorLimits,
   type FormulaType,
   type LinkStyle,
@@ -13,6 +14,7 @@ import {
   type RichEditorError,
   type RichEditorUi,
   type ToolbarConfig,
+  type ToolbarItemDescriptor,
   type UploadAdapter,
 } from '@rich-editor/core';
 
@@ -35,6 +37,13 @@ const props = withDefaults(
     limits?: Partial<EditorLimits>;
     editable?: boolean;
     toolbar?: ToolbarConfig;
+    /**
+     * Дополнительные пункты тулбара поверх встроенных. Читаются один раз при
+     * создании, как и `features`: набор возможностей — часть схемы документа.
+     */
+    toolbarItems?: Record<string, ToolbarItemDescriptor>;
+    /** Возможности поверх встроенных: расширения, пункты тулбара, диалоги. */
+    features?: EditorFeature[];
     placeholder?: string;
     /** Scales MathJax output relative to the surrounding text. */
     formulaScale?: number;
@@ -93,6 +102,8 @@ onMounted(() => {
     formulaScale: props.formulaScale,
     legacy: props.legacy,
     toolbar: props.toolbar,
+    toolbarItems: props.toolbarItems,
+    features: props.features,
     linkStyles: props.linkStyles,
     mathliveFontsDirectory: props.mathliveFontsDirectory,
     minHeight: props.minHeight,

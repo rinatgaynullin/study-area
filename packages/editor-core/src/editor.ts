@@ -173,8 +173,14 @@ export class RichEditorCore {
       // Узел нужен только там, где включён legacy-режим: иначе он просто
       // расширяет схему тем, что никогда не встретится.
       ...(this.options.legacy ? [LegacyEmbedNode] : []),
-      ...((this.options.extensions ?? []) as Extensions),
+      ...(this.resolveExtraExtensions() as Extensions),
     ];
+  }
+
+  private resolveExtraExtensions(): unknown[] {
+    const { extensions } = this.options;
+    if (typeof extensions === 'function') return extensions({ t: this.i18n.t });
+    return extensions ?? [];
   }
 
   // ---------------------------------------------------------------- content

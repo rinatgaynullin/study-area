@@ -29,6 +29,7 @@ export type {
   DialogComponent,
   EditorFeature,
   EditorUiContext,
+  FeatureBuildOptions,
   ToolbarItemDescriptor,
   UiComponent,
 } from './ui/types';
@@ -107,8 +108,8 @@ export {
   VoiceRecorder,
   isRecordingSupported,
   pickAudioMimeType,
-  type RecorderState,
   type RecorderLimit,
+  type RecorderState,
   type RecordingResult,
   type VoiceRecorderOptions,
 } from './media/recorder';

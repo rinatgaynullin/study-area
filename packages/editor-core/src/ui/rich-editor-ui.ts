@@ -9,10 +9,16 @@ import { createLinkPopover } from './link-popover';
 import { MODAL_CLOSE_EVENT } from './modal';
 import type { LinkStyle } from './link-styles';
 import { resolveToolbar, type ToolbarConfig } from './presets';
-import { createToolbar, type Toolbar } from './toolbar';
+import { createToolbar, type Toolbar, type ToolbarGroupConfig } from './toolbar';
 import { SIMPLE_TOOLBAR_ITEMS } from './toolbar-items';
 import { createPanelToolbarItems } from './toolbar-panels';
-import type { EditorUiContext, ToolbarItemDescriptor, UiComponent } from './types';
+import type {
+  EditorFeature,
+  EditorUiContext,
+  FeatureBuildOptions,
+  ToolbarItemDescriptor,
+  UiComponent,
+} from './types';
 
 export interface RichEditorUiOptions extends Omit<RichEditorCoreOptions, 'element'> {
   /** Куда смонтировать редактор целиком: тулбар и область ввода. */
@@ -21,6 +27,12 @@ export interface RichEditorUiOptions extends Omit<RichEditorCoreOptions, 'elemen
   toolbar?: ToolbarConfig;
   /** Дополнительные пункты тулбара поверх встроенных. */
   toolbarItems?: Record<string, ToolbarItemDescriptor>;
+  /**
+   * Возможности поверх встроенных: расширения схемы, пункты тулбара и диалоги
+   * одним объявлением. Пункты, не упомянутые в конфигурации тулбара, встают
+   * своей группой в конец — подключённую возможность должно быть видно.
+   */
+  features?: EditorFeature[];
   /** Варианты оформления ссылки в поповере. */
   linkStyles?: LinkStyle[];
   /** Откуда MathLive берёт шрифты; `null` — CSS уже подключён. */
@@ -43,6 +55,32 @@ export interface RichEditorUi {
   /** Пересобирает тулбар после смены таблицы переводов. */
   refreshLabels(): void;
   destroy(): void;
+}
+
+/** Пункты каждой возможности, запрошенные один раз: дескрипторы не пересоздаются. */
+interface FeatureItems {
+  feature: EditorFeature;
+  items: ToolbarItemDescriptor[];
+}
+
+/**
+ * Пункты возможностей, которых нет в конфигурации тулбара, встают своей
+ * группой в конец. Явно перечисленные остаются там, куда их поставил хост:
+ * конфигурация тулбара главнее умолчания возможности.
+ */
+function withFeatureGroups(
+  groups: ToolbarGroupConfig[],
+  features: FeatureItems[],
+): ToolbarGroupConfig[] {
+  const mentioned = new Set(groups.flatMap((group) => group.items));
+
+  const extra = features.flatMap(({ feature, items }) => {
+    const ids = items.map((item) => item.id).filter((id) => !mentioned.has(id));
+    return ids.length > 0 ? [{ id: feature.id, items: ids }] : [];
+  });
+
+  // Пресеты — общие константы, дописывать в них нельзя.
+  return extra.length > 0 ? [...groups, ...extra] : groups;
 }
 
 /**
@@ -78,9 +116,30 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
    */
   let refresh = (): void => {};
 
+  const features = options.features ?? [];
+
+  /** Расширения хоста и возможностей; переводчик приходит из движка. */
+  function buildExtensions({ t }: { t: FeatureBuildOptions['t'] }): unknown[] {
+    const own =
+      typeof options.extensions === 'function'
+        ? options.extensions({ t })
+        : (options.extensions ?? []);
+
+    const build: FeatureBuildOptions = {
+      t,
+      legacy: options.legacy ?? false,
+      placeholder: options.placeholder,
+      formulaScale: options.formulaScale ?? 1,
+      onFormulaEdit: (payload) => formulaDialog.open(payload),
+    };
+
+    return [...own, ...features.flatMap((feature) => feature.extensions?.(build) ?? [])];
+  }
+
   const core = new RichEditorCore({
     ...options,
     element: host,
+    extensions: buildExtensions,
     onTransaction: (editor) => {
       refresh();
       options.onTransaction?.(editor);
@@ -141,6 +200,11 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
 
   const linkPopover = createLinkPopover(context, { styles: options.linkStyles });
 
+  const featureItems: FeatureItems[] = features.map((feature) => ({
+    feature,
+    items: feature.toolbarItems?.() ?? [],
+  }));
+
   const items: Record<string, ToolbarItemDescriptor> = {
     ...SIMPLE_TOOLBAR_ITEMS,
     ...createPanelToolbarItems({
@@ -161,11 +225,14 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
       recordAudio: () => recorderDialog.open(),
       insertFormula: (type) => formulaDialog.open({ mathml: '', type, pos: null }),
     }),
+    ...Object.fromEntries(featureItems.flatMap(({ items }) => items.map((item) => [item.id, item]))),
+    // Пункты, переданные напрямую, главнее: ими хост точечно правит и
+    // встроенные пункты, и пункты возможностей.
     ...options.toolbarItems,
   };
 
   const toolbar: Toolbar = createToolbar(context, {
-    groups: resolveToolbar(options.toolbar),
+    groups: withFeatureGroups(resolveToolbar(options.toolbar), featureItems),
     items,
     collapseBelow: options.collapseBelow,
   });
@@ -179,6 +246,8 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     recorderDialog,
     formulaDialog,
     linkPopover,
+    // Диалоги возможностей живут и умирают вместе с редактором, как встроенные.
+    ...features.flatMap((feature) => feature.dialogs?.(context) ?? []),
   ];
   for (const overlay of overlays) root.appendChild(overlay.element);
 
