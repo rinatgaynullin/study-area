@@ -1,8 +1,23 @@
+import type { Editor } from '@tiptap/core';
 import { createColorPanel } from './color-panel';
 import { createMenuItem, createMenuSeparator } from './dropdown';
 import { el } from './dom';
 import { ALIGNMENTS, HEADING_LEVELS, TABLE_ACTIONS, tableActionLabelKey } from './toolbar-items';
 import type { EditorUiContext, ToolbarItemDescriptor } from './types';
+
+/** Уровень заголовка под кареткой; 0 — обычный абзац. */
+function activeHeadingLevel(editor: Editor): number {
+  return HEADING_LEVELS.find((level) => editor.isActive('heading', { level })) ?? 0;
+}
+
+/** Выравнивание под кареткой; по умолчанию — по левому краю. */
+function activeAlignment(editor: Editor): (typeof ALIGNMENTS)[number] {
+  return ALIGNMENTS.find((alignment) => editor.isActive({ textAlign: alignment })) ?? 'left';
+}
+
+function alignIcon(alignment: string): string {
+  return `align${alignment.charAt(0).toUpperCase()}${alignment.slice(1)}`;
+}
 
 /**
  * Пункты тулбара с выпадающей панелью.
@@ -206,6 +221,12 @@ export function createPanelToolbarItems(
       labelKey: 'toolbar_heading',
       kind: 'dropdown',
       isActive: (editor) => editor.isActive('heading'),
+      // Кнопка показывает, где каретка: «H2» или «Обычный текст», — иначе
+      // уровень заголовка приходится угадывать по кеглю.
+      text: (context) => {
+        const level = activeHeadingLevel(context.editor);
+        return level > 0 ? `H${level}` : context.t('toolbar_paragraph');
+      },
       renderPanel: headingPanel,
     },
     align: {
@@ -213,6 +234,7 @@ export function createPanelToolbarItems(
       icon: 'alignLeft',
       labelKey: 'toolbar_align',
       kind: 'dropdown',
+      dynamicIcon: (editor) => alignIcon(activeAlignment(editor)),
       renderPanel: alignPanel,
     },
     textColor: colorItem(

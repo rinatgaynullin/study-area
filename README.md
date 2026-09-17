@@ -121,10 +121,12 @@ Emits `rendered` once pending formulas have been drawn.
 | `formulaScale` | `number` | `1` | Formula size relative to the text |
 | `mathliveFontsDirectory` | `string \| null` | `null` | See *Formula fonts* |
 | `minHeight` | `string` | `'220px'` | Minimum height of the editing surface |
+| `statusLine` | `boolean` | `true` | Line under the toolbar showing uploads in progress and the last error; `false` if the host shows its own notifications |
 
 ### Events
 
 `update:modelValue` · `change` · `focus` · `blur` · `error` (a `RichEditorError`) ·
+`upload` (an `UploadEvent`: `kind`, `file`, `phase: 'start' | 'done' | 'failed'`) ·
 `ready` (the `RichEditorCore` instance)
 
 ### Exposed methods
@@ -158,7 +160,10 @@ text file and formula insertion.
 
 Standard hotkeys come from TipTap: `Ctrl/Cmd+B`, `I`, `U`, `Shift+Ctrl+S`,
 `Ctrl+Z` / `Shift+Ctrl+Z`, `Ctrl+Alt+1…6`, `Shift+Ctrl+7/8`, `Shift+Ctrl+B`,
-`Ctrl+E`, and so on.
+`Ctrl+E`, and so on. Each button's tooltip shows its shortcut (`⌘B` on a Mac,
+`Ctrl+B` elsewhere) and exposes it through `aria-keyshortcuts`; toggle buttons
+report their state through `aria-pressed`, the heading button shows the current
+level, and menus are navigable with the arrow keys.
 
 Build a custom toolbar from groups:
 
@@ -170,7 +175,10 @@ const toolbar = [
 ```
 
 A `collapsible` group made only of plain buttons folds into a `⋯` menu when the
-toolbar is too narrow.
+toolbar is too narrow. Below `collapseBelow` (760 px by default) every such
+group folds at once; above it the toolbar measures itself and folds groups one
+by one, from the end, until it fits on a single row — so a wide toolbar never
+wraps just because a locale has longer labels or a host added a few items.
 
 ### Custom items
 

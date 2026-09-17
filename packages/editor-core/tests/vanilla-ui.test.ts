@@ -38,7 +38,7 @@ function openDialog(): HTMLElement | null {
 
 function toolbarButton(label: string): HTMLButtonElement {
   const found = [...document.querySelectorAll<HTMLButtonElement>('.rte-toolbar button')].find(
-    (button) => button.title === label,
+    (button) => button.getAttribute('aria-label') === label,
   );
   if (!found) throw new Error(`Нет кнопки тулбара с подписью «${label}»`);
   return found;
@@ -155,6 +155,46 @@ describe('оверлеи', () => {
     const inputs = editor.element.querySelectorAll<HTMLInputElement>('input[type="file"]');
 
     expect([...inputs].map((input) => input.accept)).toEqual([IMAGE_ACCEPT, TEXT_FILE_ACCEPT]);
+  });
+});
+
+describe('строка статуса', () => {
+  it('показывает идущую загрузку и последнюю ошибку', async () => {
+    let finish!: (result: { url: string }) => void;
+    const uploadImage = () => new Promise<{ url: string }>((resolve) => { finish = resolve; });
+    const editor = mountEditor({ uploadImage });
+    const status = editor.element.querySelector<HTMLElement>('.rte-status')!;
+    expect(status.hidden).toBe(true);
+
+    const file = new File([new Uint8Array(16)], 'a.png', { type: 'image/png' });
+    const pending = editor.core.insertImageFile(file);
+    expect(status.hidden).toBe(false);
+    expect(status.textContent).toBe('Загрузка изображения…');
+
+    finish({ url: 'https://cdn.example.com/a.png' });
+    await pending;
+    expect(status.hidden).toBe(true);
+
+    const huge = new File([new Uint8Array(16)], 'big.png', { type: 'image/png' });
+    Object.defineProperty(huge, 'size', { value: 100 * 1024 * 1024 });
+    await editor.core.insertImageFile(huge);
+    expect(status.hidden).toBe(false);
+    expect(status.classList.contains('rte-status--error')).toBe(true);
+    expect(status.textContent).toContain('big.png');
+  });
+
+  it('выключается опцией — у хоста свои уведомления', () => {
+    const editor = mountEditor({ statusLine: false });
+    expect(editor.element.querySelector('.rte-status')).toBeNull();
+  });
+
+  it('диалог назван своим заголовком', () => {
+    mountEditor();
+    toolbarButton('Математическая формула').click();
+    const dialog = openDialog()!.querySelector('[role="dialog"]')!;
+    const title = dialog.querySelector('.rte-modal__title')!;
+    expect(dialog.getAttribute('aria-labelledby')).toBe(title.id);
+    expect(title.id).not.toBe('');
   });
 });
 

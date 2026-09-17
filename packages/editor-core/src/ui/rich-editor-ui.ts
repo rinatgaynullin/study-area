@@ -1,7 +1,14 @@
 import { RichEditorCore } from '../editor';
 import { DEFAULT_LOCALE } from '../i18n';
 import { IMAGE_ACCEPT, TEXT_FILE_ACCEPT } from '../media/upload';
-import type { EditorLimits, FormulaPayload, Messages, RichEditorCoreOptions } from '../types';
+import type {
+  EditorLimits,
+  FormulaPayload,
+  Messages,
+  RichEditorCoreOptions,
+  RichEditorError,
+  UploadKind,
+} from '../types';
 import { createDisposer, el, on } from './dom';
 import { createAudioRecorderDialog } from './dialogs/audio-recorder-dialog';
 import { createFormulaDialog } from './dialogs/formula-dialog';
@@ -45,7 +52,15 @@ export interface RichEditorUiOptions extends Omit<RichEditorCoreOptions, 'elemen
   textSwatches?: string[];
   highlightSwatches?: string[];
   minHeight?: string;
+  /**
+   * Строка под тулбаром с идущими загрузками и последней ошибкой. Включена
+   * по умолчанию; хост с собственными уведомлениями выключает её.
+   */
+  statusLine?: boolean;
 }
+
+/** Сколько держать ошибку в строке статуса: прочитать успеют, навсегда не останется. */
+const ERROR_VISIBLE_MS = 6000;
 
 export interface RichEditorUi {
   /** Движок: документ, команды, загрузки. */
@@ -126,6 +141,44 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
   const surface = el('div', { class: 'rte-surface', children: [host] });
   if (options.minHeight) host.style.minHeight = options.minHeight;
 
+  /**
+   * Строка статуса: идущие загрузки и последняя ошибка. Хост получает то же
+   * через onUpload и onError, но пользователь должен видеть, что файл
+   * грузится и почему не вставился, без обвязки со стороны хоста.
+   */
+  const status = el('div', {
+    class: 'rte-status',
+    attrs: { role: 'status', 'aria-live': 'polite' },
+  });
+  status.hidden = true;
+  const hasStatusLine = options.statusLine !== false;
+
+  /** Загрузки в полёте, по видам: параллельных может быть несколько. */
+  const uploading = new Map<UploadKind, number>();
+  let errorText = '';
+  let errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function refreshStatus(): void {
+    if (!hasStatusLine) return;
+    const busy = [...uploading.entries()].find(([, count]) => count > 0)?.[0];
+    const text = errorText || (busy ? core.t(`upload_${busy}`) : '');
+    status.textContent = text;
+    status.classList.toggle('rte-status--error', errorText !== '');
+    status.hidden = text === '';
+  }
+
+  function reportError(error: RichEditorError): void {
+    errorText = error.message;
+    if (errorTimer) clearTimeout(errorTimer);
+    errorTimer = setTimeout(() => {
+      errorText = '';
+      errorTimer = null;
+      refreshStatus();
+    }, ERROR_VISIBLE_MS);
+    refreshStatus();
+    options.onError?.(error);
+  }
+
   // Скрытые поля выбора файлов: системный диалог нельзя открыть иначе.
   // Фильтр — тот же, что у пайплайна загрузки, иначе пикер прячет файлы,
   // которые редактор принял бы перетаскиванием.
@@ -179,6 +232,13 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     ...options,
     element: host,
     extensions: buildExtensions,
+    onError: reportError,
+    onUpload: (event) => {
+      const count = uploading.get(event.kind) ?? 0;
+      uploading.set(event.kind, event.phase === 'start' ? count + 1 : Math.max(0, count - 1));
+      refreshStatus();
+      options.onUpload?.(event);
+    },
     onTransaction: (editor) => {
       refresh();
       options.onTransaction?.(editor);
@@ -233,9 +293,9 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
           peaks: payload.peaks,
         }),
       // Рекордер живёт в диалоге, а не в движке, так что его ошибки — нет
-      // разрешения на микрофон, превышен предел — движок не видит. Хосту они
-      // нужны наравне с ошибками загрузки: показать уведомление, залогировать.
-      onError: (error) => options.onError?.(error),
+      // разрешения на микрофон, превышен предел — движок не видит. Идут тем
+      // же путём, что ошибки загрузки: в строку статуса и хосту.
+      onError: reportError,
     });
 
     const formula = createFormulaDialog(context, {
@@ -299,7 +359,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     collapseBelow: options.collapseBelow,
   });
 
-  root.append(toolbar.element, surface, imageInput, fileInput);
+  root.append(toolbar.element, ...(hasStatusLine ? [status] : []), surface, imageInput, fileInput);
   options.element.appendChild(root);
   overlays = buildOverlays();
 
@@ -316,6 +376,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     destroyOverlays();
     overlays = buildOverlays();
     toolbar.rebuild();
+    refreshStatus();
   }
 
   disposer.add(
@@ -378,6 +439,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     refreshLabels: rebuildChrome,
     setLimits: (limits) => core.setLimits(limits),
     destroy: () => {
+      if (errorTimer) clearTimeout(errorTimer);
       disposer.dispose();
       toolbar.destroy();
       destroyOverlays();

@@ -15,6 +15,8 @@ interface SimpleItemSpec {
   labelKey: string;
   /** Имя марки или узла для подсветки. Без него пункт не подсвечивается. */
   activeName?: string;
+  /** Сочетание клавиш, которое вешает расширение TipTap, — для подсказки. */
+  shortcut?: string;
   run(editor: Editor): void;
   isDisabled?(editor: Editor): boolean;
 }
@@ -22,6 +24,7 @@ interface SimpleItemSpec {
 const SIMPLE_ITEMS: SimpleItemSpec[] = [
   {
     id: 'undo',
+    shortcut: 'Mod-Z',
     icon: 'undo',
     labelKey: 'toolbar_undo',
     run: (editor) => void editor.chain().focus().undo().run(),
@@ -29,6 +32,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'redo',
+    shortcut: 'Mod-Shift-Z',
     icon: 'redo',
     labelKey: 'toolbar_redo',
     run: (editor) => void editor.chain().focus().redo().run(),
@@ -36,6 +40,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'bold',
+    shortcut: 'Mod-B',
     icon: 'bold',
     labelKey: 'toolbar_bold',
     activeName: 'bold',
@@ -43,6 +48,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'italic',
+    shortcut: 'Mod-I',
     icon: 'italic',
     labelKey: 'toolbar_italic',
     activeName: 'italic',
@@ -50,6 +56,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'underline',
+    shortcut: 'Mod-U',
     icon: 'underline',
     labelKey: 'toolbar_underline',
     activeName: 'underline',
@@ -57,6 +64,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'strike',
+    shortcut: 'Mod-Shift-S',
     icon: 'strike',
     labelKey: 'toolbar_strike',
     activeName: 'strike',
@@ -64,6 +72,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'subscript',
+    shortcut: 'Mod-,',
     icon: 'subscript',
     labelKey: 'toolbar_subscript',
     activeName: 'subscript',
@@ -71,6 +80,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'superscript',
+    shortcut: 'Mod-.',
     icon: 'superscript',
     labelKey: 'toolbar_superscript',
     activeName: 'superscript',
@@ -78,6 +88,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'bulletList',
+    shortcut: 'Mod-Shift-8',
     icon: 'bulletList',
     labelKey: 'toolbar_bullet_list',
     activeName: 'bulletList',
@@ -85,6 +96,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'orderedList',
+    shortcut: 'Mod-Shift-7',
     icon: 'orderedList',
     labelKey: 'toolbar_ordered_list',
     activeName: 'orderedList',
@@ -92,6 +104,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'blockquote',
+    shortcut: 'Mod-Shift-B',
     icon: 'blockquote',
     labelKey: 'toolbar_blockquote',
     activeName: 'blockquote',
@@ -99,6 +112,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'code',
+    shortcut: 'Mod-E',
     icon: 'code',
     labelKey: 'toolbar_code',
     activeName: 'code',
@@ -106,6 +120,7 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
   },
   {
     id: 'codeBlock',
+    shortcut: 'Mod-Alt-C',
     icon: 'codeBlock',
     labelKey: 'toolbar_code_block',
     activeName: 'codeBlock',
@@ -164,6 +179,7 @@ export const SIMPLE_TOOLBAR_ITEMS: Record<string, ToolbarItemDescriptor> = Objec
       icon: spec.icon,
       labelKey: spec.labelKey,
       kind: 'button',
+      shortcut: spec.shortcut,
       run: ({ editor }) => spec.run(editor),
       isActive: spec.activeName ? (editor) => editor.isActive(spec.activeName!) : undefined,
       isDisabled: spec.isDisabled,

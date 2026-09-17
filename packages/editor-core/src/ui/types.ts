@@ -48,8 +48,20 @@ export interface ToolbarItemDescriptor {
   id: string;
   /** Имя иконки из встроенного набора. */
   icon?: string;
+  /**
+   * Иконка от состояния документа — например, текущее выравнивание. Главнее
+   * `icon`; пересчитывается на каждой транзакции.
+   */
+  dynamicIcon?(editor: Editor): string;
+  /** Короткая подпись вместо иконки — например, уровень заголовка. */
+  text?(context: EditorUiContext): string;
   /** Ключ перевода для подписи и подсказки. */
   labelKey: string;
+  /**
+   * Сочетание клавиш в записи TipTap («Mod-Shift-S»). Попадает в подсказку
+   * и в `aria-keyshortcuts`; само сочетание вешает расширение, не тулбар.
+   */
+  shortcut?: string;
   kind?: ToolbarItemKind;
   /** Выполняет действие пункта. */
   run?(context: EditorUiContext, payload?: unknown): void;

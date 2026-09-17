@@ -17,6 +17,13 @@ export interface Dropdown extends UiComponent {
   setActive(active: boolean): void;
   setDisabled(disabled: boolean): void;
   setText(text: string): void;
+  /** Меняет иконку на кнопке — для пунктов, показывающих текущее состояние. */
+  setIcon(name: string): void;
+}
+
+/** Пункты открытой панели, по которым ходят стрелки. */
+function menuItemsOf(panel: HTMLElement): HTMLButtonElement[] {
+  return [...panel.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
 }
 
 /**
@@ -33,9 +40,10 @@ export function createDropdown(options: DropdownOptions): Dropdown {
   const caret = icon('chevronDown', 14);
   caret.classList.add('rte-btn__caret');
 
-  const label = options.text === undefined
-    ? icon(options.iconName ?? 'more', 20)
-    : el('span', { class: 'rte-btn__text', text: options.text });
+  let label: Element =
+    options.text === undefined
+      ? icon(options.iconName ?? 'more', 20)
+      : el('span', { class: 'rte-btn__text', text: options.text });
 
   const button = el('button', {
     class: 'rte-btn',
@@ -99,11 +107,42 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     };
   }
 
+  // Стрелки ходят по пунктам по кругу, Home/End — к краям: меню без этого
+  // читалке и клавиатуре доступно только через Tab по всем пунктам подряд.
+  disposer.add(
+    on(panel, 'keydown', (event) => {
+      const items = menuItemsOf(panel);
+      if (items.length === 0) return;
+
+      const current = items.indexOf(document.activeElement as HTMLButtonElement);
+      const moves: Record<string, number> = {
+        ArrowDown: current + 1,
+        ArrowUp: current - 1,
+        Home: 0,
+        End: items.length - 1,
+      };
+      const next = moves[event.key];
+      if (next === undefined) return;
+
+      event.preventDefault();
+      items[(next + items.length) % items.length].focus();
+    }),
+  );
+
+  // Кнопка и пункты не забирают фокус у документа: команда применится к
+  // живому выделению, а не к восстановленному в следующем кадре.
+  disposer.add(on(button, 'mousedown', (event) => event.preventDefault()));
   disposer.add(
     on(button, 'click', (event) => {
       event.preventDefault();
-      if (isVisible) close();
-      else open();
+      if (isVisible) {
+        close();
+        return;
+      }
+      open();
+      // Открыли с клавиатуры (у синтетического клика detail = 0) — фокус
+      // должен оказаться в меню, а не остаться на кнопке.
+      if (event.detail === 0) menuItemsOf(panel)[0]?.focus();
     }),
   );
 
@@ -120,6 +159,12 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     },
     setText: (text: string) => {
       if (options.text !== undefined) label.textContent = text;
+    },
+    setIcon: (name: string) => {
+      if (options.text !== undefined || label.getAttribute('data-icon') === name) return;
+      const fresh = icon(name, 20);
+      label.replaceWith(fresh);
+      label = fresh;
     },
     destroy: () => {
       releaseDocument?.();
@@ -151,6 +196,7 @@ export function createMenuItem(options: MenuItemOptions): HTMLButtonElement {
   });
 
   button.disabled = options.disabled ?? false;
+  button.addEventListener('mousedown', (event) => event.preventDefault());
   button.addEventListener('click', options.onSelect);
   return button;
 }

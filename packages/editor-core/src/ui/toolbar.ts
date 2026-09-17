@@ -1,5 +1,6 @@
 import { createDisposer, el, icon, on } from './dom';
 import { createDropdown, createMenuItem, type Dropdown } from './dropdown';
+import { ariaKeyshortcuts, formatShortcut } from './shortcuts';
 import type { EditorUiContext, ToolbarItemDescriptor, UiComponent } from './types';
 
 export interface ToolbarGroupConfig {
@@ -13,7 +14,10 @@ export interface ToolbarOptions {
   groups: ToolbarGroupConfig[];
   /** Дескрипторы по идентификатору пункта. */
   items: Record<string, ToolbarItemDescriptor>;
-  /** Ниже этой ширины схлопываемые группы уезжают в меню. */
+  /**
+   * Ниже этой ширины все схлопываемые группы уходят в меню сразу. Выше —
+   * по одной с конца, пока тулбар не поместится в одну строку.
+   */
   collapseBelow?: number;
 }
 
@@ -26,12 +30,19 @@ export interface Toolbar extends UiComponent {
    * из переводчика в момент отрисовки.
    */
   rebuild(): void;
+  /**
+   * Подбирает число схлопнутых групп под ширину. Наблюдатель размера зовёт
+   * это сам; снаружи нужно тестам и хосту с собственной раскладкой.
+   */
+  layout(width: number): void;
 }
 
 interface RenderedItem {
   descriptor: ToolbarItemDescriptor;
   button: HTMLButtonElement;
   dropdown?: Dropdown;
+  /** Иконка обычной кнопки — чтобы подменять её при смене состояния. */
+  iconNode?: SVGElement;
 }
 
 /**
@@ -48,17 +59,49 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
   const element = el('div', { class: 'rte-toolbar', attrs: { role: 'toolbar' } });
   const rendered: RenderedItem[] = [];
 
-  let isDisabled = false;
-  let isNarrow = false;
+  /** Схлопывать можно только группы из обычных кнопок: панель в меню не влезет. */
+  function isCollapsible(group: ToolbarGroupConfig): boolean {
+    return (
+      group.collapsible === true &&
+      group.items.every((id) => options.items[id]?.kind !== 'dropdown')
+    );
+  }
 
-  function buildButton(descriptor: ToolbarItemDescriptor): HTMLButtonElement {
+  /** Схлопываемые группы в порядке следования; в меню уходят с конца. */
+  const collapsibleGroups = options.groups.filter(isCollapsible);
+
+  let isDisabled = false;
+  /** Сколько схлопываемых групп сейчас в меню «⋯», считая с конца. */
+  let collapsedCount = 0;
+  let lastWidth = 0;
+
+  function iconNameFor(descriptor: ToolbarItemDescriptor): string {
+    return descriptor.dynamicIcon?.(context.editor) ?? descriptor.icon ?? 'more';
+  }
+
+  function buildButton(descriptor: ToolbarItemDescriptor): RenderedItem {
     const label = context.t(descriptor.labelKey);
+    const shortcut = descriptor.shortcut ? formatShortcut(descriptor.shortcut) : '';
+    const iconNode = icon(iconNameFor(descriptor), 20);
+
     const button = el('button', {
       class: 'rte-btn',
-      attrs: { type: 'button', title: label, 'aria-label': label },
-      children: [icon(descriptor.icon ?? 'more', 20)],
+      attrs: {
+        type: 'button',
+        // Подсказка — с сочетанием клавиш, доступное имя — без него: читалке
+        // сочетание сообщает aria-keyshortcuts.
+        title: shortcut ? `${label} · ${shortcut}` : label,
+        'aria-label': label,
+        'aria-keyshortcuts': descriptor.shortcut ? ariaKeyshortcuts(descriptor.shortcut) : null,
+        // Переключатель сообщает состояние, а не только подсвечивается.
+        'aria-pressed': descriptor.isActive ? 'false' : null,
+      },
+      children: [iconNode],
     });
 
+    // Кнопка не забирает фокус у документа: иначе каждый клик — потеря
+    // выделения, возврат фокуса в следующем кадре и гонка с набором.
+    disposer.add(on(button, 'mousedown', (event) => event.preventDefault()));
     disposer.add(
       on(button, 'click', (event) => {
         event.preventDefault();
@@ -66,7 +109,7 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
       }),
     );
 
-    return button;
+    return { descriptor, button, iconNode };
   }
 
   function buildItem(id: string): HTMLElement | null {
@@ -78,24 +121,17 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
     if (descriptor.kind === 'dropdown' && descriptor.renderPanel) {
       const dropdown = createDropdown({
         label: context.t(descriptor.labelKey),
-        iconName: descriptor.icon,
+        iconName: iconNameFor(descriptor),
+        text: descriptor.text?.(context),
         renderPanel: (close) => descriptor.renderPanel!(context, close),
       });
       rendered.push({ descriptor, button: dropdown.button, dropdown });
       return dropdown.element;
     }
 
-    const button = buildButton(descriptor);
-    rendered.push({ descriptor, button });
-    return button;
-  }
-
-  /** Схлопывать можно только группы из обычных кнопок: панель в меню не влезет. */
-  function isCollapsible(group: ToolbarGroupConfig): boolean {
-    return (
-      group.collapsible === true &&
-      group.items.every((id) => options.items[id]?.kind !== 'dropdown')
-    );
+    const item = buildButton(descriptor);
+    rendered.push(item);
+    return item.button;
   }
 
   function buildOverflow(groups: ToolbarGroupConfig[]): HTMLElement {
@@ -111,7 +147,7 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
             panel.appendChild(
               createMenuItem({
                 label: context.t(descriptor.labelKey),
-                iconName: descriptor.icon,
+                iconName: iconNameFor(descriptor),
                 active: descriptor.isActive?.(context.editor) ?? false,
                 disabled: isDisabled || (descriptor.isDisabled?.(context.editor) ?? false),
                 onSelect: () => {
@@ -126,7 +162,11 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
       },
     });
 
-    rendered.push({ descriptor: { id: 'more', labelKey: 'toolbar_more' }, button: dropdown.button, dropdown });
+    rendered.push({
+      descriptor: { id: 'more', labelKey: 'toolbar_more' },
+      button: dropdown.button,
+      dropdown,
+    });
     return dropdown.element;
   }
 
@@ -135,8 +175,9 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
     for (const item of rendered) item.dropdown?.destroy();
     rendered.length = 0;
     element.replaceChildren();
+    element.setAttribute('aria-label', context.t('toolbar_label'));
 
-    const collapsed = isNarrow ? options.groups.filter(isCollapsible) : [];
+    const collapsed = collapsibleGroups.slice(collapsibleGroups.length - collapsedCount);
     const visible = options.groups.filter((group) => !collapsed.includes(group));
 
     for (const group of visible) {
@@ -166,23 +207,83 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
       if (item.dropdown) {
         item.dropdown.setActive(active);
         item.dropdown.setDisabled(disabled);
+        if (item.descriptor.text) item.dropdown.setText(item.descriptor.text(context));
+        if (item.descriptor.dynamicIcon) {
+          item.dropdown.setIcon(item.descriptor.dynamicIcon(context.editor));
+        }
         continue;
       }
 
       item.button.classList.toggle('rte-btn--active', active);
+      if (item.descriptor.isActive) item.button.setAttribute('aria-pressed', String(active));
       item.button.disabled = disabled;
+
+      if (item.descriptor.dynamicIcon && item.iconNode) {
+        const next = item.descriptor.dynamicIcon(context.editor);
+        if (item.iconNode.getAttribute('data-icon') !== next) {
+          const fresh = icon(next, 20);
+          item.iconNode.replaceWith(fresh);
+          item.iconNode = fresh;
+        }
+      }
+    }
+  }
+
+  /** Переносится ли тулбар на вторую строку. */
+  function isWrapped(): boolean {
+    const groups = [...element.children] as HTMLElement[];
+    if (groups.length < 2) return false;
+    const firstTop = groups[0].offsetTop;
+    return groups.some((group) => group.offsetTop > firstTop);
+  }
+
+  /**
+   * Подбирает число схлопнутых групп под ширину.
+   *
+   * Ниже collapseBelow все схлопываемые группы уходят в меню сразу: на
+   * телефоне в одну строку они не встанут при любом переборе. Выше порога
+   * фиксированное правило не работает — ширина тулбара зависит от набора
+   * пунктов и языка подписей, — поэтому измеряем: если тулбар переносится,
+   * убираем группы по одной с конца, пока не перестанет; если места стало
+   * больше, пробуем вернуть одну и откатываемся, когда перенос вернулся.
+   */
+  function layout(width: number): void {
+    lastWidth = width;
+
+    if (width < collapseBelow) {
+      if (collapsedCount !== collapsibleGroups.length) {
+        collapsedCount = collapsibleGroups.length;
+        render();
+      }
+      return;
+    }
+
+    if (isWrapped()) {
+      while (isWrapped() && collapsedCount < collapsibleGroups.length) {
+        collapsedCount += 1;
+        render();
+      }
+      return;
+    }
+
+    while (collapsedCount > 0) {
+      collapsedCount -= 1;
+      render();
+      if (isWrapped()) {
+        collapsedCount += 1;
+        render();
+        return;
+      }
     }
   }
 
   let observer: ResizeObserver | null = null;
+  let frame = 0;
   if (typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(([entry]) => {
-      const next = entry.contentRect.width < collapseBelow;
-      // Пересобираем только на смене режима: перестройка на каждый пиксель
-      // ресайза дёргала бы фокус и закрывала открытые панели.
-      if (next === isNarrow) return;
-      isNarrow = next;
-      render();
+      // Один подбор на кадр: события ресайза идут на каждый пиксель.
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => layout(entry.contentRect.width));
     });
     observer.observe(element);
   }
@@ -192,13 +293,20 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
   return {
     element,
     syncState,
-    rebuild: render,
+    layout,
+    rebuild: () => {
+      // Подписи сменились — ширины тоже: подбираем заново с полного тулбара.
+      collapsedCount = 0;
+      render();
+      layout(lastWidth);
+    },
     setDisabled: (disabled: boolean) => {
       isDisabled = disabled;
       syncState();
     },
     destroy: () => {
       observer?.disconnect();
+      cancelAnimationFrame(frame);
       for (const item of rendered) item.dropdown?.destroy();
       disposer.dispose();
       element.remove();

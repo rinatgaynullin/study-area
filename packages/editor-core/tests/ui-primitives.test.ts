@@ -20,6 +20,46 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+describe('клавиатура в меню', () => {
+  it('стрелки ходят по пунктам по кругу, Home и End — к краям', () => {
+    const dropdown = createDropdown({
+      label: 'Меню',
+      renderPanel: () => {
+        const panel = document.createElement('div');
+        for (const text of ['один', 'два', 'три']) {
+          const item = document.createElement('button');
+          item.setAttribute('role', 'menuitem');
+          item.textContent = text;
+          panel.appendChild(item);
+        }
+        return panel;
+      },
+    });
+    document.body.appendChild(dropdown.element);
+
+    // Синтетический клик — как с клавиатуры: фокус уходит в меню.
+    dropdown.button.click();
+    const items = [...dropdown.element.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+    expect(document.activeElement).toBe(items[0]);
+
+    const press = (key: string) =>
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+
+    press('ArrowDown');
+    expect(document.activeElement).toBe(items[1]);
+    press('End');
+    expect(document.activeElement).toBe(items[2]);
+    press('ArrowDown');
+    expect(document.activeElement).toBe(items[0]);
+    press('ArrowUp');
+    expect(document.activeElement).toBe(items[2]);
+    press('Home');
+    expect(document.activeElement).toBe(items[0]);
+
+    dropdown.destroy();
+  });
+});
+
 describe('слушатели документа у оверлеев', () => {
   it('дропдаун слушает документ только пока открыт', () => {
     watchDocument();

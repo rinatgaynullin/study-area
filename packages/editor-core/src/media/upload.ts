@@ -3,6 +3,7 @@ import {
   type EditorLimits,
   type Translate,
   type UploadAdapter,
+  type UploadEvent,
   type UploadKind,
   type UploadResult,
 } from '../types';
@@ -30,6 +31,7 @@ export interface UploadPipelineOptions {
   t: Translate;
   adapters: Partial<Record<UploadKind, UploadAdapter | undefined>>;
   onError?: (error: RichEditorError) => void;
+  onUpload?: (event: UploadEvent) => void;
 }
 
 function hasTextExtension(name: string): boolean {
@@ -108,6 +110,7 @@ export class UploadPipeline {
     const adapter = this.options.adapters[kind];
     if (!adapter) return this.toObjectUrl(file);
 
+    this.options.onUpload?.({ kind, file, phase: 'start' });
     try {
       const result = await adapter(file, {
         kind,
@@ -115,6 +118,7 @@ export class UploadPipeline {
         t,
       });
       if (!result?.url) throw new Error('Upload adapter returned no URL');
+      this.options.onUpload?.({ kind, file, phase: 'done' });
       return {
         name: file.name,
         mime: file.type,
@@ -122,6 +126,7 @@ export class UploadPipeline {
         ...result,
       };
     } catch (cause) {
+      this.options.onUpload?.({ kind, file, phase: 'failed' });
       this.fail(
         new RichEditorError('upload-failed', t('error_upload_failed', { name: file.name }), cause),
       );

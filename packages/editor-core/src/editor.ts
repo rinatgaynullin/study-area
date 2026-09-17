@@ -81,6 +81,7 @@ export class RichEditorCore {
         file: options.uploadFile,
       },
       onError: (error) => this.reportError(error),
+      onUpload: (event) => options.onUpload?.(event),
     });
 
     this.editor = new Editor({

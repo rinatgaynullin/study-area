@@ -48,6 +48,8 @@ export function icon(name: string, size = 20): SVGElement {
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
+  // Имя иконки на элементе: так её можно не пересоздавать, если не менялась.
+  svg.setAttribute('data-icon', name);
   svg.innerHTML = ICONS[name] ?? '';
   return svg;
 }

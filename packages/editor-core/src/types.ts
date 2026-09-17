@@ -23,6 +23,13 @@ export interface UploadContext {
 
 export type UploadAdapter = (file: File, ctx: UploadContext) => Promise<UploadResult>;
 
+/** Этап загрузки через адаптер хоста; локальный blob-путь событий не даёт. */
+export interface UploadEvent {
+  kind: UploadKind;
+  file: File;
+  phase: 'start' | 'done' | 'failed';
+}
+
 export interface EditorLimits {
   maxAudioDurationSec: number;
   maxAudioSizeBytes: number;
@@ -122,6 +129,8 @@ export interface RichEditorCoreOptions {
   onTransaction?: (editor: Editor) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  /** Начало и конец загрузки через адаптер — для индикации в интерфейсе. */
+  onUpload?: (event: UploadEvent) => void;
   /** Invoked when the user asks to insert or re-edit a formula. */
   onFormulaEdit?: (payload: FormulaPayload) => void;
   onError?: (error: RichEditorError) => void;

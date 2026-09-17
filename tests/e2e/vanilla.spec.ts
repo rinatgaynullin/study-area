@@ -30,7 +30,7 @@ test.describe('ванильный редактор', () => {
 
     await page.locator(EDITOR).click();
     await page.keyboard.press('End');
-    await page.locator('.rte-toolbar button[title="Полужирный"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Полужирный"]').click();
     // Клик по кнопке уводит фокус из документа, а TipTap возвращает его в
     // следующем кадре; набор до этого лёг бы под старое выделение.
     await expect(page.locator(EDITOR)).toBeFocused();
@@ -42,7 +42,7 @@ test.describe('ванильный редактор', () => {
   test('открывает выпадающие меню', async ({ page }) => {
     await openVanilla(page);
 
-    await page.locator('.rte-toolbar button[title="Заголовок"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Заголовок"]').click();
 
     // В DOM висит по панели на каждый дропдаун, поэтому смотрим на открытую.
     const panel = page.locator('.rte-dropdown__panel:not([hidden])');
@@ -57,7 +57,7 @@ test.describe('ванильный редактор', () => {
   test('открывает диалоги', async ({ page }) => {
     await openVanilla(page);
 
-    await page.locator('.rte-toolbar button[title="Таблица"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Таблица"]').click();
     await page.locator('.rte-dropdown__panel .rte-menu__item').first().click();
 
     const dialog = page.locator('.rte-modal:not([hidden])');
@@ -68,13 +68,13 @@ test.describe('ванильный редактор', () => {
     // не побеждает display: flex у подложки.
     await page.keyboard.press('Escape');
     await expect(page.locator('.rte-modal:not([hidden])')).toHaveCount(0);
-    await page.locator('.rte-toolbar button[title="Полужирный"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Полужирный"]').click();
   });
 
   test('вставляет таблицу в документ', async ({ page }) => {
     await openVanilla(page);
 
-    await page.locator('.rte-toolbar button[title="Таблица"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Таблица"]').click();
     await page.locator('.rte-dropdown__panel .rte-menu__item').first().click();
     await page.locator('.rte-modal:not([hidden])').getByRole('button', { name: 'Применить' }).click();
 
@@ -107,7 +107,7 @@ test.describe('видимость интерфейса', () => {
 
   test('диалог записи показывает кнопки только своей фазы', async ({ page }) => {
     await openVanilla(page);
-    await page.locator('.rte-toolbar button[title="Голосовое сообщение"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Голосовое сообщение"]').click();
 
     const controls = page.locator('.rte-modal:not([hidden]) .rte-recorder__controls button');
     await expect(controls.filter({ visible: true })).toHaveCount(1);
@@ -118,7 +118,7 @@ test.describe('видимость интерфейса', () => {
 
   test('при вставке новой формулы кнопки удаления нет', async ({ page }) => {
     await openVanilla(page);
-    await page.locator('.rte-toolbar button[title="Математическая формула"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').click();
 
     const dialog = page.locator('.rte-modal:not([hidden])');
     await expect(dialog.getByRole('button', { name: 'Вставить' })).toBeVisible();
@@ -127,7 +127,7 @@ test.describe('видимость интерфейса', () => {
 
   test('модалка затемняет страницу и закрывается кликом по подложке', async ({ page }) => {
     await openVanilla(page);
-    await page.locator('.rte-toolbar button[title="Таблица"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Таблица"]').click();
     await page.locator('.rte-dropdown__panel .rte-menu__item').first().click();
 
     const backdrop = page.locator('.rte-modal:not([hidden]) .rte-modal__backdrop');
@@ -141,7 +141,7 @@ test.describe('видимость интерфейса', () => {
     await openVanilla(page);
     await page.evaluate(() => (window as unknown as VanillaWindow).vanillaEditor.setLocale('en'));
 
-    await page.locator('.rte-toolbar button[title="Link"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Link"]').click();
     await expect(page.locator('.rte-modal:not([hidden]) .rte-modal__title')).toHaveText('Link');
   });
 });

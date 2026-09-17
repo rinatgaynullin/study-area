@@ -199,7 +199,7 @@ test.describe('formula editing', () => {
     await openDemo(page);
 
     await page.locator(`${EDITOR} p`).first().click();
-    await page.locator('.rte-toolbar button[title="Химическая формула"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Химическая формула"]').click();
 
     await expect(page.locator(MODAL_TITLE)).toHaveText('Химическая формула');
     await page.locator('.rte-formula-editor__category', { hasText: 'Типовые формулы' }).click();
@@ -248,7 +248,7 @@ test.describe('toolbar', () => {
 
     await page.locator(`${EDITOR} h2`).first().click();
     await page.keyboard.press('ControlOrMeta+a');
-    await page.locator('.rte-toolbar button[title="Полужирный"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Полужирный"]').click();
 
     await page.getByRole('button', { name: 'Исходник' }).click();
     expect(await page.locator('.demo__source').innerText()).toContain('<strong>');
@@ -257,14 +257,14 @@ test.describe('toolbar', () => {
   test('switches every label when the locale changes', async ({ page }) => {
     await openDemo(page);
 
-    await expect(page.locator('.rte-toolbar button[title="Полужирный"]')).toBeVisible();
+    await expect(page.locator('.rte-toolbar button[aria-label="Полужирный"]')).toBeVisible();
 
     await page.selectOption('.demo__controls select', { label: 'English (messages.json)' });
 
-    await expect(page.locator('.rte-toolbar button[title="Bold"]')).toBeVisible();
-    await expect(page.locator('.rte-toolbar button[title="Voice message"]')).toBeVisible();
+    await expect(page.locator('.rte-toolbar button[aria-label="Bold"]')).toBeVisible();
+    await expect(page.locator('.rte-toolbar button[aria-label="Voice message"]')).toBeVisible();
 
-    await page.locator('.rte-toolbar button[title="Math formula"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Math formula"]').click();
     await expect(page.locator(MODAL_TITLE)).toHaveText('Math formula');
     await expect(page.locator('.rte-formula-editor__category').first()).toHaveText('Basics');
   });
@@ -275,11 +275,11 @@ test.describe('responsive layout', () => {
     await openDemo(page);
     await page.setViewportSize({ width: 420, height: 900 });
 
-    const overflow = page.locator('.rte-toolbar button[title="Ещё"]');
+    const overflow = page.locator('.rte-toolbar button[aria-label="Ещё"]');
     await expect(overflow).toBeVisible();
 
     // Undo lives in a collapsible group, so it moves into the menu.
-    await expect(page.locator('.rte-toolbar > .rte-toolbar__group button[title="Отменить"]')).toHaveCount(0);
+    await expect(page.locator('.rte-toolbar > .rte-toolbar__group button[aria-label="Отменить"]')).toHaveCount(0);
 
     await overflow.click();
     await expect(page.locator('.rte-dropdown__panel', { hasText: 'Отменить' })).toBeVisible();
@@ -600,7 +600,7 @@ test.describe('поповер ссылки', () => {
     await page.locator(`${EDITOR} a`).first().click();
     await expect(page.locator(POPOVER)).toBeVisible();
 
-    await page.locator(`${POPOVER} button[title="Удалить ссылку"]`).click();
+    await page.locator(`${POPOVER} button[aria-label="Удалить ссылку"]`).click();
 
     await expect(page.locator(`${EDITOR} a`)).toHaveCount(0);
     await expect(page.locator(`${EDITOR} p`).first()).toContainText('эту ссылку');
@@ -658,7 +658,7 @@ test.describe('превью шаблонов формул', () => {
   const TEMPLATE = '.rte-formula-editor__template';
 
   async function openFormulaDialog(page: Page): Promise<void> {
-    await page.locator('.rte-toolbar button[title="Математическая формула"]').click();
+    await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').click();
     await page.locator(TEMPLATE).first().waitFor();
   }
 

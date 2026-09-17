@@ -71,7 +71,7 @@ afterEach(() => {
 
 function openDialog(): HTMLElement {
   [...document.querySelectorAll<HTMLButtonElement>('.rte-toolbar button')]
-    .find((button) => button.title === ru.toolbar_audio)!
+    .find((button) => button.getAttribute('aria-label') === ru.toolbar_audio)!
     .click();
 
   return document.querySelector<HTMLElement>('.rte-modal:not([hidden])')!;

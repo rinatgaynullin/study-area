@@ -16,6 +16,7 @@ import {
   type ToolbarConfig,
   type ToolbarItemDescriptor,
   type UploadAdapter,
+  type UploadEvent,
 } from '@rich-editor/core';
 
 /**
@@ -60,6 +61,8 @@ const props = withDefaults(
     /** Passed to `MathfieldElement.fontsDirectory`. */
     mathliveFontsDirectory?: string | null;
     minHeight?: string;
+    /** Строка под тулбаром с загрузками и ошибками; `false` — у хоста свои уведомления. */
+    statusLine?: boolean;
   }>(),
   {
     modelValue: '',
@@ -70,6 +73,7 @@ const props = withDefaults(
     legacy: false,
     mathliveFontsDirectory: null,
     minHeight: '220px',
+    statusLine: true,
   },
 );
 
@@ -79,6 +83,7 @@ const emit = defineEmits<{
   (event: 'focus'): void;
   (event: 'blur'): void;
   (event: 'error', error: RichEditorError): void;
+  (event: 'upload', payload: UploadEvent): void;
   (event: 'ready', core: RichEditorCore): void;
 }>();
 
@@ -107,6 +112,7 @@ onMounted(() => {
     linkStyles: props.linkStyles,
     mathliveFontsDirectory: props.mathliveFontsDirectory,
     minHeight: props.minHeight,
+    statusLine: props.statusLine,
     uploadImage: props.uploadImage,
     uploadAudio: props.uploadAudio,
     uploadFile: props.uploadFile,
@@ -118,6 +124,7 @@ onMounted(() => {
     onFocus: () => emit('focus'),
     onBlur: () => emit('blur'),
     onError: (error) => emit('error', error),
+    onUpload: (event) => emit('upload', event),
   });
 
   ui.value = instance;
