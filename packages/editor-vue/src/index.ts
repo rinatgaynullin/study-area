@@ -2,8 +2,6 @@ export { default as RichContent } from './components/rich-content.vue';
 export { default as RichEditor } from './components/rich-editor.vue';
 export { default as RteIcon } from './components/rte-icon.vue';
 
-export { useEditorI18n } from './composables/use-editor-i18n';
-
 /*
  * Интерфейс редактора — тулбар, диалоги, поповеры — целиком живёт в ядре и
  * собран на голом DOM; Vue-обёртка его монтирует. Поэтому прежние
@@ -21,7 +19,6 @@ export {
   TOOLBAR_PRESETS,
   resolveToolbar,
   SIMPLE_TOOLBAR_ITEMS,
-  createPanelToolbarItems,
   DEFAULT_LINK_STYLES,
   MATHLIVE_STRINGS,
   mathliveRu,

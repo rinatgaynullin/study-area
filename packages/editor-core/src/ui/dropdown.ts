@@ -1,4 +1,4 @@
-import { createDisposer, el, icon, on } from './dom';
+import { createDisposer, el, icon, on, type Unsubscribe } from './dom';
 import type { UiComponent } from './types';
 
 export interface DropdownOptions {
@@ -56,6 +56,13 @@ export function createDropdown(options: DropdownOptions): Dropdown {
 
   let isVisible = false;
 
+  /**
+   * Слушатели документа живут только пока панель открыта. Закрытый дропдаун
+   * не должен стоить странице ничего: на ней может быть несколько редакторов,
+   * и у каждого — по семь панелей.
+   */
+  let releaseDocument: Unsubscribe | null = null;
+
   function close(): void {
     if (!isVisible) return;
     isVisible = false;
@@ -63,6 +70,8 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     panel.replaceChildren();
     button.setAttribute('aria-expanded', 'false');
     button.classList.remove('rte-btn--active');
+    releaseDocument?.();
+    releaseDocument = null;
   }
 
   function open(): void {
@@ -72,6 +81,22 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     panel.hidden = false;
     button.setAttribute('aria-expanded', 'true');
     button.classList.add('rte-btn--active');
+
+    const offMousedown = on(document, 'mousedown', (event) => {
+      const target = event.target as Node | null;
+      if (target && element.contains(target)) return;
+      close();
+    });
+    const offKeydown = on(document, 'keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      close();
+      button.focus();
+    });
+    releaseDocument = () => {
+      offMousedown();
+      offKeydown();
+    };
   }
 
   disposer.add(
@@ -79,23 +104,6 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       event.preventDefault();
       if (isVisible) close();
       else open();
-    }),
-  );
-
-  disposer.add(
-    on(document, 'mousedown', (event) => {
-      const target = event.target as Node | null;
-      if (!isVisible || (target && element.contains(target))) return;
-      close();
-    }),
-  );
-
-  disposer.add(
-    on(document, 'keydown', (event) => {
-      if (!isVisible || event.key !== 'Escape') return;
-      event.stopPropagation();
-      close();
-      button.focus();
     }),
   );
 
@@ -114,6 +122,7 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       if (options.text !== undefined) label.textContent = text;
     },
     destroy: () => {
+      releaseDocument?.();
       disposer.dispose();
       element.remove();
     },

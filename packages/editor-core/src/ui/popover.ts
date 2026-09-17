@@ -1,4 +1,4 @@
-import { createDisposer, el, on } from './dom';
+import { createDisposer, el, on, type Unsubscribe } from './dom';
 import type { UiComponent } from './types';
 
 export interface Popover extends UiComponent {
@@ -41,6 +41,8 @@ export function createPopover(options: PopoverOptions = {}): Popover {
 
   let isVisible = false;
   let currentAnchor: DOMRect | null = null;
+  /** Документ и окно слушаются только пока панель видна. */
+  let releaseDocument: Unsubscribe | null = null;
 
   function reposition(anchor: DOMRect): void {
     currentAnchor = anchor;
@@ -61,11 +63,37 @@ export function createPopover(options: PopoverOptions = {}): Popover {
     }px`;
   }
 
+  // Якорь двигается вместе с текстом — при скролле и смене размера окна.
+  const follow = (): void => {
+    if (currentAnchor) reposition(currentAnchor);
+  };
+
+  function listenDocument(): void {
+    const offs = [
+      on(document, 'mousedown', (event) => {
+        const target = event.target as Node | null;
+        if (target && element.contains(target)) return;
+        close();
+      }),
+      on(document, 'keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        event.stopPropagation();
+        close();
+      }),
+      on(window, 'scroll', follow, { capture: true }),
+      on(window, 'resize', follow),
+    ];
+    releaseDocument = () => {
+      for (const off of offs) off();
+    };
+  }
+
   function open(anchor: DOMRect): void {
     currentAnchor = anchor;
     if (!isVisible) {
       isVisible = true;
       element.hidden = false;
+      listenDocument();
     }
     // Ждём кадр: до отрисовки у панели нет размеров, а они нужны для раскладки.
     requestAnimationFrame(() => reposition(anchor));
@@ -75,31 +103,10 @@ export function createPopover(options: PopoverOptions = {}): Popover {
     if (!isVisible) return;
     isVisible = false;
     element.hidden = true;
+    releaseDocument?.();
+    releaseDocument = null;
     options.onClose?.();
   }
-
-  disposer.add(
-    on(document, 'mousedown', (event) => {
-      const target = event.target as Node | null;
-      if (!isVisible || (target && element.contains(target))) return;
-      close();
-    }),
-  );
-
-  disposer.add(
-    on(document, 'keydown', (event) => {
-      if (!isVisible || event.key !== 'Escape') return;
-      event.stopPropagation();
-      close();
-    }),
-  );
-
-  // Якорь двигается вместе с текстом — при скролле и смене размера окна.
-  const follow = (): void => {
-    if (isVisible && currentAnchor) reposition(currentAnchor);
-  };
-  disposer.add(on(window, 'scroll', follow, { capture: true }));
-  disposer.add(on(window, 'resize', follow));
 
   return {
     element,
@@ -111,6 +118,7 @@ export function createPopover(options: PopoverOptions = {}): Popover {
       return isVisible;
     },
     destroy: () => {
+      releaseDocument?.();
       disposer.dispose();
       element.remove();
     },
