@@ -1,4 +1,5 @@
 import { VoiceRecorder, isRecordingSupported } from '../../media/recorder';
+import type { RichEditorError } from '../../types';
 import { formatDuration } from '../../utils/format';
 import { createDisposer, el, icon, on } from '../dom';
 import { createModal } from '../modal';
@@ -14,7 +15,8 @@ export interface AudioRecorderResult {
 
 export interface AudioRecorderDialogOptions {
   onInsert(payload: AudioRecorderResult): void;
-  onError(error: unknown): void;
+  /** Ошибки рекордера: нет разрешения, не поддерживается, превышен предел. */
+  onError(error: RichEditorError): void;
 }
 
 /** Что показывает диалог прямо сейчас. Интерфейсом объединение не выразить. */
@@ -160,16 +162,15 @@ export function createAudioRecorderDialog(
       maxSizeBytes: limits.maxAudioSizeBytes,
       onTick: (value) => {
         elapsed = value;
-
-        if (value >= limits.maxAudioDurationSec && phase === 'recording') {
-          // На пределе рекордер сам встаёт на паузу, так что записанное цело.
-          phase = 'paused';
-          // Финализируем дубль, но не внутри тика: рекордер ещё не довёл до
-          // конца собственную обработку предела и поставит паузу после нас.
-          queueMicrotask(() => void stop());
-        }
-
         render();
+      },
+      onLimit: () => {
+        // Предел длительности или размера: рекордер уже на паузе, записанное
+        // цело. Финализируем дубль сами — продолжать пользователю нечего, а
+        // «стоп» руками был бы лишним шагом. Ошибку размера рекордер уже
+        // сообщил через onError, и она останется на экране рядом с дублем.
+        phase = 'paused';
+        void stop();
       },
       onLevel: setLevel,
       onError: (error) => {

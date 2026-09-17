@@ -108,6 +108,7 @@ export {
   isRecordingSupported,
   pickAudioMimeType,
   type RecorderState,
+  type RecorderLimit,
   type RecordingResult,
   type VoiceRecorderOptions,
 } from './media/recorder';

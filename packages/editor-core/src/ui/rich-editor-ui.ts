@@ -123,9 +123,10 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
         duration: payload.duration,
         peaks: payload.peaks,
       }),
-    onError: () => {
-      // Ошибку уже показал сам движок через onError — здесь глотать нечего.
-    },
+    // Рекордер живёт в диалоге, а не в движке, так что его ошибки — нет
+    // разрешения на микрофон, превышен предел — движок не видит. Хосту они
+    // нужны наравне с ошибками загрузки: показать уведомление, залогировать.
+    onError: (error) => options.onError?.(error),
   });
 
   const formulaDialog = createFormulaDialog(context, {

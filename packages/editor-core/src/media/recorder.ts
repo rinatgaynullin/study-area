@@ -2,6 +2,9 @@ import { RichEditorError, type Translate } from '../types';
 
 export type RecorderState = 'idle' | 'recording' | 'paused' | 'stopped';
 
+/** Какой из пределов остановил запись. */
+export type RecorderLimit = 'duration' | 'size';
+
 export interface RecordingResult {
   blob: Blob;
   mime: string;
@@ -17,6 +20,12 @@ export interface VoiceRecorderOptions {
   maxSizeBytes: number;
   onTick?: (elapsedSec: number) => void;
   onStateChange?: (state: RecorderState) => void;
+  /**
+   * Достигнут предел длительности или размера. К этому моменту рекордер уже
+   * встал на паузу и записанное цело; вызывающий решает, финализировать ли
+   * дубль или дать пользователю прослушать и переписать.
+   */
+  onLimit?: (reason: RecorderLimit) => void;
   /** Live input level 0..1, for a recording indicator. */
   onLevel?: (level: number) => void;
   onError?: (error: RichEditorError) => void;
@@ -140,14 +149,18 @@ export class VoiceRecorder {
 
   pause(): void {
     if (this.state !== 'recording' || !this.recorder) return;
-    this.recorder.pause();
+    // Своё состояние и состояние MediaRecorder могут разойтись: браузер
+    // останавливает запись сам, когда обрывается трек (микрофон отключили,
+    // разрешение отозвали). У неактивного рекордера pause() бросает
+    // InvalidStateError, поэтому сверяемся с ним, а не только с собой.
+    if (this.recorder.state === 'recording') this.recorder.pause();
     this.accumulatedMs += Date.now() - this.startedAt;
     this.setState('paused');
   }
 
   resume(): void {
     if (this.state !== 'paused' || !this.recorder) return;
-    this.recorder.resume();
+    if (this.recorder.state === 'paused') this.recorder.resume();
     this.startedAt = Date.now();
     this.setState('recording');
   }
@@ -165,13 +178,19 @@ export class VoiceRecorder {
     const duration = this.accumulatedMs / 1000;
 
     const blob = await new Promise<Blob>((resolve) => {
-      recorder.addEventListener(
-        'stop',
-        () => {
-          resolve(new Blob(this.chunks, { type: recorder.mimeType || 'audio/webm' }));
-        },
-        { once: true },
-      );
+      const finish = (): void => {
+        resolve(new Blob(this.chunks, { type: recorder.mimeType || 'audio/webm' }));
+      };
+
+      // Браузер уже остановил запись сам: события stop не будет, а stop()
+      // на неактивном рекордере бросит InvalidStateError. Куски к этому
+      // моменту отданы, так что собираем дорожку из того, что есть.
+      if (recorder.state === 'inactive') {
+        finish();
+        return;
+      }
+
+      recorder.addEventListener('stop', finish, { once: true });
       recorder.stop();
     });
 
@@ -214,7 +233,7 @@ export class VoiceRecorder {
           this.options.t('error_audio_too_long', { seconds: this.options.maxDurationSec }),
         ),
       );
-      this.stopAtLimit();
+      this.stopAtLimit('size');
     }
   };
 
@@ -229,7 +248,7 @@ export class VoiceRecorder {
     this.tickTimer = setInterval(() => {
       const elapsed = this.getElapsed();
       this.options.onTick?.(elapsed);
-      if (elapsed >= this.options.maxDurationSec) this.stopAtLimit();
+      if (elapsed >= this.options.maxDurationSec) this.stopAtLimit('duration');
     }, 200);
   }
 
@@ -241,12 +260,14 @@ export class VoiceRecorder {
   }
 
   /**
-   * The duration cap is enforced by pausing the recorder: the pending `stop()`
-   * still resolves with everything captured up to the limit.
+   * Предел соблюдается паузой, а не остановкой: последующий `stop()` отдаёт
+   * всё, что записано до предела. О самом пределе сообщаем отдельно — по
+   * паузе вызывающий не отличил бы его от паузы руками.
    */
-  private stopAtLimit(): void {
+  private stopAtLimit(reason: RecorderLimit): void {
     if (this.state === 'recording') this.pause();
     this.stopTicking();
+    this.options.onLimit?.(reason);
   }
 
   private startLevelMetering(stream: MediaStream): void {
