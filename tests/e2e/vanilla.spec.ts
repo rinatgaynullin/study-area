@@ -31,6 +31,9 @@ test.describe('ванильный редактор', () => {
     await page.locator(EDITOR).click();
     await page.keyboard.press('End');
     await page.locator('.rte-toolbar button[title="Полужирный"]').click();
+    // Клик по кнопке уводит фокус из документа, а TipTap возвращает его в
+    // следующем кадре; набор до этого лёг бы под старое выделение.
+    await expect(page.locator(EDITOR)).toBeFocused();
     await page.keyboard.type('жирный');
 
     await expect(page.locator(`${EDITOR} strong`).last()).toHaveText('жирный');

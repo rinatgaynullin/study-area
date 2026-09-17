@@ -15,7 +15,6 @@ export {
 } from './ui/presets';
 export { createToolbar, type Toolbar, type ToolbarGroupConfig } from './ui/toolbar';
 export { SIMPLE_TOOLBAR_ITEMS } from './ui/toolbar-items';
-export { createPanelToolbarItems } from './ui/toolbar-panels';
 export { DEFAULT_LINK_STYLES, type LinkStyle } from './ui/link-styles';
 export { createModal, MODAL_CLOSE_EVENT, type Modal } from './ui/modal';
 export { createPopover, type Popover } from './ui/popover';

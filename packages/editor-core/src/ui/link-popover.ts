@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
 import { createDisposer, el, icon, on } from './dom';
 import { DEFAULT_LINK_STYLES, type LinkStyle } from './link-styles';
+import { normalizeHref } from './links';
 import { createPopover } from './popover';
 import type { EditorUiContext, UiComponent } from './types';
 
@@ -26,22 +27,6 @@ interface LinkSnapshot {
   className: string;
   /** Прямоугольник всей ссылки в координатах вьюпорта. */
   anchor: DOMRect;
-}
-
-/** Повторяет правило санитайзера: проходят только схемы, по которым можно перейти. */
-const NAVIGABLE_SCHEMES = ['http', 'https', 'mailto', 'tel'];
-
-const REGEX_SCHEME = /^([a-z][a-z0-9+.-]*):/i;
-
-/** @returns Нормализованный адрес или `null`, если адрес использовать нельзя. */
-function normalizeHref(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const scheme = REGEX_SCHEME.exec(trimmed)?.[1].toLowerCase();
-  // Адрес без схемы — почти всегда домен, набранный руками.
-  if (!scheme) return `https://${trimmed}`;
-  return NAVIGABLE_SCHEMES.includes(scheme) ? trimmed : null;
 }
 
 /**

@@ -236,6 +236,22 @@ describe('v-model', () => {
   });
 });
 
+describe('v-model echo', () => {
+  it('does not re-apply HTML the document already holds', async () => {
+    const w = await mountEditor({ modelValue: '<p>текст</p>' });
+    const vm = w.vm as unknown as { core: { setHTML(html: string): void; getHTML(): string } };
+    const setHTML = vi.spyOn(vm.core, 'setHTML');
+
+    // Хост вернул ровно то, что в документе: сброс выделения и лишний шаг в
+    // истории здесь ни к чему.
+    await w.setProps({ modelValue: vm.core.getHTML() });
+    expect(setHTML).not.toHaveBeenCalled();
+
+    await w.setProps({ modelValue: '<p>другой</p>' });
+    expect(setHTML).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('i18n', () => {
   it('labels the toolbar in Russian by default', async () => {
     const w = await mountEditor();

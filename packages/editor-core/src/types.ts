@@ -56,15 +56,13 @@ export interface FormulaPayload {
 
 export type RichEditorErrorCode =
   | 'file-too-large'
-  | 'audio-too-long'
   | 'unsupported-type'
   | 'upload-failed'
   | 'recorder-unsupported'
   | 'recorder-permission-denied'
   | 'recorder-failed'
   | 'file-read-failed'
-  | 'invalid-mathml'
-  | 'formula-render-failed';
+  | 'invalid-mathml';
 
 export class RichEditorError extends Error {
   readonly code: RichEditorErrorCode;

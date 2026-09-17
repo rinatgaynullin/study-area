@@ -1,4 +1,5 @@
 import { createDisposer, el, on } from '../dom';
+import { normalizeHref } from '../links';
 import { createModal } from '../modal';
 import type { DialogComponent, EditorUiContext } from '../types';
 
@@ -19,29 +20,6 @@ export interface LinkDialogResult {
 export interface LinkDialogOptions {
   onApply(result: LinkDialogResult): void;
   onRemove(): void;
-}
-
-/** Схемы, по которым браузер действительно куда-то переходит. */
-const NAVIGABLE_SCHEMES = ['http', 'https', 'mailto', 'tel'];
-
-const REGEX_SCHEME = /^([a-z][a-z0-9+.-]*):/i;
-
-/**
- * Повторяет санитайзер: принимаются только адреса с навигационной схемой.
- *
- * Адрес без схемы считаем сокращённой записью и достраиваем до https, а всё
- * остальное (javascript:, data: и прочее) отбрасываем — иначе диалог пустил бы
- * в документ то, что санитайзер всё равно вырежет.
- *
- * @returns Нормализованный адрес или `null`, если адрес использовать нельзя.
- */
-function normalizeHref(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const scheme = REGEX_SCHEME.exec(trimmed)?.[1].toLowerCase();
-  if (!scheme) return `https://${trimmed}`;
-  return NAVIGABLE_SCHEMES.includes(scheme) ? trimmed : null;
 }
 
 /** Диалог создания и правки ссылки. */

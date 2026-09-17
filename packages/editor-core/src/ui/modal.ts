@@ -1,4 +1,4 @@
-import { createDisposer, el, icon, on } from './dom';
+import { createDisposer, el, icon, on, type Unsubscribe } from './dom';
 import type { DialogComponent } from './types';
 
 /**
@@ -63,6 +63,8 @@ export function createModal(options: ModalOptions): Modal {
   let isVisible = false;
   /** Куда вернуть фокус после закрытия — обычно кнопка, открывшая диалог. */
   let lastFocused: HTMLElement | null = null;
+  /** Escape и кольцо фокуса слушаются на документе только пока диалог открыт. */
+  let releaseDocument: Unsubscribe | null = null;
 
   function focusableItems(): HTMLElement[] {
     return [
@@ -105,6 +107,7 @@ export function createModal(options: ModalOptions): Modal {
     lastFocused = document.activeElement as HTMLElement | null;
     isVisible = true;
     element.hidden = false;
+    releaseDocument = on(document, 'keydown', onKeydown);
 
     // Ждём кадр: до отрисовки элементы ещё не фокусируемы.
     requestAnimationFrame(() => {
@@ -117,6 +120,8 @@ export function createModal(options: ModalOptions): Modal {
     if (!isVisible) return;
     isVisible = false;
     element.hidden = true;
+    releaseDocument?.();
+    releaseDocument = null;
 
     const restoreLastFocused = element.dispatchEvent(
       new CustomEvent(MODAL_CLOSE_EVENT, { bubbles: true, cancelable: true }),
@@ -127,7 +132,6 @@ export function createModal(options: ModalOptions): Modal {
   }
 
   disposer.add(on(closeButton, 'click', close));
-  disposer.add(on(document, 'keydown', onKeydown));
   // Клик по подложке закрывает, клик по панели — нет.
   disposer.add(
     on(element, 'mousedown', (event) => {
@@ -148,6 +152,7 @@ export function createModal(options: ModalOptions): Modal {
       titleElement.textContent = title;
     },
     destroy: () => {
+      releaseDocument?.();
       disposer.dispose();
       element.remove();
     },
