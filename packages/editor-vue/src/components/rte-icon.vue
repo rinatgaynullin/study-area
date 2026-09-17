@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ICONS } from './icons';
+import { ICONS } from '@rich-editor/core';
 
 const props = withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 });
 

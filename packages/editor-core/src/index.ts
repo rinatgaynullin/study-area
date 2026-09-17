@@ -2,6 +2,7 @@ export { RichEditorCore, prepareIncomingHtml } from './editor';
 export type { PrepareIncomingHtmlOptions } from './editor';
 export { decodeWirisMathml, upgradeLegacyHtml } from './legacy';
 export { DEFAULT_FORMULA_FONT_SIZE_PX } from './formula/mathjax';
+export { ICONS, type IconName } from './ui/icons';
 
 export {
   DEFAULT_LIMITS,

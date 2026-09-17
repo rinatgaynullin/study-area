@@ -8,7 +8,6 @@ export { default as LinkPopover } from './components/link-popover.vue';
 export { default as FormulaDialog } from './components/dialogs/formula-dialog.vue';
 export { default as AudioRecorderDialog } from './components/dialogs/audio-recorder-dialog.vue';
 
-export { ICONS, type IconName } from './components/icons';
 export {
   TOOLBAR_PRESETS,
   resolveToolbar,
@@ -32,6 +31,8 @@ export {
   DEFAULT_LIMITS,
   RichEditorCore,
   RichEditorError,
+  ICONS,
+  type IconName,
   en as enMessages,
   ru as ruMessages,
   buildMathML,
