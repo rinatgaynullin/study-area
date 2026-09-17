@@ -51,8 +51,9 @@ Supporting choices:
 - **Focus returns to the document.** A closing modal dispatches
   `rte:modal-close`; the shell handles it and focuses the editor. Host dialogs
   built with `createModal` inherit the behaviour.
-- **Labels are read at render time.** A locale change rebuilds the toolbar;
-  dropdown panels are rebuilt on every open. No reactive state to keep in sync.
+- **Labels are read at build time.** A locale or message change rebuilds the
+  toolbar and the overlays; dropdown panels are rebuilt on every open. No
+  reactive state to keep in sync.
 - **Styles ship with the UI.** The stylesheet moved to the core; the Vue
   package's `styles.css` re-exports it so hosts keep their import.
 - **`vanilla.html` in the demo loads only the core** and is covered by e2e

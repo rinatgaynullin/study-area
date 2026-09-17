@@ -1,11 +1,13 @@
 import { RichEditorCore } from '../editor';
-import type { FormulaPayload, RichEditorCoreOptions } from '../types';
+import { DEFAULT_LOCALE } from '../i18n';
+import { IMAGE_ACCEPT, TEXT_FILE_ACCEPT } from '../media/upload';
+import type { EditorLimits, FormulaPayload, Messages, RichEditorCoreOptions } from '../types';
 import { createDisposer, el, on } from './dom';
 import { createAudioRecorderDialog } from './dialogs/audio-recorder-dialog';
 import { createFormulaDialog } from './dialogs/formula-dialog';
-import { createLinkDialog } from './dialogs/link-dialog';
+import { createLinkDialog, type LinkDialogPayload } from './dialogs/link-dialog';
 import { createTableDialog } from './dialogs/table-dialog';
-import { createLinkPopover } from './link-popover';
+import { createLinkPopover, type LinkPopover } from './link-popover';
 import { MODAL_CLOSE_EVENT } from './modal';
 import type { LinkStyle } from './link-styles';
 import { resolveToolbar, type ToolbarConfig } from './presets';
@@ -13,6 +15,7 @@ import { createToolbar, type Toolbar, type ToolbarGroupConfig } from './toolbar'
 import { SIMPLE_TOOLBAR_ITEMS } from './toolbar-items';
 import { createPanelToolbarItems } from './toolbar-panels';
 import type {
+  DialogComponent,
   EditorFeature,
   EditorUiContext,
   FeatureBuildOptions,
@@ -50,11 +53,36 @@ export interface RichEditorUi {
   readonly element: HTMLElement;
   /** Переключает режим чтения: вместе с движком прячет и тулбар. */
   setEditable(editable: boolean): void;
-  /** Меняет язык и пересобирает тулбар: подписи приходят из переводчика. */
+  /** Меняет язык и пересобирает интерфейс: подписи приходят из переводчика. */
   setLocale(locale: string): void;
-  /** Пересобирает тулбар после смены таблицы переводов. */
+  /** Меняет таблицы переводов и пересобирает интерфейс. */
+  setMessages(messages: Record<string, Messages> | undefined): void;
+  /** Пересобирает интерфейс, если таблицу переводов изменили на месте. */
   refreshLabels(): void;
+  /** Меняет пределы загрузок и записи у живого редактора. */
+  setLimits(limits: Partial<EditorLimits>): void;
   destroy(): void;
+}
+
+/** Оверлеи оболочки: диалоги, поповер и диалоги возможностей. */
+interface Overlays {
+  link: DialogComponent<LinkDialogPayload>;
+  table: DialogComponent;
+  recorder: DialogComponent<void>;
+  formula: DialogComponent<FormulaPayload | null>;
+  linkPopover: LinkPopover;
+  extra: UiComponent[];
+}
+
+function listOverlays(overlays: Overlays): UiComponent[] {
+  return [
+    overlays.link,
+    overlays.table,
+    overlays.recorder,
+    overlays.formula,
+    overlays.linkPopover,
+    ...overlays.extra,
+  ];
 }
 
 /** Пункты каждой возможности, запрошенные один раз: дескрипторы не пересоздаются. */
@@ -99,13 +127,15 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
   if (options.minHeight) host.style.minHeight = options.minHeight;
 
   // Скрытые поля выбора файлов: системный диалог нельзя открыть иначе.
+  // Фильтр — тот же, что у пайплайна загрузки, иначе пикер прячет файлы,
+  // которые редактор принял бы перетаскиванием.
   const imageInput = el('input', {
     class: 'rte-hidden-input',
-    attrs: { type: 'file', accept: 'image/*' },
+    attrs: { type: 'file', accept: IMAGE_ACCEPT },
   });
   const fileInput = el('input', {
     class: 'rte-hidden-input',
-    attrs: { type: 'file', accept: 'text/*,.txt,.md,.csv,.json' },
+    attrs: { type: 'file', accept: TEXT_FILE_ACCEPT },
   });
 
   let fileMode: 'attach' | 'insert' = 'attach';
@@ -117,6 +147,15 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
   let refresh = (): void => {};
 
   const features = options.features ?? [];
+
+  /** Текущий язык: нужен MathLive, у которого своя локаль. */
+  let locale = options.locale ?? DEFAULT_LOCALE;
+
+  /**
+   * Оверлеи пересоздаются при смене языка, поэтому ссылка на них — одна,
+   * подменяемая, а замыкания тулбара и движка ходят через неё.
+   */
+  let overlays: Overlays;
 
   /** Расширения хоста и возможностей; переводчик приходит из движка. */
   function buildExtensions({ t }: { t: FeatureBuildOptions['t'] }): unknown[] {
@@ -130,7 +169,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
       legacy: options.legacy ?? false,
       placeholder: options.placeholder,
       formulaScale: options.formulaScale ?? 1,
-      onFormulaEdit: (payload) => formulaDialog.open(payload),
+      onFormulaEdit: (payload) => overlays.formula.open(payload),
     };
 
     return [...own, ...features.flatMap((feature) => feature.extensions?.(build) ?? [])];
@@ -147,7 +186,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     // Клик по формуле в документе открывает её редактор. Колбэк хоста при
     // этом не теряется: он может вести собственный учёт правок.
     onFormulaEdit: (payload) => {
-      formulaDialog.open(payload);
+      overlays.formula.open(payload);
       options.onFormulaEdit?.(payload);
     },
   });
@@ -155,50 +194,73 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
   const context: EditorUiContext = {
     editor: core.editor,
     t: (key, params) => core.t(key, params),
-    limits: core.getLimits(),
+    // Пределы читаются с движка при каждом обращении: setLimits меняет их у
+    // живого редактора, а снимок оставил бы диалог записи со старыми.
+    get limits() {
+      return core.getLimits();
+    },
     uploads: core.uploads,
-    editFormula: (payload) => formulaDialog.open(payload),
+    editFormula: (payload) => overlays.formula.open(payload),
   };
 
-  const linkDialog = createLinkDialog(context, {
-    onApply: ({ href, targetBlank }) => {
-      core.editor
-        .chain()
-        .focus()
-        .extendMarkRange('link')
-        .setLink({ href, target: targetBlank ? '_blank' : null })
-        .run();
-    },
-    onRemove: () => void core.editor.chain().focus().extendMarkRange('link').unsetLink().run(),
-  });
+  /**
+   * Собирает диалоги и поповер. Подписи в них запекаются при создании — как и
+   * в тулбаре, — поэтому смена языка пересобирает их заново: закрытые они
+   * без состояния, а держать реактивные подписи ради редкой операции —
+   * лишний слой.
+   */
+  function buildOverlays(): Overlays {
+    const link = createLinkDialog(context, {
+      onApply: ({ href, targetBlank }) => {
+        core.editor
+          .chain()
+          .focus()
+          .extendMarkRange('link')
+          .setLink({ href, target: targetBlank ? '_blank' : null })
+          .run();
+      },
+      onRemove: () => void core.editor.chain().focus().extendMarkRange('link').unsetLink().run(),
+    });
 
-  const tableDialog = createTableDialog(context, {
-    onInsert: (payload) => void core.editor.chain().focus().insertTable(payload).run(),
-  });
+    const table = createTableDialog(context, {
+      onInsert: (payload) => void core.editor.chain().focus().insertTable(payload).run(),
+    });
 
-  const recorderDialog = createAudioRecorderDialog(context, {
-    onInsert: (payload) =>
-      void core.insertRecording(payload.blob, {
-        duration: payload.duration,
-        peaks: payload.peaks,
-      }),
-    // Рекордер живёт в диалоге, а не в движке, так что его ошибки — нет
-    // разрешения на микрофон, превышен предел — движок не видит. Хосту они
-    // нужны наравне с ошибками загрузки: показать уведомление, залогировать.
-    onError: (error) => options.onError?.(error),
-  });
+    const recorder = createAudioRecorderDialog(context, {
+      onInsert: (payload) =>
+        void core.insertRecording(payload.blob, {
+          duration: payload.duration,
+          peaks: payload.peaks,
+        }),
+      // Рекордер живёт в диалоге, а не в движке, так что его ошибки — нет
+      // разрешения на микрофон, превышен предел — движок не видит. Хосту они
+      // нужны наравне с ошибками загрузки: показать уведомление, залогировать.
+      onError: (error) => options.onError?.(error),
+    });
 
-  const formulaDialog = createFormulaDialog(context, {
-    fontsDirectory: options.mathliveFontsDirectory,
-    locale: options.locale ?? 'ru',
-    onSave: (payload: FormulaPayload) => {
-      if (payload.pos === null) core.insertFormula(payload.mathml, payload.type);
-      else core.updateFormulaAt(payload.pos, payload.mathml, payload.type);
-    },
-    onRemove: (pos) => void core.deleteFormulaAt(pos),
-  });
+    const formula = createFormulaDialog(context, {
+      fontsDirectory: options.mathliveFontsDirectory,
+      locale,
+      onSave: (payload: FormulaPayload) => {
+        if (payload.pos === null) core.insertFormula(payload.mathml, payload.type);
+        else core.updateFormulaAt(payload.pos, payload.mathml, payload.type);
+      },
+      onRemove: (pos) => void core.deleteFormulaAt(pos),
+    });
 
-  const linkPopover = createLinkPopover(context, { styles: options.linkStyles });
+    const linkPopover = createLinkPopover(context, { styles: options.linkStyles });
+
+    // Диалоги возможностей живут и умирают вместе с оболочкой, как встроенные.
+    const extra = features.flatMap((feature) => feature.dialogs?.(context) ?? []);
+
+    const built: Overlays = { link, table, recorder, formula, linkPopover, extra };
+    for (const overlay of listOverlays(built)) root.appendChild(overlay.element);
+    return built;
+  }
+
+  function destroyOverlays(): void {
+    for (const overlay of listOverlays(overlays)) overlay.destroy();
+  }
 
   const featureItems: FeatureItems[] = features.map((feature) => ({
     feature,
@@ -210,9 +272,9 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     ...createPanelToolbarItems({
       textSwatches: options.textSwatches,
       highlightSwatches: options.highlightSwatches,
-      insertTable: () => tableDialog.open(),
+      insertTable: () => overlays.table.open(),
       editLink: () =>
-        linkDialog.open({
+        overlays.link.open({
           href: (core.editor.getAttributes('link').href as string) ?? '',
           targetBlank: core.editor.getAttributes('link').target === '_blank',
           canRemove: core.editor.isActive('link'),
@@ -222,8 +284,8 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
         fileMode = mode;
         fileInput.click();
       },
-      recordAudio: () => recorderDialog.open(),
-      insertFormula: (type) => formulaDialog.open({ mathml: '', type, pos: null }),
+      recordAudio: () => overlays.recorder.open(),
+      insertFormula: (type) => overlays.formula.open({ mathml: '', type, pos: null }),
     }),
     ...Object.fromEntries(featureItems.flatMap(({ items }) => items.map((item) => [item.id, item]))),
     // Пункты, переданные напрямую, главнее: ими хост точечно правит и
@@ -239,25 +301,22 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
 
   root.append(toolbar.element, surface, imageInput, fileInput);
   options.element.appendChild(root);
-
-  const overlays: UiComponent[] = [
-    linkDialog,
-    tableDialog,
-    recorderDialog,
-    formulaDialog,
-    linkPopover,
-    // Диалоги возможностей живут и умирают вместе с редактором, как встроенные.
-    ...features.flatMap((feature) => feature.dialogs?.(context) ?? []),
-  ];
-  for (const overlay of overlays) root.appendChild(overlay.element);
+  overlays = buildOverlays();
 
   // Тулбар и поповер ссылки зависят от выделения, поэтому обновляются на
   // каждой транзакции, а не только на изменении документа.
   refresh = () => {
     toolbar.syncState();
-    linkPopover.sync();
+    overlays.linkPopover.sync();
   };
   refresh();
+
+  /** Всё, что запекает подписи при создании: тулбар и оверлеи. */
+  function rebuildChrome(): void {
+    destroyOverlays();
+    overlays = buildOverlays();
+    toolbar.rebuild();
+  }
 
   disposer.add(
     on(root, MODAL_CLOSE_EVENT, (event) => {
@@ -307,15 +366,21 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
       core.setEditable(editable);
       applyEditable(editable);
     },
-    setLocale: (locale: string) => {
-      core.setLocale(locale);
-      toolbar.rebuild();
+    setLocale: (next: string) => {
+      locale = next;
+      core.setLocale(next);
+      rebuildChrome();
     },
-    refreshLabels: () => toolbar.rebuild(),
+    setMessages: (messages) => {
+      core.setMessages(messages);
+      rebuildChrome();
+    },
+    refreshLabels: rebuildChrome,
+    setLimits: (limits) => core.setLimits(limits),
     destroy: () => {
       disposer.dispose();
       toolbar.destroy();
-      for (const overlay of overlays) overlay.destroy();
+      destroyOverlays();
       core.destroy();
       root.remove();
     },

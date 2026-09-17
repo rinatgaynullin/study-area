@@ -76,7 +76,11 @@ export interface EditorFeature {
   extensions?(options: FeatureBuildOptions): unknown[];
   /** Пункты, которые возможность предлагает тулбару. */
   toolbarItems?(): ToolbarItemDescriptor[];
-  /** Диалоги, которые нужны её пунктам. */
+  /**
+   * Диалоги, которые нужны её пунктам. Вызывается при создании редактора и
+   * заново при каждой смене языка: подписи запекаются при сборке, поэтому
+   * диалог должен целиком собираться из контекста, а не хранить состояние.
+   */
   dialogs?(context: EditorUiContext): UiComponent[];
 }
 

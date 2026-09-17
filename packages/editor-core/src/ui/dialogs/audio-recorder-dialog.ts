@@ -42,8 +42,14 @@ export function createAudioRecorderDialog(
   context: EditorUiContext,
   options: AudioRecorderDialogOptions,
 ): DialogComponent<void> {
-  const { t, limits } = context;
+  const { t } = context;
   const disposer = createDisposer();
+
+  /**
+   * Пределы читаем у контекста при каждом обращении, а не один раз: хост
+   * меняет их у живого редактора, и снимок оставил бы рекордер со старыми.
+   */
+  const limits = () => context.limits;
 
   /** Возможности браузера в рантайме не меняются — хватает одной проверки. */
   const supported = isRecordingSupported();
@@ -138,9 +144,9 @@ export function createAudioRecorderDialog(
     timeText.textContent = formatDuration(elapsed);
     limitText.textContent = isActive
       ? t('audio_remaining', {
-          time: formatDuration(Math.max(0, limits.maxAudioDurationSec - elapsed)),
+          time: formatDuration(Math.max(0, limits().maxAudioDurationSec - elapsed)),
         })
-      : t('audio_duration_limit', { seconds: limits.maxAudioDurationSec });
+      : t('audio_duration_limit', { seconds: limits().maxAudioDurationSec });
 
     hintText.hidden = phase !== 'idle' || Boolean(message);
     errorText.textContent = message;
@@ -158,8 +164,8 @@ export function createAudioRecorderDialog(
   function createRecorder(): VoiceRecorder {
     return new VoiceRecorder({
       t,
-      maxDurationSec: limits.maxAudioDurationSec,
-      maxSizeBytes: limits.maxAudioSizeBytes,
+      maxDurationSec: limits().maxAudioDurationSec,
+      maxSizeBytes: limits().maxAudioSizeBytes,
       onTick: (value) => {
         elapsed = value;
         render();
@@ -287,7 +293,11 @@ export function createAudioRecorderDialog(
 
   return {
     element: modal.element,
-    open: () => modal.open(),
+    open: () => {
+      // Пределы могли смениться с прошлого открытия — подпись должна быть свежей.
+      render();
+      modal.open();
+    },
     close: () => modal.close(),
     get isVisible() {
       return modal.isVisible;

@@ -231,6 +231,9 @@ test.describe('formula editing', () => {
     await page.locator(FORMULA).nth(1).click();
     await page.getByRole('button', { name: 'Отмена' }).click();
     await expect(page.locator(MODAL_PANEL)).toBeHidden();
+    // Фокус возвращается в документ в следующем кадре; Backspace раньше него
+    // уйдёт в пустоту, и тест упадёт не по делу.
+    await expect(page.locator(EDITOR)).toBeFocused();
 
     await page.keyboard.press('Backspace');
 
