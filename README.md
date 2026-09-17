@@ -72,6 +72,16 @@ Documents exported by `<RichEditor />` carry their formula SVG, so MathJax never
 loads. Formulas that arrive with only `data-mathml` — for example from a backend
 that stores just the source — are rendered on demand.
 
+The viewer, like the editor, is built in the core; without Vue it is one call:
+
+```ts
+import { createRichContent } from '@rich-editor/core';
+
+const viewer = createRichContent({ element: document.querySelector('#answer')!, html });
+await viewer.update({ html: nextHtml });   // re-sanitizes and re-renders pending formulas
+viewer.destroy();
+```
+
 | Prop | Type | Default | |
 | --- | --- | --- | --- |
 | `html` | `string` | `''` | Sanitized before rendering, always |
@@ -615,6 +625,7 @@ unset locally, which keeps `npm run dev` and the Playwright suite on `/`.
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — package split, data flow, plugin boundaries
 - [LIMITATIONS.md](LIMITATIONS.md) — what v1 does not do, and why
+- [CHANGELOG.md](CHANGELOG.md) — what changed, including breaking changes
 - [docs/adr/](docs/adr/) — the decisions and their trade-offs
 
 ## Dependencies and licences

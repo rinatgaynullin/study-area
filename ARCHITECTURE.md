@@ -137,6 +137,10 @@ abstraction over the DOM beyond a handful of helpers (`el`, `on`, `icon`).
   pipeline's `onUpload` events) and the last error for a few seconds, so the
   user learns why a file did not land without the host wiring notifications.
   Hosts with their own notifications pass `statusLine: false`.
+- **Dropdown panels are popovers.** A menu is positioned `fixed` next to its
+  button, so neither the editor root's `overflow: hidden` nor a short document
+  can clip it, and the popover's outside-click, Escape and scroll handling is
+  shared rather than duplicated.
 - **Overlays stay in the DOM.** Dialogs and popovers are created once and hidden
   with the `hidden` attribute rather than re-created, so they keep no framework
   state and cost nothing while closed. The stylesheet has an explicit rule for
@@ -177,10 +181,11 @@ flat and hard to duplicate into. Russian and English are bundled;
 
 ## Read-only rendering
 
-`<RichContent />` loads none of the editing stack. It sanitizes the HTML,
-renders it, and fills in formulas that arrived with MathML but no SVG. For
-documents exported by this editor — which carry their SVG — MathJax never
-loads at all.
+`createRichContent` (core) loads none of the editing stack: `prepareIncomingHtml`
+lives in its own module so the viewer never imports TipTap. It sanitizes the
+HTML, renders it, and fills in formulas that arrived with MathML but no SVG. For
+documents exported by this editor — which carry their SVG — MathJax never loads
+at all. `<RichContent />` is the Vue wrapper: props in, `rendered` out.
 
 ## Testing
 
