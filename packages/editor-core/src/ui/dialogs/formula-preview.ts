@@ -1,6 +1,15 @@
 import { DEFAULT_FORMULA_FONT_SIZE_PX, renderMathML } from '../../formula/mathjax';
 import { latexToMathML } from '../../formula/mathml';
 import type { FormulaType } from '../../types';
+import { LruCache } from '../../utils/lru-cache';
+
+/**
+ * Потолок кэша. Галерея держит около сотни превью шаблонов, остальное —
+ * живой ввод: каждый промежуточный LaTeX при наборе тоже рендерится, и без
+ * потолка кэш рос бы всю сессию. Шаблоны читаются при каждом открытии
+ * галереи и потому остаются свежими — вытесняется именно набор.
+ */
+const MAX_PREVIEW_ENTRIES = 300;
 
 /**
  * Готовые превью по ключу «тип + масштаб + LaTeX».
@@ -10,7 +19,7 @@ import type { FormulaType } from '../../types';
  * меняются. Перерисовывать полтора десятка SVG на каждое открытие — заметная
  * задержка на ровном месте.
  */
-const cache = new Map<string, string>();
+const cache = new LruCache<string, string>(MAX_PREVIEW_ENTRIES);
 
 /** Разделитель частей ключа: в LaTeX и в типе формулы его быть не может. */
 const KEY_SEPARATOR = '\u0000';

@@ -1,4 +1,5 @@
 import { sanitizeSvg } from '../security/sanitize';
+import { LruCache } from '../utils/lru-cache';
 import { normalizeMathML } from './mathml';
 
 interface MathJaxDocument {
@@ -54,11 +55,11 @@ function exToPx(ex: number, pxPerEm: number): string {
 
 let engine: Promise<Engine> | null = null;
 
-/** Rendered SVG by MathML source. Lets `getHTML()` stay synchronous. */
-const svgCache = new Map<string, string>();
-const pending = new Set<Promise<unknown>>();
-
 const MAX_CACHE_ENTRIES = 500;
+
+/** Rendered SVG by MathML source. Lets `getHTML()` stay synchronous. */
+const svgCache = new LruCache<string, string>(MAX_CACHE_ENTRIES);
+const pending = new Set<Promise<unknown>>();
 
 /**
  * Builds a MathJax document with the lite adaptor, which has no DOM dependency
@@ -201,10 +202,6 @@ export async function renderMathML(mathml: string, options: RenderOptions = {}):
       return '';
     }
 
-    if (svgCache.size >= MAX_CACHE_ENTRIES) {
-      const oldest = svgCache.keys().next();
-      if (!oldest.done) svgCache.delete(oldest.value);
-    }
     svgCache.set(key, svg);
     return svg;
   })();
