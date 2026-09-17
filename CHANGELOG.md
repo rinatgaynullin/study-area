@@ -7,6 +7,12 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- Built-in dark theme: `theme: 'light' | 'dark' | 'auto'` on `createRichEditor`,
+  `createRichContent`, `<RichEditor />` and `<RichContent />`; `setTheme()` and
+  `update({ theme })` switch it later; the class `rte-theme-dark` on the element
+  or any ancestor works without a call. `applyTheme` and `DARK_THEME_CLASS` are
+  exported.
+
 - `createRichEditor()` in `@rich-editor/core`: the whole editor — toolbar,
   editing surface, dialogs, popovers — assembled on plain DOM with one call
   (ADR 0008). `@rich-editor/vue` is a thin wrapper over it.

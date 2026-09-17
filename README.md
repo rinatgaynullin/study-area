@@ -86,6 +86,7 @@ viewer.destroy();
 | --- | --- | --- | --- |
 | `html` | `string` | `''` | Sanitized before rendering, always |
 | `formulaScale` | `number` | `1` | Formula size relative to surrounding text |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'light'` | Built-in dark theme; `auto` follows the system setting |
 
 Emits `rendered` once pending formulas have been drawn.
 
@@ -132,6 +133,7 @@ Emits `rendered` once pending formulas have been drawn.
 | `mathliveFontsDirectory` | `string \| null` | `null` | See *Formula fonts* |
 | `minHeight` | `string` | `'220px'` | Minimum height of the editing surface |
 | `statusLine` | `boolean` | `true` | Line under the toolbar showing uploads in progress and the last error; `false` if the host shows its own notifications |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'light'` | Built-in dark theme; `auto` follows the system setting. See [THEMING.md](THEMING.md) |
 
 ### Events
 
@@ -462,9 +464,11 @@ same variables under a class the host toggles (see the demo's `.demo--dark`).
 }
 ```
 
-The full list — what each variable controls and its default — is in
-[THEMING.md](THEMING.md). Class hooks (`.rte-toolbar`, `.rte-btn`,
-`.rte-modal__panel`, …) are stable for hosts that need more than variables.
+A dark theme is built in: `theme="dark"` (or `'auto'` to follow the system),
+or the class `rte-theme-dark` on any ancestor. The full list — what each
+variable controls and its default — is in [THEMING.md](THEMING.md). Class hooks
+(`.rte-toolbar`, `.rte-btn`, `.rte-modal__panel`, …) are stable for hosts that
+need more than variables.
 
 ### Legacy content (Froala)
 
