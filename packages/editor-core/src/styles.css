@@ -580,6 +580,11 @@
   background: var(--rte-btn-hover-bg);
 }
 
+.rte-menu__item:focus-visible {
+  outline: 2px solid var(--rte-color-primary);
+  outline-offset: -2px;
+}
+
 .rte-menu__item--active {
   color: var(--rte-color-primary);
   font-weight: 600;

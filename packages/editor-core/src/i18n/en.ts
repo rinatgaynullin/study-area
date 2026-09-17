@@ -39,6 +39,7 @@ export const en: Messages = {
   toolbar_formula_math: 'Math formula',
   toolbar_formula_chem: 'Chemistry formula',
   toolbar_more: 'More',
+  toolbar_label: 'Formatting toolbar',
   table_insert: 'Insert table',
   table_rows: 'Rows',
   table_cols: 'Columns',

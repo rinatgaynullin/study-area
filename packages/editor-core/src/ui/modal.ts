@@ -8,6 +8,9 @@ import type { DialogComponent } from './types';
  */
 export const MODAL_CLOSE_EVENT = 'rte:modal-close';
 
+/** Счётчик для уникальных id заголовков: на странице несколько диалогов. */
+let modalCount = 0;
+
 export interface ModalOptions {
   title: string;
   closeLabel: string;
@@ -33,7 +36,13 @@ export interface Modal extends DialogComponent {
 export function createModal(options: ModalOptions): Modal {
   const disposer = createDisposer();
 
-  const titleElement = el('h2', { class: 'rte-modal__title', text: options.title });
+  modalCount += 1;
+  const titleId = `rte-modal-title-${modalCount}`;
+  const titleElement = el('h2', {
+    class: 'rte-modal__title',
+    text: options.title,
+    attrs: { id: titleId },
+  });
   const body = el('div', { class: 'rte-modal__body' });
   const footer = el('div', { class: 'rte-modal__footer' });
 
@@ -45,7 +54,8 @@ export function createModal(options: ModalOptions): Modal {
 
   const panel = el('div', {
     class: options.wide ? 'rte-modal__panel rte-modal__panel--wide' : 'rte-modal__panel',
-    attrs: { role: 'dialog', 'aria-modal': 'true' },
+    // Имя диалога — его заголовок: без него читалка объявляет просто «диалог».
+    attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
     children: [
       el('header', { class: 'rte-modal__header', children: [titleElement, closeButton] }),
       body,

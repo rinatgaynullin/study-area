@@ -41,6 +41,7 @@ export const ru: Messages = {
   toolbar_formula_math: 'Математическая формула',
   toolbar_formula_chem: 'Химическая формула',
   toolbar_more: 'Ещё',
+  toolbar_label: 'Панель форматирования',
   table_insert: 'Вставить таблицу',
   table_rows: 'Строк',
   table_cols: 'Столбцов',
