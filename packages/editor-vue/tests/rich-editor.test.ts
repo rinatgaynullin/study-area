@@ -236,6 +236,16 @@ describe('v-model', () => {
   });
 });
 
+describe('theme', () => {
+  it('the theme prop toggles the built-in dark theme', async () => {
+    const w = await mountEditor({ theme: 'dark' });
+    expect(w.find('.rte-root').classes()).toContain('rte-theme-dark');
+
+    await w.setProps({ theme: 'light' });
+    expect(w.find('.rte-root').classes()).not.toContain('rte-theme-dark');
+  });
+});
+
 describe('v-model echo', () => {
   it('does not re-apply HTML the document already holds', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });

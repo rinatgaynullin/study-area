@@ -22,8 +22,8 @@ const editable = ref(true);
 const mobilePreview = ref(false);
 const isLegacyEnabled = ref(false);
 const toolbarPreset = ref<'full' | 'standard' | 'minimal'>('full');
-/** Тема демо: тёмная — это те же токены `--rte-*` под классом, см. styles.css. */
-const theme = ref<'default' | 'dark'>('default');
+/** Тема редактора — проп; страница демо красится под неё своим классом. */
+const theme = ref<'light' | 'dark' | 'auto'>('light');
 const outputTab = ref<'preview' | 'source' | 'input' | 'raw'>('preview');
 const log = ref<string[]>([]);
 
@@ -199,8 +199,9 @@ async function reloadSample(): Promise<void> {
       <label>
         Тема
         <select v-model="theme">
-          <option value="default">По умолчанию</option>
-          <option value="dark">Тёмная (переопределение токенов)</option>
+          <option value="light">Светлая</option>
+          <option value="dark">Тёмная</option>
+          <option value="auto">Как в системе</option>
         </select>
       </label>
 
@@ -249,6 +250,7 @@ async function reloadSample(): Promise<void> {
         :editable="editable"
         :legacy="isLegacyEnabled"
         :toolbar="toolbarPreset"
+        :theme="theme"
         :upload-image="adapters.uploadImage"
         :upload-audio="adapters.uploadAudio"
         :upload-file="adapters.uploadFile"
@@ -294,6 +296,7 @@ async function reloadSample(): Promise<void> {
            exported by the editor already carry their SVG, so nothing extra
            loads; MathML-only formulas are rendered on the fly. -->
       <RichContent
+        :theme="theme"
         v-if="outputTab === 'preview'"
         class="demo__preview"
         :html="html"

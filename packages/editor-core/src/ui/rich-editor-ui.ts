@@ -18,6 +18,7 @@ import { createLinkPopover, type LinkPopover } from './link-popover';
 import { MODAL_CLOSE_EVENT } from './modal';
 import type { LinkStyle } from './link-styles';
 import { resolveToolbar, type ToolbarConfig } from './presets';
+import { applyTheme, type EditorTheme } from './theme';
 import { createToolbar, type Toolbar, type ToolbarGroupConfig } from './toolbar';
 import { SIMPLE_TOOLBAR_ITEMS } from './toolbar-items';
 import { createPanelToolbarItems } from './toolbar-panels';
@@ -57,6 +58,11 @@ export interface RichEditorUiOptions extends Omit<RichEditorCoreOptions, 'elemen
    * по умолчанию; хост с собственными уведомлениями выключает её.
    */
   statusLine?: boolean;
+  /**
+   * Тема интерфейса. `auto` следует за системной настройкой. То же самое
+   * даёт класс `rte-theme-dark` на элементе или любом его предке.
+   */
+  theme?: EditorTheme;
 }
 
 /** Сколько держать ошибку в строке статуса: прочитать успеют, навсегда не останется. */
@@ -76,6 +82,8 @@ export interface RichEditorUi {
   refreshLabels(): void;
   /** Меняет пределы загрузок и записи у живого редактора. */
   setLimits(limits: Partial<EditorLimits>): void;
+  /** Переключает тему; `auto` начинает следить за системной настройкой. */
+  setTheme(theme: EditorTheme): void;
   destroy(): void;
 }
 
@@ -137,6 +145,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
   const disposer = createDisposer();
 
   const root = el('div', { class: 'rte-root' });
+  let releaseTheme = applyTheme(root, options.theme ?? 'light');
   const host = el('div', { class: 'rte-host' });
   const surface = el('div', { class: 'rte-surface', children: [host] });
   if (options.minHeight) host.style.minHeight = options.minHeight;
@@ -438,7 +447,12 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     },
     refreshLabels: rebuildChrome,
     setLimits: (limits) => core.setLimits(limits),
+    setTheme: (theme) => {
+      releaseTheme();
+      releaseTheme = applyTheme(root, theme);
+    },
     destroy: () => {
+      releaseTheme();
       if (errorTimer) clearTimeout(errorTimer);
       disposer.dispose();
       toolbar.destroy();

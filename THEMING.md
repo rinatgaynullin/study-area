@@ -36,9 +36,26 @@ Per instance — the variables cascade, so a class on a wrapper is enough:
 }
 ```
 
-A dark theme is the same mechanism scoped to a class the host toggles. The demo
-(`apps/demo/src/styles.css`, `.demo--dark`) carries a complete example; the
-tokens that need a value are the palette group below and `--rte-shadow*`.
+## Dark theme
+
+A dark theme ships with the editor — the same tokens, re-valued with the
+umschool dark palette, under the class `rte-theme-dark`. Three ways to turn it
+on:
+
+- **Option or prop.** `createRichEditor({ theme: 'dark' })`,
+  `createRichContent({ theme: 'dark' })`, `<RichEditor theme="dark" />`,
+  `<RichContent theme="dark" />`. `'auto'` follows `prefers-color-scheme` and
+  switches with it; `setTheme()` / `update({ theme })` change it later.
+- **A class on the element or any ancestor.** `rte-theme-dark` on `<html>` next
+  to the host's own theme class is enough — the editor picks it up without a
+  call. `applyTheme(element, theme)` is exported for hosts that want the
+  `auto` logic on their own element.
+- **Your own values.** Override the palette group and `--rte-shadow*` under
+  any class, exactly like the built-in block in `styles.css` does; the demo's
+  `theme` control and `.demo--dark` show the page side of that.
+
+The dark block sets `color-scheme: dark` so native controls — the checkbox in
+the link dialog, the colour input, scrollbars — follow.
 
 ## Palette
 
@@ -64,6 +81,7 @@ tokens that need a value are the palette group below and `--rte-shadow*`.
 | `--rte-color-formula-hover` | `var(--rte-color-primary-soft)` | Formula under the pointer and the selected formula |
 | `--rte-color-waveform` | `#dedce3` | Unplayed part of the voice-message waveform |
 | `--rte-color-overlay` | `rgb(34 31 46 / 45%)` | Dialog backdrop |
+| `--rte-color-on-highlight` | `#221f2e` | Text over a highlight mark. Highlights are light pastel swatches, so this stays dark in the dark theme too |
 
 ## Typography
 

@@ -7,6 +7,7 @@ import {
   createRichEditor,
   type EditorFeature,
   type EditorLimits,
+  type EditorTheme,
   type FormulaType,
   type LinkStyle,
   type Messages,
@@ -63,6 +64,8 @@ const props = withDefaults(
     minHeight?: string;
     /** Строка под тулбаром с загрузками и ошибками; `false` — у хоста свои уведомления. */
     statusLine?: boolean;
+    /** Тема интерфейса; `auto` следует за системной настройкой. */
+    theme?: EditorTheme;
   }>(),
   {
     modelValue: '',
@@ -74,6 +77,7 @@ const props = withDefaults(
     mathliveFontsDirectory: null,
     minHeight: '220px',
     statusLine: true,
+    theme: 'light',
   },
 );
 
@@ -113,6 +117,7 @@ onMounted(() => {
     mathliveFontsDirectory: props.mathliveFontsDirectory,
     minHeight: props.minHeight,
     statusLine: props.statusLine,
+    theme: props.theme,
     uploadImage: props.uploadImage,
     uploadAudio: props.uploadAudio,
     uploadFile: props.uploadFile,
@@ -153,6 +158,7 @@ watch(() => props.editable, (editable) => ui.value?.setEditable(editable));
 watch(() => props.locale, (locale) => ui.value?.setLocale(locale));
 watch(() => props.messages, (messages) => ui.value?.setMessages(messages), { deep: true });
 watch(() => props.limits, (limits) => limits && ui.value?.setLimits(limits), { deep: true });
+watch(() => props.theme, (theme) => ui.value?.setTheme(theme));
 
 defineExpose({
   getHTML: () => ui.value?.core.getHTML() ?? '',

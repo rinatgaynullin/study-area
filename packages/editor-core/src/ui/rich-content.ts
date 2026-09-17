@@ -1,5 +1,6 @@
 import { DEFAULT_FORMULA_FONT_SIZE_PX, renderMathML } from '../formula/mathjax';
 import { prepareIncomingHtml } from '../prepare-html';
+import { applyTheme, type EditorTheme } from './theme';
 
 export interface RichContentOptions {
   /** Элемент, который станет вьюером: получает классы и содержимое. */
@@ -9,11 +10,15 @@ export interface RichContentOptions {
   formulaScale?: number;
   /** Разбирать разметку старого редактора (Froala + Wiris). */
   legacy?: boolean;
+  /** Тема: светлая, тёмная или как в системе. Или класс `rte-theme-dark` на предке. */
+  theme?: EditorTheme;
   /** Все формулы, ждавшие отрисовки, отрисованы. */
   onRendered?(): void;
 }
 
-export type RichContentUpdate = Partial<Pick<RichContentOptions, 'html' | 'formulaScale' | 'legacy'>>;
+export type RichContentUpdate = Partial<
+  Pick<RichContentOptions, 'html' | 'formulaScale' | 'legacy' | 'theme'>
+>;
 
 export interface RichContent {
   readonly element: HTMLElement;
@@ -47,6 +52,7 @@ export function createRichContent(options: RichContentOptions): RichContent {
   let destroyed = false;
 
   element.classList.add('rte-content-root', 'rte-content');
+  let releaseTheme = applyTheme(element, options.theme ?? 'light');
 
   function paint(): void {
     element.classList.toggle('rte-legacy', legacy);
@@ -82,6 +88,10 @@ export function createRichContent(options: RichContentOptions): RichContent {
     if (next.html !== undefined) html = next.html;
     if (next.formulaScale !== undefined) formulaScale = next.formulaScale;
     if (next.legacy !== undefined) legacy = next.legacy;
+    if (next.theme !== undefined) {
+      releaseTheme();
+      releaseTheme = applyTheme(element, next.theme);
+    }
     paint();
     await renderPendingFormulas();
   }
@@ -95,8 +105,9 @@ export function createRichContent(options: RichContentOptions): RichContent {
     renderPendingFormulas,
     destroy: () => {
       destroyed = true;
+      releaseTheme();
       element.replaceChildren();
-      element.classList.remove('rte-content-root', 'rte-content', 'rte-legacy');
+      element.classList.remove('rte-content-root', 'rte-content', 'rte-legacy', 'rte-theme-dark');
     },
   };
 }
