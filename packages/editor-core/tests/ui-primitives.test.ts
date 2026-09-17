@@ -60,6 +60,33 @@ describe('клавиатура в меню', () => {
   });
 });
 
+describe('панель дропдауна', () => {
+  it('это поповер с ролью меню: фиксированное позиционирование не обрежет её', () => {
+    const dropdown = createDropdown({
+      label: 'Меню',
+      renderPanel: () => document.createElement('div'),
+    });
+    document.body.appendChild(dropdown.element);
+
+    const panel = dropdown.element.querySelector('.rte-dropdown__panel')!;
+    expect(panel.classList.contains('rte-popover')).toBe(true);
+    expect(panel.getAttribute('role')).toBe('menu');
+    expect(panel.hasAttribute('hidden')).toBe(true);
+
+    dropdown.button.click();
+    expect(panel.hasAttribute('hidden')).toBe(false);
+    expect(dropdown.button.getAttribute('aria-expanded')).toBe('true');
+
+    // Клик по собственной кнопке — не «мимо панели»: он закрывает, а не
+    // закрывает-и-открывает.
+    dropdown.button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(panel.hasAttribute('hidden')).toBe(false);
+    dropdown.button.click();
+    expect(panel.hasAttribute('hidden')).toBe(true);
+    dropdown.destroy();
+  });
+});
+
 describe('слушатели документа у оверлеев', () => {
   it('дропдаун слушает документ только пока открыт', () => {
     watchDocument();

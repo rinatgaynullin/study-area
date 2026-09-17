@@ -545,20 +545,6 @@
   display: inline-flex;
 }
 
-.rte-dropdown__panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 20;
-  min-width: 180px;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 4px;
-  background: var(--rte-color-bg);
-  border: 1px solid var(--rte-color-border);
-  border-radius: var(--rte-radius);
-  box-shadow: var(--rte-shadow);
-}
 
 .rte-menu__item {
   display: flex;
@@ -1148,6 +1134,17 @@
   font-family: var(--rte-font-family, inherit);
   font-size: 13px;
   color: var(--rte-color-text, #414141);
+}
+
+/*
+ * Панель дропдауна — поповер: фиксированное позиционирование не даёт
+ * `overflow: hidden` корня обрезать длинное меню у низкого редактора.
+ */
+.rte-popover.rte-dropdown__panel {
+  min-width: 180px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
 }
 
 .rte-link-popover {

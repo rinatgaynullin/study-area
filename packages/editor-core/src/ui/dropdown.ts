@@ -1,4 +1,5 @@
-import { createDisposer, el, icon, on, type Unsubscribe } from './dom';
+import { createDisposer, el, icon, on } from './dom';
+import { createPopover } from './popover';
 import type { UiComponent } from './types';
 
 export interface DropdownOptions {
@@ -33,6 +34,11 @@ function menuItemsOf(panel: HTMLElement): HTMLButtonElement[] {
  * выделения (какой цвет активен, какой уровень заголовка), а держать её в
  * актуальном состоянии при закрытом виде — лишняя работа на каждое нажатие
  * клавиши.
+ *
+ * Сама панель — поповер с фиксированным позиционированием: её не обрежет ни
+ * `overflow: hidden` у корня редактора, ни низкий редактор под коротким
+ * документом, а слушатели документа, закрытие по клику мимо и Escape,
+ * удержание в границах окна — у поповера уже есть.
  */
 export function createDropdown(options: DropdownOptions): Dropdown {
   const disposer = createDisposer();
@@ -57,61 +63,50 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     children: [label, caret],
   });
 
-  const panel = el('div', { class: 'rte-dropdown__panel', attrs: { role: 'menu' } });
-  panel.hidden = true;
+  const element = el('div', { class: 'rte-dropdown', children: [button] });
 
-  const element = el('div', { class: 'rte-dropdown', children: [button, panel] });
-
-  let isVisible = false;
-
-  /**
-   * Слушатели документа живут только пока панель открыта. Закрытый дропдаун
-   * не должен стоить странице ничего: на ней может быть несколько редакторов,
-   * и у каждого — по семь панелей.
-   */
-  let releaseDocument: Unsubscribe | null = null;
+  const popover = createPopover({
+    role: 'menu',
+    className: 'rte-dropdown__panel',
+    align: 'start',
+    offset: 4,
+    // Кнопка — «внутри»: иначе клик по ней закрыл бы панель по mousedown и
+    // тут же открыл заново по click.
+    isInside: (target) => element.contains(target),
+    onClose: () => {
+      popover.body.replaceChildren();
+      button.setAttribute('aria-expanded', 'false');
+      button.classList.remove('rte-btn--active');
+    },
+  });
+  element.appendChild(popover.element);
 
   function close(): void {
-    if (!isVisible) return;
-    isVisible = false;
-    panel.hidden = true;
-    panel.replaceChildren();
-    button.setAttribute('aria-expanded', 'false');
-    button.classList.remove('rte-btn--active');
-    releaseDocument?.();
-    releaseDocument = null;
+    popover.close();
   }
 
   function open(): void {
-    if (isVisible) return;
-    isVisible = true;
-    panel.replaceChildren(options.renderPanel(close));
-    panel.hidden = false;
+    if (popover.isVisible) return;
+    popover.body.replaceChildren(options.renderPanel(close));
     button.setAttribute('aria-expanded', 'true');
     button.classList.add('rte-btn--active');
-
-    const offMousedown = on(document, 'mousedown', (event) => {
-      const target = event.target as Node | null;
-      if (target && element.contains(target)) return;
-      close();
-    });
-    const offKeydown = on(document, 'keydown', (event) => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      close();
-      button.focus();
-    });
-    releaseDocument = () => {
-      offMousedown();
-      offKeydown();
-    };
+    popover.open(button.getBoundingClientRect());
   }
 
-  // Стрелки ходят по пунктам по кругу, Home/End — к краям: меню без этого
-  // читалке и клавиатуре доступно только через Tab по всем пунктам подряд.
   disposer.add(
-    on(panel, 'keydown', (event) => {
-      const items = menuItemsOf(panel);
+    on(popover.element, 'keydown', (event) => {
+      // Escape из меню: фокус был в нём — вернуть на кнопку, иначе он
+      // провалится в никуда. Escape из документа обрабатывает сам поповер.
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        close();
+        button.focus();
+        return;
+      }
+
+      // Стрелки ходят по пунктам по кругу, Home/End — к краям: меню без этого
+      // читалке и клавиатуре доступно только через Tab по всем пунктам подряд.
+      const items = menuItemsOf(popover.body);
       if (items.length === 0) return;
 
       const current = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -135,14 +130,14 @@ export function createDropdown(options: DropdownOptions): Dropdown {
   disposer.add(
     on(button, 'click', (event) => {
       event.preventDefault();
-      if (isVisible) {
+      if (popover.isVisible) {
         close();
         return;
       }
       open();
       // Открыли с клавиатуры (у синтетического клика detail = 0) — фокус
       // должен оказаться в меню, а не остаться на кнопке.
-      if (event.detail === 0) menuItemsOf(panel)[0]?.focus();
+      if (event.detail === 0) menuItemsOf(popover.body)[0]?.focus();
     }),
   );
 
@@ -152,7 +147,7 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     close,
     setActive: (active: boolean) => {
       // Открытая панель и так подсвечена: не даём состоянию её погасить.
-      if (!isVisible) button.classList.toggle('rte-btn--active', active);
+      if (!popover.isVisible) button.classList.toggle('rte-btn--active', active);
     },
     setDisabled: (disabled: boolean) => {
       button.disabled = disabled;
@@ -167,7 +162,7 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       label = fresh;
     },
     destroy: () => {
-      releaseDocument?.();
+      popover.destroy();
       disposer.dispose();
       element.remove();
     },
