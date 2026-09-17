@@ -47,7 +47,7 @@ against the real pipeline by an automated test.
 ## MathLive's own UI is only partly translatable
 
 MathLive bundles translations for de, en, es, fr, it, ja and pl — not Russian.
-`packages/editor-vue/src/i18n/mathlive.ts` supplies the missing Russian table
+`packages/editor-core/src/i18n/mathlive.ts` supplies the missing Russian table
 and merges it in via `MathfieldElement.strings`, covering all 83 prose keys of
 MathLive's context menu and tooltips. Two consequences:
 
