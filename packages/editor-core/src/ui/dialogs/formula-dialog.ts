@@ -170,17 +170,17 @@ export function createFormulaDialog(
     status.textContent = isFailed ? t('formula_invalid') : t('formula_loading');
   }
 
+  function syncTab(tab: HTMLButtonElement, tabType: FormulaType): void {
+    const isActive = type === tabType;
+    tab.className = isActive
+      ? 'rte-formula-editor__tab rte-formula-editor__tab--active'
+      : 'rte-formula-editor__tab';
+    tab.setAttribute('aria-selected', String(isActive));
+  }
+
   function syncTabs(): void {
-    for (const [tab, tabType] of [
-      [mathTab, 'math'],
-      [chemTab, 'chem'],
-    ] as const) {
-      const isActive = type === tabType;
-      tab.className = isActive
-        ? 'rte-formula-editor__tab rte-formula-editor__tab--active'
-        : 'rte-formula-editor__tab';
-      tab.setAttribute('aria-selected', String(isActive));
-    }
+    syncTab(mathTab, 'math');
+    syncTab(chemTab, 'chem');
   }
 
   function syncFooter(): void {
@@ -228,12 +228,16 @@ export function createFormulaDialog(
     // Галерея успела смениться — результат уже не для этой кнопки.
     if (token !== galleryToken) return;
 
-    // Разметка от MathJax, уже прошедшая санитайзер, — не пользовательская.
-    if (svg) target.innerHTML = svg;
+    if (svg) {
+      // Разметка от MathJax, уже прошедшая санитайзер, — не пользовательская.
+      target.innerHTML = svg;
+      return;
+    }
+
     // Не отрисовалось — показываем исходный LaTeX. Заглушка «…» означает
-    // «рисуем сейчас», а не «не получилось», иначе кнопка врёт о своём
+    // «рисуем сейчас», а не «не получилось»: иначе кнопка врала бы о своём
     // состоянии до конца жизни диалога.
-    else target.textContent = template.preview;
+    target.textContent = template.preview;
   }
 
   /**
@@ -247,31 +251,33 @@ export function createFormulaDialog(
   function renderGallery(): void {
     const token = (galleryToken += 1);
     const category = findActiveCategory();
-    const buttons: HTMLElement[] = [];
 
-    for (const template of category?.templates ?? []) {
-      const target = el('span', { class: 'rte-formula-editor__template-preview' });
+    if (!category) {
+      gallery.replaceChildren();
+      return;
+    }
 
-      // Кэш читаем синхронно: иначе уже отрисованная галерея на каждом
-      // открытии моргала бы заглушкой в ожидании микрозадачи.
-      const cached = category ? getCachedLatexPreview(template.preview, category.type) : undefined;
-      if (cached) {
-        target.innerHTML = cached;
-      } else if (category) {
-        target.textContent = PREVIEW_PLACEHOLDER;
-        void fillTemplatePreview(target, template, category.type, token);
-      }
+    gallery.replaceChildren(
+      ...category.templates.map((template) => {
+        const target = el('span', { class: 'rte-formula-editor__template-preview' });
 
-      buttons.push(
-        el('button', {
+        // Кэш читаем синхронно: иначе уже отрисованная галерея на каждом
+        // открытии моргала бы заглушкой в ожидании микрозадачи.
+        const cached = getCachedLatexPreview(template.preview, category.type);
+        if (cached) {
+          target.innerHTML = cached;
+        } else {
+          target.textContent = PREVIEW_PLACEHOLDER;
+          void fillTemplatePreview(target, template, category.type, token);
+        }
+
+        return el('button', {
           class: 'rte-formula-editor__template',
           attrs: { type: 'button', 'data-template-id': template.id },
           children: [target],
-        }),
-      );
-    }
-
-    gallery.replaceChildren(...buttons);
+        });
+      }),
+    );
   }
 
   function showPreviewMessage(message: string): void {
@@ -341,19 +347,19 @@ export function createFormulaDialog(
 
     setStatus('loading');
     try {
-      const { MathfieldElement: MathfieldCtor } = await import('mathlive');
-      MathfieldCtor.soundsDirectory = null;
+      const { MathfieldElement: MathfieldConstructor } = await import('mathlive');
+      MathfieldConstructor.soundsDirectory = null;
       if (options.fontsDirectory !== undefined) {
-        MathfieldCtor.fontsDirectory = options.fontsDirectory;
+        MathfieldConstructor.fontsDirectory = options.fontsDirectory;
       }
 
       // Русского перевода MathLive не поставляет, и без этой таблицы его меню
       // осталось бы английским. Локаль и строки живут на самом классе, а не на
       // экземпляре, поэтому задаются один раз — при загрузке.
-      MathfieldCtor.strings = MATHLIVE_STRINGS;
-      MathfieldCtor.locale = options.locale;
+      MathfieldConstructor.strings = MATHLIVE_STRINGS;
+      MathfieldConstructor.locale = options.locale;
 
-      const created = new MathfieldCtor({
+      const created = new MathfieldConstructor({
         defaultMode: 'math',
         // Диалог — десктопная форма с галереей шаблонов; собственная экранная
         // клавиатура MathLive дублирует её и закрывает превью. 'manual'
@@ -419,8 +425,7 @@ export function createFormulaDialog(
     renderGallery();
 
     modal.open();
-    openToken += 1;
-    void prepareField(openToken);
+    void prepareField((openToken += 1));
   }
 
   // --------------------------------------------------------------- события
