@@ -276,7 +276,10 @@ describe('configured limits', () => {
     MockMediaRecorder.instances[0].emitChunk(150);
 
     expect(onError).toHaveBeenCalledTimes(1);
-    expect((onError.mock.calls[0][0] as RichEditorError).code).toBe('file-too-large');
+    const error = onError.mock.calls[0][0] as RichEditorError;
+    expect(error.code).toBe('file-too-large');
+    // Про размер, а не про длительность: текст должен называть настоящий предел.
+    expect(error.message).toContain('100 B');
     expect(recorder.getState()).toBe('paused');
   });
 

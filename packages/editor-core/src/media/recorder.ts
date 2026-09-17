@@ -1,4 +1,5 @@
 import { RichEditorError, type Translate } from '../types';
+import { formatBytes } from '../utils/format';
 
 export type RecorderState = 'idle' | 'recording' | 'paused' | 'stopped';
 
@@ -230,7 +231,7 @@ export class VoiceRecorder {
       this.options.onError?.(
         new RichEditorError(
           'file-too-large',
-          this.options.t('error_audio_too_long', { seconds: this.options.maxDurationSec }),
+          this.options.t('error_audio_too_large', { max: formatBytes(this.options.maxSizeBytes) }),
         ),
       );
       this.stopAtLimit('size');
