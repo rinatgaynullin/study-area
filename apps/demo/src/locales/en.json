@@ -120,5 +120,9 @@
   "common_apply": "Apply",
   "editor_placeholder": "Start typing…",
   "editor_aria_label": "Rich text editor",
-  "error_audio_too_large": "The recording exceeds {max}."
+  "error_audio_too_large": "The recording exceeds {max}.",
+  "toolbar_label": "Formatting toolbar",
+  "upload_image": "Uploading image…",
+  "upload_audio": "Uploading audio…",
+  "upload_file": "Uploading file…"
 }

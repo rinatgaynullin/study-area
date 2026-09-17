@@ -678,6 +678,21 @@
   cursor: pointer;
 }
 
+/* ------------------------------------------------------------------ status */
+
+/* Строка под тулбаром: идущие загрузки и последняя ошибка. */
+.rte-status {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--rte-color-muted);
+  background: var(--rte-color-subtle-bg);
+  border-bottom: 1px solid var(--rte-color-border);
+}
+
+.rte-status--error {
+  color: var(--rte-color-danger);
+}
+
 /* ----------------------------------------------------------------- surface */
 
 .rte-surface {

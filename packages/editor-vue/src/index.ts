@@ -73,6 +73,7 @@ export {
   type Messages,
   type UploadAdapter,
   type UploadContext,
+  type UploadEvent,
   type UploadKind,
   type UploadResult,
 } from '@rich-editor/core';

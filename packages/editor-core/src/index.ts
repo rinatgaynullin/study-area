@@ -47,6 +47,7 @@ export {
   type Translate,
   type UploadAdapter,
   type UploadContext,
+  type UploadEvent,
   type UploadKind,
   type UploadResult,
 } from './types';
