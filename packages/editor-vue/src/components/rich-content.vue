@@ -2,24 +2,16 @@
 // Единая таблица стилей пакета. Импорт живёт в компонентах, а не в index.ts,
 // который по соглашению содержит только реэкспорты.
 import '../styles/index.css';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import {
-  DEFAULT_FORMULA_FONT_SIZE_PX,
-  prepareIncomingHtml,
-  renderMathML,
-} from '@rich-editor/core';
+import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { createRichContent, type RichContent } from '@rich-editor/core';
 
 /**
- * Read-only viewer for documents produced by `<RichEditor />`.
+ * Обёртка над ванильным вьюером `createRichContent`.
  *
- * It loads none of the editing stack — no ProseMirror, no MathLive — and simply
- * renders sanitized HTML. Formulas exported by the editor already carry their
- * MathJax SVG, so nothing extra loads for them; formulas that arrive with only
- * `data-mathml` (for example from a backend that stores just the source) are
- * rendered on the fly from that MathML.
- *
- * Rendering happens on the client: sanitization needs a DOM, so under SSR the
- * component renders an empty shell and fills it on hydration.
+ * Сам вьюер живёт в ядре: санитизация, отрисовка формул без SVG, масштаб.
+ * Компоненту остаются пропы и событие. Создаётся при монтировании — на
+ * сервере санитайзеру негде работать, поэтому под SSR компонент отдаёт пустую
+ * оболочку и наполняет её на клиенте.
  */
 const props = withDefaults(
   defineProps<{
@@ -35,70 +27,41 @@ const props = withDefaults(
 const emit = defineEmits<{ (event: 'rendered'): void }>();
 
 const root = ref<HTMLElement | null>(null);
-const mounted = ref(false);
-
-// `prepareIncomingHtml` needs a DOM, so it must not run during SSR.
-const safeHtml = computed(() =>
-  mounted.value ? prepareIncomingHtml(props.html, { legacy: props.legacy }) : '',
-);
-
-async function renderPendingFormulas(): Promise<void> {
-  const container = root.value;
-  if (!container) return;
-
-  const formulas = Array.from(container.querySelectorAll<HTMLElement>('span[data-formula]'));
-
-  await Promise.all(
-    formulas.map(async (formula) => {
-      const host =
-        formula.querySelector<HTMLElement>('[data-render-host]') ??
-        formula.appendChild(createRenderHost());
-
-      // SVG, приехавший вместе с документом, уже нужного размера — если только
-      // хост не попросил другой масштаб: пиксели в разметке на font-size не
-      // реагируют, поэтому единственный способ его применить — перерисовать.
-      const isDefaultScale = props.formulaScale === 1;
-      if (host.childElementCount > 0 && isDefaultScale) return;
-
-      const svg = await renderMathML(formula.getAttribute('data-mathml') ?? '', {
-        fontSizePx: DEFAULT_FORMULA_FONT_SIZE_PX * props.formulaScale,
-      });
-      if (svg) host.innerHTML = svg;
-    }),
-  );
-
-  emit('rendered');
-}
-
-function createRenderHost(): HTMLElement {
-  const host = document.createElement('span');
-  host.className = 'rte-formula__render';
-  host.setAttribute('data-render-host', 'true');
-  return host;
-}
+const viewer = shallowRef<RichContent | null>(null);
 
 onMounted(() => {
-  mounted.value = true;
+  if (!root.value) return;
+  viewer.value = createRichContent({
+    element: root.value,
+    html: props.html,
+    formulaScale: props.formulaScale,
+    legacy: props.legacy,
+    onRendered: () => emit('rendered'),
+  });
+});
+
+onBeforeUnmount(() => {
+  viewer.value?.destroy();
+  viewer.value = null;
 });
 
 watch(
-  [safeHtml, () => props.formulaScale],
-  async () => {
-    // v-html replaces the subtree, so re-render after Vue has patched it.
-    await nextTick();
-    await renderPendingFormulas();
+  () => [props.html, props.formulaScale, props.legacy] as const,
+  ([html, formulaScale, legacy]) => {
+    void viewer.value?.update({ html, formulaScale, legacy });
   },
-  { immediate: true },
 );
 
-defineExpose({ renderPendingFormulas });
+defineExpose({
+  renderPendingFormulas: () => viewer.value?.renderPendingFormulas() ?? Promise.resolve(),
+});
+
+// Содержимое ставит ядро; классы темы стоят и в шаблоне, чтобы серверная
+// оболочка под SSR уже несла их. Комментариев в шаблоне нет намеренно: рядом с
+// корневым элементом они делают компонент фрагментом, и класс с хоста
+// перестаёт проваливаться на корень.
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="rte-content-root rte-content"
-    :class="{ 'rte-legacy': legacy }"
-    v-html="safeHtml"
-  />
+  <div ref="root" class="rte-content-root rte-content" :class="{ 'rte-legacy': legacy }" />
 </template>

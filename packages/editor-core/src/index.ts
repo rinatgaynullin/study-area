@@ -1,12 +1,14 @@
-export { RichEditorCore, prepareIncomingHtml } from './editor';
-export type { PrepareIncomingHtmlOptions } from './editor';
+export { RichEditorCore } from './editor';
+export { prepareIncomingHtml, type PrepareIncomingHtmlOptions } from './prepare-html';
 export { decodeWirisMathml, upgradeLegacyHtml } from './legacy';
 export { DEFAULT_FORMULA_FONT_SIZE_PX } from './formula/mathjax';
 export { ICONS, type IconName } from './ui/icons';
 
-// Ванильный интерфейс: редактор целиком, без фреймворка.
+// Ванильный интерфейс: редактор целиком и вьюер, без фреймворка.
 export { createRichEditor } from './ui/rich-editor-ui';
 export type { RichEditorUi, RichEditorUiOptions } from './ui/rich-editor-ui';
+export { createRichContent } from './ui/rich-content';
+export type { RichContent, RichContentOptions, RichContentUpdate } from './ui/rich-content';
 export {
   TOOLBAR_PRESETS,
   resolveToolbar,

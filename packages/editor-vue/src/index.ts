@@ -12,6 +12,7 @@ export { default as RteIcon } from './components/rte-icon.vue';
  */
 export {
   createRichEditor,
+  createRichContent,
   createToolbar,
   createModal,
   createPopover,
@@ -31,6 +32,8 @@ export {
   type Popover,
   type RichEditorUi,
   type RichEditorUiOptions,
+  type RichContent as RichContentViewer,
+  type RichContentOptions,
   type Toolbar,
   type ToolbarConfig,
   type ToolbarGroupConfig,

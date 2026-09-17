@@ -22,11 +22,9 @@ import {
   type UploadResult,
 } from './types';
 import { createI18n, type I18n } from './i18n';
-import { sanitizeHtml } from './security/sanitize';
-import { inlineMathMLToFormulaNodes } from './formula/import';
+import { prepareIncomingHtml } from './prepare-html';
 import { StrictTextStyle } from './extensions/strict-text-style';
 import { LegacyHighlight } from './legacy/legacy-highlight';
-import { upgradeLegacyHtml } from './legacy/upgrade-legacy-html';
 import { whenFormulasReady } from './formula/mathjax';
 import { normalizeMathML } from './formula/mathml';
 import { AttachmentNode } from './nodes/attachment';
@@ -40,24 +38,8 @@ import { readTextFile, textToParagraphs } from './media/text-file';
 // который по соглашению содержит только реэкспорты.
 import './styles.css';
 
-export interface PrepareIncomingHtmlOptions {
-  /** Разбирать разметку старого редактора (Froala + Wiris). */
-  legacy?: boolean;
-}
-
 /** Ниже этого размера картинку уже не за что ухватить. */
 const IMAGE_MIN_SIZE = 40;
-
-/** Sanitizes and upgrades HTML arriving from outside the editor. */
-export function prepareIncomingHtml(
-  html: string,
-  options: PrepareIncomingHtmlOptions = {},
-): string {
-  // Legacy-разбор идёт первым: он восстанавливает MathML из `data-mathml`, а
-  // дальше формула проходит общий путь `<math>` вместе с остальными.
-  const upgraded = options.legacy ? upgradeLegacyHtml(html) : html;
-  return sanitizeHtml(inlineMathMLToFormulaNodes(upgraded));
-}
 
 export class RichEditorCore {
   readonly editor: Editor;
