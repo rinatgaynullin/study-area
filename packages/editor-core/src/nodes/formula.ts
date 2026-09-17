@@ -1,7 +1,11 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeSelection } from '@tiptap/pm/state';
 import type { FormulaPayload, FormulaType } from '../types';
-import { getCachedFormulaSvg, renderMathML } from '../formula/mathjax';
+import {
+  DEFAULT_FORMULA_FONT_SIZE_PX,
+  getCachedFormulaSvg,
+  renderMathML,
+} from '../formula/mathjax';
 import { extractFormulaType, normalizeMathML } from '../formula/mathml';
 
 export interface FormulaOptions {
@@ -24,12 +28,15 @@ declare module '@tiptap/core' {
 export const FORMULA_NODE_NAME = 'formula';
 
 /**
- * MathJax sizes its SVG in `ex` units, so the whole formula — dimensions and
- * baseline offset alike — scales with the host element's font size. That keeps
- * one cached render usable at any scale.
+ * Кегль, под который рендерится формула.
+ *
+ * Раньше масштаб задавался `font-size` на элементе-хосте: SVG был размечен в
+ * ex и тянулся за кеглем. Теперь размер запечён в пикселях — ровно затем,
+ * чтобы формула не зависела от окружения, — и на `font-size` уже не реагирует.
+ * Поэтому масштаб входит в сам рендер.
  */
-function applyScale(host: HTMLElement, scale: number): void {
-  if (scale !== 1) host.style.fontSize = `${scale}em`;
+function formulaFontSize(scale: number): number {
+  return DEFAULT_FORMULA_FONT_SIZE_PX * scale;
 }
 
 /**
@@ -96,9 +103,8 @@ export const FormulaNode = Node.create<FormulaOptions>({
     const host = document.createElement('span');
     host.className = 'rte-formula__render';
     host.setAttribute('data-render-host', 'true');
-    applyScale(host, this.options.scale);
 
-    const svg = getCachedFormulaSvg(mathml);
+    const svg = getCachedFormulaSvg(mathml, formulaFontSize(this.options.scale));
     // Already sanitized when it entered the cache.
     if (svg) host.innerHTML = svg;
 
@@ -116,8 +122,9 @@ export const FormulaNode = Node.create<FormulaOptions>({
       const host = document.createElement('span');
       host.className = 'rte-formula__render';
       host.setAttribute('data-render-host', 'true');
-      applyScale(host, this.options.scale);
       dom.appendChild(host);
+
+      const fontSizePx = formulaFontSize(this.options.scale);
 
       let destroyed = false;
       let currentMathml = '';
@@ -127,14 +134,14 @@ export const FormulaNode = Node.create<FormulaOptions>({
         dom.setAttribute('data-mathml', mathml);
         dom.setAttribute('data-formula-type', type);
 
-        const cached = getCachedFormulaSvg(mathml);
+        const cached = getCachedFormulaSvg(mathml, fontSizePx);
         if (cached !== undefined) {
           host.innerHTML = cached;
           return;
         }
 
         host.textContent = '…';
-        void renderMathML(mathml).then((svg) => {
+        void renderMathML(mathml, { fontSizePx }).then((svg) => {
           // Guard against a stale render landing after the node changed again.
           if (destroyed || currentMathml !== mathml) return;
           if (svg) host.innerHTML = svg;

@@ -46,12 +46,38 @@ describe('MathJax SVG output', () => {
     expect(second).toBe(first);
   });
 
-  // Sizes are in `ex`, so scaling is a font-size concern on the host element,
-  // not a second render. One cached SVG therefore serves every scale.
-  it('sizes the SVG in ex units so a host can scale it with CSS', async () => {
+  /**
+   * Размер запекается в пикселях. Браузерный `ex` считается по x-height
+   * унаследованного шрифта, поэтому в ex одна и та же формула визуально
+   * скачет: в абзаце она была 16.6px, а в заголовке 29.5px.
+   */
+  it('фиксирует размер в пикселях, а не в ex', async () => {
     const svg = await renderMathML(await latexToMathML('x', 'math'));
 
-    expect(svg).toMatch(/width="[\d.]+ex"/);
-    expect(svg).toMatch(/height="[\d.]+ex"/);
+    expect(svg).toMatch(/width="[\d.]+px"/);
+    expect(svg).toMatch(/height="[\d.]+px"/);
+    expect(svg).not.toMatch(/(width|height)="[\d.]+ex"/);
+    // Смещение базовой линии страдало ровно так же.
+    expect(svg).not.toMatch(/vertical-align:\s*[-\d.]+ex/);
+  });
+
+  it('масштабирует формулу пропорционально запрошенному кеглю', async () => {
+    const mathml = await latexToMathML('x', 'math');
+    const normal = await renderMathML(mathml);
+    const doubled = await renderMathML(mathml, { fontSizePx: 30 });
+
+    const widthOf = (svg: string) => Number.parseFloat(/width="([\d.]+)px"/.exec(svg)?.[1] ?? '0');
+
+    expect(widthOf(normal)).toBeGreaterThan(0);
+    // Кегль по умолчанию — 15px, значит 30px даёт ровно вдвое больше.
+    expect(widthOf(doubled) / widthOf(normal)).toBeCloseTo(2, 1);
+  });
+
+  it('не выдаёт один и тот же SVG для разных кеглей', async () => {
+    const mathml = await latexToMathML('y', 'math');
+
+    expect(await renderMathML(mathml, { fontSizePx: 15 })).not.toBe(
+      await renderMathML(mathml, { fontSizePx: 24 }),
+    );
   });
 });
