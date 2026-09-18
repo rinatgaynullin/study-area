@@ -702,6 +702,20 @@ A project site is served from `/<repo>/`, so the workflow passes that prefix to
 the build as `DEMO_BASE`, which the demo's Vite config maps to `base`. It is
 unset locally, which keeps `npm run dev` and the Playwright suite on `/`.
 
+The demo has three pages, one per build, linked from a switcher at the top:
+
+| Page | Build | Published at |
+| --- | --- | --- |
+| `index.html` | `@rich-editor/vue` | https://rinatgaynullin.github.io/study-area/ |
+| `vanilla.html` | `@rich-editor/core` (`createRichEditor`) | https://rinatgaynullin.github.io/study-area/vanilla.html |
+| `standalone.html` | `@rich-editor/standalone` served as static files | https://rinatgaynullin.github.io/study-area/standalone.html |
+
+The first two run against package sources through Vite. The standalone page
+loads the built `dist` from `public/standalone/` with one module script and
+no bundler in between — exactly what a Django template or a CDN would do;
+`scripts/sync-standalone.mjs` rebuilds and copies it before `npm run dev`
+and `npm run build`.
+
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — package split, data flow, plugin boundaries

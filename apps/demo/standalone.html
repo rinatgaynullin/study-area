@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Автономная сборка редактора</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <!-- Сборка лежит в public/standalone и подключается как обычная статика:
+         vite-ignore оставляет адреса как есть, относительно страницы. -->
+    <link rel="stylesheet" href="./standalone/styles.css" vite-ignore />
+    <style>body { font-family: system-ui, sans-serif; margin: 24px; } h1 { font-size: 18px; }</style>
+  </head>
+  <body>
+    <nav class="demo__variants" aria-label="Варианты сборки">
+      <a href="./">Vue</a>
+      <a href="./vanilla.html">Vanilla</a>
+      <a href="./standalone.html" aria-current="page">Standalone</a>
+    </nav>
+    <h1>Редактор из @rich-editor/standalone: один module-скрипт, без бандлера</h1>
+    <div id="editor"></div>
+    <h1>Вьюер из viewer.js той же сборки</h1>
+    <div id="viewer"></div>
+    <script type="module" src="./standalone-demo.js" vite-ignore></script>
+  </body>
+</html>

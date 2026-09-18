@@ -23,6 +23,28 @@ body {
   font-size: 24px;
 }
 
+/* Переключатель между тремя сборками: Vue, ванильная и автономная. */
+.demo__variants {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.demo__variants a {
+  padding: 4px 12px;
+  border: 1px solid #dedce3;
+  border-radius: 999px;
+  color: inherit;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.demo__variants a[aria-current='page'] {
+  background: #ff892e;
+  border-color: #ff892e;
+  color: #fff;
+}
+
 .demo__subtitle {
   margin: 0;
   color: #5a5a5a;
