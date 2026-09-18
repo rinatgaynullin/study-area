@@ -13,15 +13,16 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w @rich-editor/core && npm run build -w @rich-editor/vue && node scripts/copy-legacy-css.mjs",
+    "build": "npm run build -w @rich-editor/core && npm run build -w @rich-editor/vue && node scripts/copy-legacy-css.mjs && npm run build -w @rich-editor/standalone",
     "build:demo": "npm run build -w @rich-editor/demo",
     "dev": "npm run dev -w @rich-editor/demo",
-    "typecheck": "npm run typecheck -w @rich-editor/core && npm run typecheck -w @rich-editor/vue && npm run typecheck -w @rich-editor/demo",
+    "typecheck": "npm run typecheck -w @rich-editor/core && npm run typecheck -w @rich-editor/vue && npm run typecheck -w @rich-editor/standalone && npm run typecheck -w @rich-editor/demo",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "ci": "npm run typecheck && npm run test && npm run build"
+    "ci": "npm run typecheck && npm run test && npm run build",
+    "smoke:standalone": "npm run smoke -w @rich-editor/standalone"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",

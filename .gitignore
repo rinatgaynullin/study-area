@@ -19,3 +19,8 @@ blob-report/
 # Logs
 *.log
 npm-debug.log*
+
+# Python (django-rich-editor)
+__pycache__/
+.pytest_cache/
+*.egg-info/

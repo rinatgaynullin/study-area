@@ -7,6 +7,18 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/standalone`: a self-contained build for hosts without a
+  bundler — `editor.js` and the light `viewer.js` as ES modules with lazy
+  chunks, `styles.css`, `legacy.css` and the MathLive fonts next to the
+  bundle (`mathliveFontsDirectory` defaults to that folder). `npm run
+  smoke:standalone` checks the built files in a browser served as static.
+- `django-rich-editor`: Django widget (`RichEditorWidget`), form field with
+  server-side sanitization (`RichTextFormField`, `nh3`, the editor's own
+  allowlist — a test keeps the Python copy equal to the TypeScript source),
+  model field (`RichTextField`), upload views and template tags
+  (`rich_editor_assets`, `rich_viewer_assets`, `rich_content`); the widget's
+  script handles admin inlines and the admin theme toggle. The static build
+  is synced from `@rich-editor/standalone` before packaging.
 - Built-in dark theme: `theme: 'light' | 'dark' | 'auto'` on `createRichEditor`,
   `createRichContent`, `<RichEditor />` and `<RichContent />`; `setTheme()` and
   `update({ theme })` switch it later; the class `rte-theme-dark` on the element

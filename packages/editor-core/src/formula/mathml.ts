@@ -48,6 +48,17 @@ export function extractTexAnnotation(mathml: string): string | null {
   return match ? unescapeXml(match[1]).trim() : null;
 }
 
+/**
+ * Имя формулы для читалки. Картинка MathJax ей ни о чём не говорит, а
+ * вложенный LaTeX — самая честная запись формулы, какая у нас есть без
+ * речевого движка. Без аннотации остаётся текст MathML: символы без структуры,
+ * но лучше, чем «изображение». Живёт здесь, а не в узле: вьюеру нужна та же
+ * функция, а тянуть ради неё TipTap ему незачем.
+ */
+export function formulaAccessibleName(mathml: string): string {
+  return extractTexAnnotation(mathml) ?? mathml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
 /** Reads the formula kind recorded on the `<math>` element; defaults to `math`. */
 export function extractFormulaType(mathml: string): FormulaType {
   return /data-formula-type\s*=\s*["']chem["']/i.test(mathml) ? 'chem' : 'math';

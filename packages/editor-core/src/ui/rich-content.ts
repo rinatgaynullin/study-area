@@ -1,5 +1,5 @@
 import { DEFAULT_FORMULA_FONT_SIZE_PX, renderMathML } from '../formula/mathjax';
-import { formulaAccessibleName } from '../nodes/formula';
+import { formulaAccessibleName } from '../formula/mathml';
 import { prepareIncomingHtml } from '../prepare-html';
 import { applyTheme, type EditorTheme } from './theme';
 
