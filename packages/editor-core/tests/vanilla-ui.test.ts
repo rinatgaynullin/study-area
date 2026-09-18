@@ -174,21 +174,24 @@ describe('строка статуса', () => {
     const uploadImage = () => new Promise<{ url: string }>((resolve) => { finish = resolve; });
     const editor = mountEditor({ uploadImage });
     const status = editor.element.querySelector<HTMLElement>('.rte-status')!;
-    expect(status.hidden).toBe(true);
+    // Живая область существует и пустой: читалка объявляет только то, что
+    // появилось в уже существующем регионе. Пустую строку схлопывают стили.
+    expect(status.hidden).toBe(false);
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.textContent).toBe('');
 
     const file = new File([new Uint8Array(16)], 'a.png', { type: 'image/png' });
     const pending = editor.core.insertImageFile(file);
-    expect(status.hidden).toBe(false);
     expect(status.textContent).toBe('Загрузка изображения…');
 
     finish({ url: 'https://cdn.example.com/a.png' });
     await pending;
-    expect(status.hidden).toBe(true);
+    expect(status.textContent).toBe('');
+    expect(status.hidden).toBe(false);
 
     const huge = new File([new Uint8Array(16)], 'big.png', { type: 'image/png' });
     Object.defineProperty(huge, 'size', { value: 100 * 1024 * 1024 });
     await editor.core.insertImageFile(huge);
-    expect(status.hidden).toBe(false);
     expect(status.classList.contains('rte-status--error')).toBe(true);
     expect(status.textContent).toContain('big.png');
   });
@@ -309,5 +312,119 @@ describe('клавиатура из документа', () => {
     expect(dialog).not.toBeNull();
     expect(dialog!.querySelector('.rte-modal__title')?.textContent).toBe('Ссылка');
     expect(toolbarButton('Ссылка').getAttribute('aria-keyshortcuts')).toBe('Control+K');
+  });
+});
+
+describe('доступность диалогов', () => {
+  const nextFrame = (): Promise<void> =>
+    new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  const press = (target: Element, key: string): void => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  };
+
+  it('вкладки редактора формул — список вкладок со стрелками и панелью', () => {
+    mountEditor();
+    toolbarButton('Математическая формула').click();
+    const dialog = openDialog()!;
+
+    const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__tabs [role="tab"]')];
+    const [math, chem] = tabs;
+    const panel = dialog.querySelector<HTMLElement>('[role="tabpanel"]')!;
+
+    expect(math.getAttribute('aria-selected')).toBe('true');
+    expect(math.tabIndex).toBe(0);
+    expect(chem.tabIndex).toBe(-1);
+    expect(math.getAttribute('aria-controls')).toBe(panel.id);
+    expect(panel.getAttribute('aria-labelledby')).toBe(math.id);
+
+    math.focus();
+    press(math, 'ArrowRight');
+    expect(document.activeElement).toBe(chem);
+    expect(chem.getAttribute('aria-selected')).toBe('true');
+    expect(chem.tabIndex).toBe(0);
+    expect(panel.getAttribute('aria-labelledby')).toBe(chem.id);
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Химическая формула');
+
+    // По кругу: с последней вкладки вправо — на первую.
+    press(chem, 'ArrowRight');
+    expect(document.activeElement).toBe(math);
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Математическая формула');
+  });
+
+  it('категории шаблонов — второй список вкладок, шаблоны названы своим LaTeX', () => {
+    mountEditor();
+    toolbarButton('Математическая формула').click();
+    const dialog = openDialog()!;
+
+    const categories = [...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__categories [role="tab"]')];
+    const gallery = dialog.querySelector<HTMLElement>('.rte-formula-editor__gallery')!;
+    expect(categories.length).toBeGreaterThan(1);
+    expect(gallery.getAttribute('role')).toBe('tabpanel');
+    expect(gallery.getAttribute('aria-labelledby')).toBe(categories[0].id);
+    expect(categories[0].tabIndex).toBe(0);
+    expect(categories[1].tabIndex).toBe(-1);
+
+    categories[0].focus();
+    press(categories[0], 'ArrowRight');
+    const reRendered = [...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__categories [role="tab"]')];
+    expect(document.activeElement).toBe(reRendered[1]);
+    expect(reRendered[1].getAttribute('aria-selected')).toBe('true');
+    expect(gallery.getAttribute('aria-labelledby')).toBe(reRendered[1].id);
+
+    const template = gallery.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!;
+    expect(template.getAttribute('aria-label')).not.toBe('');
+    expect(template.getAttribute('aria-label')).toBe(template.title);
+    expect(template.querySelector('.rte-formula-editor__template-preview')?.getAttribute('aria-hidden')).toBe('true');
+    expect(dialog.querySelector('.rte-formula-editor__status')?.getAttribute('role')).toBe('status');
+  });
+
+  it('поповер ссылки назван, Escape из его поля возвращает каретку в текст', async () => {
+    const editor = mountEditor({
+      content: '<p><a href="https://example.com">ссылка</a> и текст</p>',
+    });
+    const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+    editor.core.editor.commands.setTextSelection(3);
+
+    const popover = editor.element.querySelector<HTMLElement>('.rte-popover:not(.rte-dropdown__panel)')!;
+    expect(popover.hidden).toBe(false);
+    expect(popover.getAttribute('role')).toBe('dialog');
+    expect(popover.getAttribute('aria-label')).toBe('Ссылка');
+
+    const href = popover.querySelector<HTMLInputElement>('input[type="url"]')!;
+    href.focus();
+    expect(document.activeElement).toBe(href);
+
+    press(href, 'Escape');
+    expect(popover.hidden).toBe(true);
+    await nextFrame();
+    expect(document.activeElement).toBe(content);
+
+    // Возврат фокуса и движение каретки по той же ссылке панель не возвращают:
+    // Escape что-то значит. Каретка вышла и вернулась — панель снова здесь.
+    editor.core.editor.commands.setTextSelection(5);
+    expect(popover.hidden).toBe(true);
+    editor.core.editor.commands.setTextSelection(12);
+    editor.core.editor.commands.setTextSelection(3);
+    expect(popover.hidden).toBe(false);
+  });
+
+  it('недопустимый адрес в диалоге ссылки объявляется и помечает поле', () => {
+    mountEditor();
+    toolbarButton('Ссылка').click();
+    const dialog = openDialog()!;
+    const href = dialog.querySelector<HTMLInputElement>('input[type="url"]')!;
+    const error = dialog.querySelector<HTMLElement>('.rte-field__error')!;
+
+    expect(error.getAttribute('role')).toBe('alert');
+    expect(error.hidden).toBe(true);
+
+    href.value = 'javascript:alert(1)';
+    [...dialog.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'Применить')!
+      .click();
+
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toBe('Недопустимый адрес ссылки');
+    expect(href.getAttribute('aria-invalid')).toBe('true');
   });
 });

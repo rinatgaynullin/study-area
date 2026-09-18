@@ -45,7 +45,7 @@ export function createLinkDialog(
     children: [el('span', { class: 'rte-field__label', text: t('link_url') }), hrefInput],
   });
 
-  const errorText = el('p', { class: 'rte-field__error' });
+  const errorText = el('p', { class: 'rte-field__error', attrs: { role: 'alert' } });
   errorText.hidden = true;
 
   const targetBlankInput = el('input', { attrs: { type: 'checkbox' } });
@@ -85,6 +85,7 @@ export function createLinkDialog(
   function setError(message: string): void {
     errorText.textContent = message;
     errorText.hidden = !message;
+    hrefInput.setAttribute('aria-invalid', String(Boolean(message)));
   }
 
   function apply(): void {

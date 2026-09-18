@@ -1,10 +1,17 @@
 import { createDisposer, el, on, type Unsubscribe } from './dom';
 import type { UiComponent } from './types';
 
+/**
+ * Почему панель закрылась: по Escape, по клику мимо или по вызову снаружи.
+ * Поповер ссылки по Escape не показывается снова, пока каретка в той же
+ * ссылке, — а после клика мимо или применения правок показывается как обычно.
+ */
+export type PopoverCloseReason = 'escape' | 'outside' | 'api';
+
 export interface Popover extends UiComponent {
   /** Показывает панель у прямоугольника в координатах вьюпорта. */
   open(anchor: DOMRect): void;
-  close(): void;
+  close(reason?: PopoverCloseReason): void;
   readonly isVisible: boolean;
   /** Содержимое панели. Наполняет тот, кто её создал. */
   readonly body: HTMLElement;
@@ -30,7 +37,7 @@ export interface PopoverOptions {
    * mousedown, а следом открыл бы заново по click.
    */
   isInside?(target: Node): boolean;
-  onClose?(): void;
+  onClose?(reason: PopoverCloseReason): void;
 }
 
 /** Отступ от края окна, ближе которого панель прижимать некрасиво. */
@@ -94,12 +101,12 @@ export function createPopover(options: PopoverOptions = {}): Popover {
       on(document, 'mousedown', (event) => {
         const target = event.target as Node | null;
         if (target && (options.isInside?.(target) ?? element.contains(target))) return;
-        close();
+        close('outside');
       }),
       on(document, 'keydown', (event) => {
         if (event.key !== 'Escape') return;
         event.stopPropagation();
-        close();
+        close('escape');
       }),
       on(window, 'scroll', follow, { capture: true }),
       on(window, 'resize', follow),
@@ -122,13 +129,13 @@ export function createPopover(options: PopoverOptions = {}): Popover {
     requestAnimationFrame(() => reposition(anchor));
   }
 
-  function close(): void {
+  function close(reason: PopoverCloseReason = 'api'): void {
     if (!isVisible) return;
     isVisible = false;
     element.hidden = true;
     releaseDocument?.();
     releaseDocument = null;
-    options.onClose?.();
+    options.onClose?.(reason);
   }
 
   return {

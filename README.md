@@ -274,7 +274,13 @@ and returns focus to the button. The colour palette is a grid: `←` / `→` mov
 between swatches, `↑` / `↓` between rows.
 
 Dialogs trap focus, close on `Escape` and return focus to the document. Text
-fields submit on `Enter`.
+fields submit on `Enter`. In the formula editor the math/chemistry tabs and the
+template categories are ARIA tab lists: `←` / `→` switch them. In the voice
+recorder, when the button you pressed gives way to the next phase (`Record` →
+`Stop` → `Record again`), focus moves with it. The link popover that follows
+the caret does not take focus; `Tab` reaches its fields, `Escape` from a field
+returns the caret to the text and keeps the popover away until the caret leaves
+the link — `Ctrl/Cmd+K` opens the link dialog instead.
 
 **Screen readers.** The editing surface is a labelled multiline `textbox` with
 `aria-placeholder`; the toolbar has a name. Toggle buttons report their state
@@ -282,11 +288,15 @@ through `aria-pressed`; the heading button's current value (`H2`, “Normal
 text”) is exposed as its description. Menus are named after their button;
 items that reflect the document state are `menuitemradio` (heading level,
 alignment, colour) or `menuitemcheckbox` (toggles in the `⋯` menu) with
-`aria-checked`. Dialogs are `aria-modal` and labelled by their title. Uploads
-and errors are announced through a polite live region (the status line).
+`aria-checked`. Dialogs are `aria-modal` and labelled by their title; the link
+popover is a named dialog. Validation errors are alerts and mark the field
+`aria-invalid`. Formula templates are named by their LaTeX; the formula field
+is labelled and described by its hint; loading and parse errors are announced.
+Uploads and errors are announced through a polite live region (the status
+line), which stays in the tree while empty so that announcements are not lost.
 
-Focus is always visible: every control shows a ring (`--rte-focus-ring`), and
-the editing surface shows one while the caret is inside.
+Focus is always visible: every control shows a ring (`--rte-focus-ring`). The
+editing surface itself shows no ring — the caret is the indicator there.
 
 ## Images and links
 

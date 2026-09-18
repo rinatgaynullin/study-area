@@ -85,7 +85,7 @@ export function createLinkPopover(
   /** Выбирать не из чего — поле только мешало бы. */
   const hasStyleChoice = styles.length > 1;
 
-  const errorText = el('p', { class: 'rte-field__error' });
+  const errorText = el('p', { class: 'rte-field__error', attrs: { role: 'alert' } });
   errorText.hidden = true;
 
   const openButton = el('button', {
@@ -132,7 +132,20 @@ export function createLinkPopover(
     ],
   });
 
-  const popover = createPopover();
+  /**
+   * Панель закрыли по Escape: не показывать её снова, пока каретка в той же
+   * ссылке. Иначе первая же транзакция — возврат фокуса в текст — открыла бы
+   * её обратно, и Escape ничего бы не значил.
+   */
+  let dismissed = false;
+
+  // Панель — диалог у ссылки; без имени читалка объявила бы просто «диалог».
+  const popover = createPopover({
+    label: t('link_title'),
+    onClose: (reason) => {
+      if (reason === 'escape') dismissed = true;
+    },
+  });
   popover.body.appendChild(panel);
 
   /** Последнее прочитанное состояние ссылки: с ним сравниваем правки. */
@@ -142,6 +155,7 @@ export function createLinkPopover(
   function setError(message: string): void {
     errorText.textContent = message;
     errorText.hidden = !message;
+    hrefInput.setAttribute('aria-invalid', String(Boolean(message)));
   }
 
   function fill(snapshot: LinkSnapshot): void {
@@ -155,16 +169,26 @@ export function createLinkPopover(
     const snapshot = readLink(editor);
     if (!snapshot) {
       current = null;
+      dismissed = false;
       popover.close();
       return;
     }
 
+    const previous = current;
     const isSameLink =
-      current !== null &&
-      current.href === snapshot.href &&
-      current.text === snapshot.text &&
-      current.className === snapshot.className;
+      previous !== null &&
+      previous.href === snapshot.href &&
+      previous.text === snapshot.text &&
+      previous.className === snapshot.className;
     current = snapshot;
+
+    // Отклонённая панель возвращается, только когда под кареткой другая
+    // ссылка — или каретка вышла из ссылки и вернулась. Набор текста внутри
+    // той же ссылки её не возвращает: ссылка та же, хоть подпись и другая.
+    if (dismissed) {
+      if (previous?.href === snapshot.href) return;
+      dismissed = false;
+    }
 
     if (!popover.isVisible) {
       fill(snapshot);
@@ -236,6 +260,16 @@ export function createLinkPopover(
 
   disposer.add(on(hrefInput, 'keydown', onFieldKeydown));
   disposer.add(on(textInput, 'keydown', onFieldKeydown));
+  // Escape из поля панели: панель закроется по слушателю документа, а фокус
+  // остался бы на скрытом поле — возвращаем его в текст, к ссылке.
+  disposer.add(
+    on(panel, 'keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      popover.close('escape');
+      editor.commands.focus(null, { scrollIntoView: false });
+    }),
+  );
   disposer.add(on(openButton, 'click', openLink));
   disposer.add(on(removeButton, 'click', remove));
   disposer.add(on(applyButton, 'click', apply));

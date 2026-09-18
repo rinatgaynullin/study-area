@@ -88,6 +88,16 @@ describe('панель дропдауна', () => {
   });
 });
 
+describe('панель модалки', () => {
+  it('фокусируема сама: есть куда встать, пока содержимое грузится', () => {
+    const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+    document.body.appendChild(modal.element);
+    const panel = modal.element.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(panel.tabIndex).toBe(-1);
+    modal.destroy();
+  });
+});
+
 describe('слушатели документа у оверлеев', () => {
   it('дропдаун слушает документ только пока открыт', () => {
     watchDocument();

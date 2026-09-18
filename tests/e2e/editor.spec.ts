@@ -630,6 +630,29 @@ test.describe('поповер ссылки', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator(POPOVER)).toHaveCount(0);
   });
+
+  test('Escape из поля панели возвращает каретку в текст и не открывает панель заново', async ({
+    page,
+  }) => {
+    await insertLink(page);
+    await page.locator(`${EDITOR} a`).first().click();
+    await expect(page.locator(POPOVER)).toBeVisible();
+    await expect(page.locator(OPEN_POPOVER)).toHaveAttribute('aria-label', 'Ссылка');
+
+    await page.locator(`${POPOVER} input`).nth(0).click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(POPOVER)).toHaveCount(0);
+    await expect(page.locator(EDITOR)).toBeFocused();
+
+    // Каретка всё ещё в ссылке, но Escape что-то значит: набор текста в ней
+    // панель не возвращает. Вернётся, когда каретка выйдет и зайдёт снова.
+    await page.keyboard.type('ё');
+    await expect(page.locator(POPOVER)).toHaveCount(0);
+
+    await page.locator(`${EDITOR} p`).first().click({ position: { x: 4, y: 8 } });
+    await page.locator(`${EDITOR} a`).first().click();
+    await expect(page.locator(POPOVER)).toBeVisible();
+  });
 });
 
 test.describe('размер формулы не зависит от окружения', () => {

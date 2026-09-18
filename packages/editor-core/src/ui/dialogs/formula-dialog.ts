@@ -24,6 +24,35 @@ type FieldStatus = 'idle' | 'loading' | 'failed';
 /** Заглушка на кнопке шаблона. Означает «превью рисуется прямо сейчас». */
 const PREVIEW_PLACEHOLDER = '…';
 
+/** Счётчик для уникальных id: вкладки ссылаются на свою панель, панель — на вкладку. */
+let formulaDialogCount = 0;
+
+/**
+ * Клавиатура списка вкладок (паттерн ARIA tabs): ← → ходят по вкладкам по
+ * кругу, Home/End — к краям, и выбирают вкладку сразу. Список — одна
+ * остановка Tab'а: у активной вкладки tabindex 0, у остальных −1.
+ */
+function onTablistKeydown(event: KeyboardEvent, tabs: HTMLElement[], select: (tab: HTMLElement) => void): void {
+  const current = tabs.indexOf(document.activeElement as HTMLElement);
+  if (current === -1 || tabs.length === 0) return;
+
+  const moves: Record<string, number> = {
+    ArrowRight: current + 1,
+    ArrowLeft: current - 1,
+    Home: 0,
+    End: tabs.length - 1,
+  };
+  const next = moves[event.key];
+  if (next === undefined) return;
+
+  event.preventDefault();
+  const tab = tabs[(next + tabs.length) % tabs.length];
+  select(tab);
+  // Выбор мог пересобрать вкладки (категории рисуются заново) — фокусируем
+  // ту, что теперь в разметке под тем же id.
+  (document.getElementById(tab.id) ?? tab).focus();
+}
+
 /**
  * Визуальный редактор формул: вкладки математика/химия, галерея шаблонов по
  * категориям и живое превью.
@@ -56,23 +85,30 @@ export function createFormulaDialog(
 
   // --------------------------------------------------------------- разметка
 
-  function createTab(iconName: string, labelKey: string): HTMLButtonElement {
+  formulaDialogCount += 1;
+  const idPrefix = `rte-formula-${formulaDialogCount}`;
+  const panelId = `${idPrefix}-panel`;
+  const galleryId = `${idPrefix}-gallery`;
+  const hintId = `${idPrefix}-hint`;
+
+  function createTab(iconName: string, labelKey: string, type: FormulaType): HTMLButtonElement {
     return el('button', {
       class: 'rte-formula-editor__tab',
-      attrs: { type: 'button', role: 'tab' },
+      attrs: { type: 'button', role: 'tab', id: `${idPrefix}-tab-${type}`, 'aria-controls': panelId },
       children: [icon(iconName, 16), document.createTextNode(t(labelKey))],
     });
   }
 
-  const mathTab = createTab('formulaMath', 'formula_tab_math');
-  const chemTab = createTab('formulaChem', 'formula_tab_chem');
+  const mathTab = createTab('formulaMath', 'formula_tab_math', 'math');
+  const chemTab = createTab('formulaChem', 'formula_tab_chem', 'chem');
   const tabs = el('div', {
     class: 'rte-formula-editor__tabs',
     attrs: { role: 'tablist' },
     children: [mathTab, chemTab],
   });
 
-  const status = el('p', { class: 'rte-formula-editor__status' });
+  // Загрузка и ошибка объявляются сами: ждать их взглядом читалка не может.
+  const status = el('p', { class: 'rte-formula-editor__status', attrs: { role: 'status' } });
   status.hidden = true;
 
   const host = el('div', { class: 'rte-formula-editor__host' });
@@ -80,15 +116,18 @@ export function createFormulaDialog(
     class: 'rte-formula-editor__input',
     children: [
       host,
-      el('p', { class: 'rte-formula-editor__hint', text: t('formula_input_hint') }),
+      el('p', { class: 'rte-formula-editor__hint', text: t('formula_input_hint'), attrs: { id: hintId } }),
     ],
   });
 
   const categoryList = el('div', {
     class: 'rte-formula-editor__categories',
-    attrs: { role: 'tablist' },
+    attrs: { role: 'tablist', 'aria-label': t('formula_templates') },
   });
-  const gallery = el('div', { class: 'rte-formula-editor__gallery' });
+  const gallery = el('div', {
+    class: 'rte-formula-editor__gallery',
+    attrs: { role: 'tabpanel', id: galleryId },
+  });
   const templates = el('section', {
     class: 'rte-formula-editor__templates',
     children: [
@@ -103,7 +142,13 @@ export function createFormulaDialog(
     class: 'rte-formula-editor__preview',
     children: [
       el('h3', { class: 'rte-formula-editor__section-title', text: t('formula_preview') }),
-      el('div', { class: 'rte-formula-editor__preview-box', children: [previewContent] }),
+      // Сообщения «формула пуста» и «не удалось разобрать» читалка слышит;
+      // сама картинка формулы ей ни о чём не говорит.
+      el('div', {
+        class: 'rte-formula-editor__preview-box',
+        attrs: { 'aria-live': 'polite' },
+        children: [previewContent],
+      }),
     ],
   });
 
@@ -113,10 +158,17 @@ export function createFormulaDialog(
     wide: true,
   });
 
+  // Всё под вкладками — их панель: поле, шаблоны и превью зависят от типа.
+  const panel = el('div', {
+    class: 'rte-formula-editor__panel',
+    attrs: { role: 'tabpanel', id: panelId },
+    children: [status, input, templates, preview],
+  });
+
   modal.body.appendChild(
     el('div', {
       class: 'rte-formula-editor',
-      children: [tabs, status, input, templates, preview],
+      children: [tabs, panel],
     }),
   );
 
@@ -176,6 +228,8 @@ export function createFormulaDialog(
       ? 'rte-formula-editor__tab rte-formula-editor__tab--active'
       : 'rte-formula-editor__tab';
     tab.setAttribute('aria-selected', String(isActive));
+    tab.tabIndex = isActive ? 0 : -1;
+    if (isActive) panel.setAttribute('aria-labelledby', tab.id);
   }
 
   function syncTabs(): void {
@@ -193,6 +247,8 @@ export function createFormulaDialog(
     categoryList.replaceChildren(
       ...categories().map((category) => {
         const isActive = category.id === activeCategoryId;
+        const id = `${idPrefix}-category-${category.id}`;
+        if (isActive) gallery.setAttribute('aria-labelledby', id);
         return el('button', {
           class: isActive
             ? 'rte-formula-editor__category rte-formula-editor__category--active'
@@ -200,7 +256,10 @@ export function createFormulaDialog(
           attrs: {
             type: 'button',
             role: 'tab',
+            id,
             'aria-selected': String(isActive),
+            'aria-controls': galleryId,
+            tabindex: isActive ? 0 : -1,
             'data-category-id': category.id,
           },
           text: t(category.labelKey),
@@ -259,7 +318,11 @@ export function createFormulaDialog(
 
     gallery.replaceChildren(
       ...category.templates.map((template) => {
-        const target = el('span', { class: 'rte-formula-editor__template-preview' });
+        // Картинка превью читалке не нужна — имя кнопки даёт сам LaTeX.
+        const target = el('span', {
+          class: 'rte-formula-editor__template-preview',
+          attrs: { 'aria-hidden': 'true' },
+        });
 
         // Кэш читаем синхронно: иначе уже отрисованная галерея на каждом
         // открытии моргала бы заглушкой в ожидании микрозадачи.
@@ -273,7 +336,12 @@ export function createFormulaDialog(
 
         return el('button', {
           class: 'rte-formula-editor__template',
-          attrs: { type: 'button', 'data-template-id': template.id },
+          attrs: {
+            type: 'button',
+            'data-template-id': template.id,
+            title: template.preview,
+            'aria-label': template.preview,
+          },
           children: [target],
         });
       }),
@@ -370,6 +438,10 @@ export function createFormulaDialog(
       // Модалка отдаёт фокус помеченному элементу — каретка должна оказаться
       // в поле формулы, а не на первой кнопке.
       created.setAttribute('data-autofocus', '');
+      // Поле без имени читалка объявляет как «поле математики»; подсказка
+      // под ним — его описание.
+      created.setAttribute('aria-label', t('formula_input_hint'));
+      created.setAttribute('aria-describedby', hintId);
       disposer.add(on(created, 'input', () => setLatex(created.value)));
 
       field = created;
@@ -432,6 +504,21 @@ export function createFormulaDialog(
 
   disposer.add(on(mathTab, 'click', () => setType('math')));
   disposer.add(on(chemTab, 'click', () => setType('chem')));
+  disposer.add(
+    on(tabs, 'keydown', (event) =>
+      onTablistKeydown(event, [mathTab, chemTab], (tab) =>
+        setType(tab === chemTab ? 'chem' : 'math'),
+      ),
+    ),
+  );
+  disposer.add(
+    on(categoryList, 'keydown', (event) =>
+      onTablistKeydown(event, [...categoryList.querySelectorAll<HTMLElement>('[role="tab"]')], (tab) => {
+        const id = tab.dataset.categoryId;
+        if (id) setCategory(id);
+      }),
+    ),
+  );
   disposer.add(on(cancelButton, 'click', () => modal.close()));
   disposer.add(on(removeButton, 'click', remove));
   disposer.add(on(saveButton, 'click', () => void save()));

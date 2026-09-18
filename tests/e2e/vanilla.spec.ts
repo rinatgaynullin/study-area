@@ -282,6 +282,39 @@ test.describe('клавиатура', () => {
     await expect(focusedButton(page)).toHaveAttribute('aria-label', 'Заголовок');
   });
 
+  test('вкладки редактора формул переключаются стрелками', async ({ page }) => {
+    await openVanilla(page);
+    await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').click();
+    const dialog = page.locator('.rte-modal:not([hidden])');
+    await expect(dialog).toBeVisible();
+
+    const math = dialog.getByRole('tab', { name: 'Математика' });
+    const chem = dialog.getByRole('tab', { name: 'Химия' });
+    await expect(math).toHaveAttribute('aria-selected', 'true');
+    await expect(chem).toHaveAttribute('tabindex', '-1');
+
+    await math.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(chem).toBeFocused();
+    await expect(chem).toHaveAttribute('aria-selected', 'true');
+    await expect(dialog.locator('.rte-modal__title')).toHaveText('Химическая формула');
+
+    const panel = dialog.locator('.rte-formula-editor__panel');
+    await expect(panel).toHaveAttribute('role', 'tabpanel');
+    await expect(panel).toHaveAttribute('aria-labelledby', await chem.getAttribute('id') ?? '');
+
+    // Категории шаблонов — тоже вкладки: вправо — следующая категория и её галерея.
+    const categories = dialog.locator('.rte-formula-editor__categories [role="tab"]');
+    await categories.first().focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(categories.nth(1)).toBeFocused();
+    await expect(categories.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(dialog.locator('.rte-formula-editor__template').first()).toHaveAttribute(
+      'aria-label',
+      /\S/,
+    );
+  });
+
   test('Ctrl+K открывает диалог ссылки из документа', async ({ page }) => {
     await caretIntoParagraph(page);
 

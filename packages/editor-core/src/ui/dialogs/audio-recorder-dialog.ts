@@ -75,7 +75,8 @@ export function createAudioRecorderDialog(
     });
   }
 
-  const indicator = el('div', { class: 'rte-recorder__indicator' });
+  // Кружок с иконкой — украшение: состояние читалке сообщают кнопки.
+  const indicator = el('div', { class: 'rte-recorder__indicator', attrs: { 'aria-hidden': 'true' } });
   const timeText = el('span', { class: 'rte-recorder__time' });
   const limitText = el('span', { class: 'rte-recorder__limit' });
 
@@ -88,7 +89,9 @@ export function createAudioRecorderDialog(
   });
 
   const hintText = el('p', { class: 'rte-recorder__hint', text: t('audio_permission_hint') });
-  const errorText = el('p', { class: 'rte-field__error' });
+  // Ошибка появляется в ответ на действие — объявляется сразу, не дожидаясь,
+  // пока до неё дойдут Tab'ом.
+  const errorText = el('p', { class: 'rte-field__error', attrs: { role: 'alert' } });
   const unsupportedText = el('p', { class: 'rte-field__error', text: t('audio_unsupported') });
 
   const preview = el('audio', { class: 'rte-recorder__preview', attrs: { controls: true } });
@@ -159,6 +162,24 @@ export function createAudioRecorderDialog(
     stopButton.hidden = !isActive;
     rerecordButton.hidden = phase !== 'ready';
     insertButton.disabled = phase !== 'ready';
+
+    keepFocusVisible();
+  }
+
+  /**
+   * Кнопки фазы сменяют друг друга: нажали «Записать» — она спряталась, и
+   * фокус клавиатуры ушёл бы в никуда, а с ним и кольцо фокуса модалки.
+   * Переводим его на первую кнопку новой фазы: «Остановить» после
+   * «Записать», «Записать заново» после «Остановить».
+   */
+  function keepFocusVisible(): void {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !active.hidden || !modal.element.contains(active)) {
+      return;
+    }
+    [stopButton, pauseButton, resumeButton, rerecordButton, recordButton, insertButton]
+      .find((button) => !button.hidden && !button.disabled)
+      ?.focus();
   }
 
   function createRecorder(): VoiceRecorder {

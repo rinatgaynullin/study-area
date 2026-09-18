@@ -567,12 +567,6 @@
   outline-offset: 2px;
 }
 
-/* Область ввода тоже показывает, что каретка в ней, — как поле формы. */
-.rte-surface:focus-within {
-  outline: var(--rte-focus-ring);
-  outline-offset: -2px;
-}
-
 /* ----------------------------------------------------------------- toolbar */
 
 .rte-toolbar {
@@ -795,6 +789,17 @@
   color: var(--rte-color-muted);
   background: var(--rte-color-subtle-bg);
   border-bottom: 1px solid var(--rte-color-border);
+}
+
+/*
+ * Пустая строка схлопывается, но остаётся в дереве: это живая область, и
+ * читалка объявит текст только в регионе, который существовал до него.
+ */
+.rte-status:empty {
+  height: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
 }
 
 .rte-status--error {
