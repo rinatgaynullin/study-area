@@ -83,3 +83,28 @@ describe('вьюер без фреймворка', () => {
     expect(view.element.classList.contains('rte-legacy')).toBe(false);
   });
 });
+
+describe('доступность вьюера', () => {
+  it('формула без имени получает role="img" и имя из LaTeX, имя редактора остаётся', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const mathml =
+      '<math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>x</mi>' +
+      '<annotation encoding="application/x-tex">x</annotation></semantics></math>';
+    const viewer = createRichContent({
+      element,
+      html:
+        `<p><span data-formula="true" data-mathml="${mathml.replace(/"/g, '&quot;')}"></span>` +
+        `<span data-formula="true" role="img" aria-label="своё имя" data-mathml="${mathml.replace(/"/g, '&quot;')}"></span></p>`,
+    });
+    await viewer.renderPendingFormulas();
+
+    const [bare, named] = [...element.querySelectorAll('span[data-formula]')];
+    expect(bare.getAttribute('role')).toBe('img');
+    expect(bare.getAttribute('aria-label')).toBe('x');
+    expect(named.getAttribute('aria-label')).toBe('своё имя');
+
+    viewer.destroy();
+    element.remove();
+  });
+});

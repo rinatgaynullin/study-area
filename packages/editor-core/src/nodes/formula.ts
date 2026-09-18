@@ -1,12 +1,13 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-import { NodeSelection } from '@tiptap/pm/state';
+import type { Node as PMNode } from '@tiptap/pm/model';
+import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 import type { FormulaPayload, FormulaType } from '../types';
 import {
   DEFAULT_FORMULA_FONT_SIZE_PX,
   getCachedFormulaSvg,
   renderMathML,
 } from '../formula/mathjax';
-import { extractFormulaType, normalizeMathML } from '../formula/mathml';
+import { extractFormulaType, extractTexAnnotation, normalizeMathML } from '../formula/mathml';
 
 export interface FormulaOptions {
   /** Opens the host's visual editor for a new or existing formula. */
@@ -37,6 +38,25 @@ export const FORMULA_NODE_NAME = 'formula';
  */
 function formulaFontSize(scale: number): number {
   return DEFAULT_FORMULA_FONT_SIZE_PX * scale;
+}
+
+/**
+ * Имя формулы для читалки. Картинка MathJax ей ни о чём не говорит, а
+ * вложенный LaTeX — самая честная запись формулы, какая у нас есть без
+ * речевого движка. Без аннотации остаётся текст MathML: символы без структуры,
+ * но лучше, чем «изображение».
+ */
+export function formulaAccessibleName(mathml: string): string {
+  return extractTexAnnotation(mathml) ?? mathml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** Формула под выделением узла — та, которую можно открыть по Enter. */
+function selectedFormula(state: EditorState): { node: PMNode; pos: number } | null {
+  const { selection } = state;
+  if (!(selection instanceof NodeSelection) || selection.node.type.name !== FORMULA_NODE_NAME) {
+    return null;
+  }
+  return { node: selection.node, pos: selection.from };
 }
 
 /**
@@ -94,6 +114,9 @@ export const FormulaNode = Node.create<FormulaOptions>({
       'data-formula': 'true',
       class: 'rte-formula',
       contenteditable: 'false',
+      // Экспортированный документ читают и без редактора — имя едет с ним.
+      role: 'img',
+      'aria-label': formulaAccessibleName(mathml),
     });
 
     for (const [key, value] of Object.entries(attrs)) {
@@ -118,6 +141,7 @@ export const FormulaNode = Node.create<FormulaOptions>({
       dom.className = 'rte-formula';
       dom.setAttribute('data-formula', 'true');
       dom.setAttribute('contenteditable', 'false');
+      dom.setAttribute('role', 'img');
 
       const host = document.createElement('span');
       host.className = 'rte-formula__render';
@@ -133,6 +157,7 @@ export const FormulaNode = Node.create<FormulaOptions>({
         currentMathml = mathml;
         dom.setAttribute('data-mathml', mathml);
         dom.setAttribute('data-formula-type', type);
+        dom.setAttribute('aria-label', formulaAccessibleName(mathml));
 
         const cached = getCachedFormulaSvg(mathml, fontSizePx);
         if (cached !== undefined) {
@@ -193,6 +218,24 @@ export const FormulaNode = Node.create<FormulaOptions>({
           dom.removeEventListener('mousedown', openEditor);
         },
       };
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      // Стрелки выделяют формулу как узел; Enter открывает её редактор —
+      // иначе с клавиатуры до правки формулы не добраться: клик ей нужен.
+      Enter: () => {
+        const selected = selectedFormula(this.editor.state);
+        if (!selected || !this.editor.isEditable || !this.options.onEdit) return false;
+
+        this.options.onEdit({
+          mathml: selected.node.attrs.mathml as string,
+          type: selected.node.attrs.formulaType as FormulaType,
+          pos: selected.pos,
+        });
+        return true;
+      },
     };
   },
 

@@ -76,7 +76,7 @@ export class RichEditorCore {
           class: options.legacy ? 'rte-content rte-legacy' : 'rte-content',
           role: 'textbox',
           'aria-multiline': 'true',
-          'aria-label': this.i18n.t('editor_aria_label'),
+          'aria-label': options.ariaLabel ?? this.i18n.t('editor_aria_label'),
           // Подсказка пустого поля рисуется псевдоэлементом, читалке её не
           // видно — сообщаем отдельно.
           'aria-placeholder': options.placeholder ?? this.i18n.t('editor_placeholder'),

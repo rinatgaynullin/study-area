@@ -104,6 +104,12 @@ export interface RichEditorCoreOptions {
   content?: string;
   editable?: boolean;
   placeholder?: string;
+  /**
+   * Имя области ввода для читалки — то, что она объявляет вместе с «поле
+   * ввода». По умолчанию общее «Текстовый редактор»; в форме здесь должна
+   * быть подпись поля: «Ответ», «Комментарий».
+   */
+  ariaLabel?: string;
   locale?: string;
   messages?: Record<string, Messages>;
   limits?: Partial<EditorLimits>;

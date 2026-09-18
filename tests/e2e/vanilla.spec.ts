@@ -132,6 +132,10 @@ interface VanillaWindow {
   vanillaEditor: { setEditable(editable: boolean): void; setLocale(locale: string): void };
 }
 
+interface VanillaCore {
+  insertFormula(mathml: string, type: 'math' | 'chem'): boolean;
+}
+
 /*
  * Видимость интерфейса. Ванильный UI прячет элементы атрибутом `hidden`, а
  * тот проигрывает любому авторскому `display`, если стили не оговаривают
@@ -313,6 +317,35 @@ test.describe('клавиатура', () => {
       'aria-label',
       /\S/,
     );
+  });
+
+  test('Enter на выделенной формуле открывает её редактор', async ({ page, isMobile }) => {
+    // ProseMirror намеренно не обрабатывает keydown Enter в Chrome на Android:
+    // там он приходит частью композиции. На телефоне формулу открывают касанием.
+    test.skip(isMobile, 'Enter в Chrome на Android не доходит до сочетаний ProseMirror');
+    await caretIntoParagraph(page);
+    await page.evaluate(() => {
+      const mathml =
+        '<math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>x</mi><mn>2</mn></msup>' +
+        '<annotation encoding="application/x-tex">x^2</annotation></semantics></math>';
+      (window as unknown as { vanillaEditor: { core: VanillaCore } }).vanillaEditor.core.insertFormula(
+        mathml,
+        'math',
+      );
+    });
+    const formula = page.locator(`${EDITOR} .rte-formula`);
+    await expect(formula).toHaveAttribute('role', 'img');
+    await expect(formula).toHaveAttribute('aria-label', 'x^2');
+
+    // Стрелка влево с позиции сразу за формулой выделяет её как узел.
+    await page.keyboard.press('ArrowLeft');
+    await expect(formula).toHaveClass(/rte-formula--selected/);
+    await page.keyboard.press('Enter');
+
+    const dialog = page.locator('.rte-modal:not([hidden])');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.rte-modal__title')).toHaveText('Математическая формула');
+    await expect(dialog.getByRole('button', { name: 'Удалить формулу' })).toBeVisible();
   });
 
   test('Ctrl+K открывает диалог ссылки из документа', async ({ page }) => {

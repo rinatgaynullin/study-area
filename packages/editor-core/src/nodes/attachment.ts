@@ -126,6 +126,8 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
       link.rel = 'noopener noreferrer';
       link.textContent = attrs.name;
       link.title = this.options.t('file_download');
+      // Видимый текст — имя файла; читалке нужно и действие: «Скачать отчёт.txt».
+      link.setAttribute('aria-label', `${this.options.t('file_download')}: ${attrs.name}`);
 
       const meta = document.createElement('span');
       meta.className = 'rte-attachment__meta';

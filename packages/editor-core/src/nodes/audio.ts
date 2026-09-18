@@ -17,6 +17,9 @@ declare module '@tiptap/core' {
 
 export const AUDIO_NODE_NAME = 'audioMessage';
 
+/** Шаг перемотки с клавиатуры, секунды. */
+const SEEK_STEP_SEC = 5;
+
 function parsePeaks(raw: string | null): number[] {
   if (!raw) return [];
   return raw
@@ -111,7 +114,7 @@ export const AudioNode = Node.create<AudioOptions>({
   },
 
   addNodeView() {
-    return ({ node }) => {
+    return ({ node, editor }) => {
       const t = this.options.t;
       const attrs = node.attrs as unknown as AudioAttributes;
 
@@ -120,6 +123,10 @@ export const AudioNode = Node.create<AudioOptions>({
       dom.setAttribute('data-audio', 'true');
       dom.setAttribute('data-src', attrs.src);
       dom.contentEditable = 'false';
+      // Плеер — группа с именем: читалка объявляет, что это за блок, прежде
+      // чем читать его кнопку и ползунок.
+      dom.setAttribute('role', 'group');
+      dom.setAttribute('aria-label', attrs.name || t('audio_title'));
 
       const audio = new Audio();
       audio.preload = 'metadata';
@@ -131,8 +138,13 @@ export const AudioNode = Node.create<AudioOptions>({
       button.setAttribute('aria-label', t('audio_play'));
       button.textContent = '▶';
 
+      // Осциллограмма — ползунок: по ней и мышью ищут место, и клавиатурой.
       const waveform = document.createElement('div');
       waveform.className = 'rte-audio__waveform';
+      waveform.setAttribute('role', 'slider');
+      waveform.setAttribute('tabindex', '0');
+      waveform.setAttribute('aria-label', t('audio_position'));
+      waveform.setAttribute('aria-valuemin', '0');
 
       const peaks = parsePeaks(attrs.peaks ?? null);
       const bars: HTMLElement[] = [];
@@ -159,8 +171,10 @@ export const AudioNode = Node.create<AudioOptions>({
       dom.append(controls);
       if (attrs.name) dom.append(name);
 
+      const totalDuration = () => audio.duration || attrs.duration || 0;
+
       const paintProgress = () => {
-        const total = audio.duration || attrs.duration || 0;
+        const total = totalDuration();
         const ratio = total > 0 ? audio.currentTime / total : 0;
         const played = Math.round(ratio * bars.length);
         bars.forEach((bar, index) => {
@@ -169,6 +183,19 @@ export const AudioNode = Node.create<AudioOptions>({
         time.textContent = formatDuration(
           audio.currentTime > 0 ? audio.currentTime : (attrs.duration ?? 0),
         );
+        waveform.setAttribute('aria-valuemax', String(Math.round(total)));
+        waveform.setAttribute('aria-valuenow', String(Math.round(audio.currentTime)));
+        waveform.setAttribute(
+          'aria-valuetext',
+          `${formatDuration(audio.currentTime)} / ${formatDuration(total)}`,
+        );
+      };
+
+      const seekTo = (seconds: number) => {
+        const total = totalDuration();
+        if (total <= 0) return;
+        audio.currentTime = Math.min(total, Math.max(0, seconds));
+        paintProgress();
       };
 
       const onToggle = (event: MouseEvent) => {
@@ -196,15 +223,38 @@ export const AudioNode = Node.create<AudioOptions>({
         const rect = waveform.getBoundingClientRect();
         if (rect.width === 0) return;
         const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-        const total = audio.duration || attrs.duration || 0;
-        if (total > 0) {
-          audio.currentTime = ratio * total;
-          paintProgress();
+        seekTo(ratio * totalDuration());
+      };
+
+      // Стрелки перематывают, Home/End — к краям, Escape возвращает каретку в
+      // документ. Событие не должно дойти до ProseMirror: там стрелка двигала
+      // бы выделение, а не ползунок.
+      const onSeekKey = (event: KeyboardEvent) => {
+        const moves: Record<string, number | undefined> = {
+          ArrowRight: audio.currentTime + SEEK_STEP_SEC,
+          ArrowUp: audio.currentTime + SEEK_STEP_SEC,
+          ArrowLeft: audio.currentTime - SEEK_STEP_SEC,
+          ArrowDown: audio.currentTime - SEEK_STEP_SEC,
+          Home: 0,
+          End: totalDuration(),
+        };
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          editor.commands.focus(null, { scrollIntoView: false });
+          return;
         }
+        const next = moves[event.key];
+        if (next === undefined) return;
+        event.preventDefault();
+        seekTo(next);
       };
 
       button.addEventListener('click', onToggle);
       waveform.addEventListener('click', onSeek);
+      waveform.addEventListener('keydown', onSeekKey);
+      // Ползунок сообщает предел и позицию с первого кадра, не дожидаясь
+      // метаданных: длительность известна из атрибутов узла.
+      paintProgress();
       audio.addEventListener('timeupdate', paintProgress);
       audio.addEventListener('play', onPlay);
       audio.addEventListener('pause', onPause);
@@ -214,10 +264,14 @@ export const AudioNode = Node.create<AudioOptions>({
       return {
         dom,
         ignoreMutation: () => true,
+        // Клавиши внутри плеера — его: иначе ProseMirror перехватил бы стрелки
+        // и Enter на кнопке и ползунке.
+        stopEvent: (event) => event instanceof KeyboardEvent,
         destroy: () => {
           audio.pause();
           button.removeEventListener('click', onToggle);
           waveform.removeEventListener('click', onSeek);
+          waveform.removeEventListener('keydown', onSeekKey);
           audio.removeEventListener('timeupdate', paintProgress);
           audio.removeEventListener('play', onPlay);
           audio.removeEventListener('pause', onPause);

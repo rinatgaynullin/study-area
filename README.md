@@ -273,6 +273,11 @@ between items, `Home` / `End` jump to the edges, `Enter` picks, `Escape` closes
 and returns focus to the button. The colour palette is a grid: `←` / `→` move
 between swatches, `↑` / `↓` between rows.
 
+Inside the document, a formula is selected as a node by the arrow keys and
+`Enter` opens its editor. A voice message is a group: `Tab` reaches its play
+button and the waveform, which is a slider — `←` / `→` seek by five seconds,
+`Home` / `End` jump to the edges, `Escape` returns the caret to the text.
+
 Dialogs trap focus, close on `Escape` and return focus to the document. Text
 fields submit on `Enter`. In the formula editor the math/chemistry tabs and the
 template categories are ARIA tab lists: `←` / `→` switch them. In the voice
@@ -283,7 +288,11 @@ returns the caret to the text and keeps the popover away until the caret leaves
 the link — `Ctrl/Cmd+K` opens the link dialog instead.
 
 **Screen readers.** The editing surface is a labelled multiline `textbox` with
-`aria-placeholder`; the toolbar has a name. Toggle buttons report their state
+`aria-placeholder`; pass `ariaLabel` (the `aria-label` prop in Vue) to name it
+after the form field it stands for. The toolbar has a name. A formula is an
+image named by its LaTeX, in the editor, in the exported HTML and in the
+viewer; a voice message is a named group with a slider that reports its
+position; an attachment link names both the action and the file. Toggle buttons report their state
 through `aria-pressed`; the heading button's current value (`H2`, “Normal
 text”) is exposed as its description. Menus are named after their button;
 items that reflect the document state are `menuitemradio` (heading level,

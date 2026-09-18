@@ -47,6 +47,11 @@ describe('mounting', () => {
     expect(w.find('.rte-content').text()).toContain('привет');
   });
 
+  it('passes ariaLabel through to the editing surface', async () => {
+    const w = await mountEditor({ ariaLabel: 'Ответ' });
+    expect(w.find('.rte-content').attributes('aria-label')).toBe('Ответ');
+  });
+
   it('hides the toolbar when not editable', async () => {
     const w = await mountEditor({ editable: false });
 

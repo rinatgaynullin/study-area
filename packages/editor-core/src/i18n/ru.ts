@@ -85,6 +85,7 @@ export const ru: Messages = {
   audio_unsupported: 'Браузер не поддерживает запись звука',
   audio_remaining: 'Осталось {time}',
   audio_duration_limit: 'Максимальная длительность: {seconds} с',
+  audio_position: 'Позиция воспроизведения',
   file_attach: 'Прикрепить файлом',
   file_insert_content: 'Вставить содержимое как текст',
   file_download: 'Скачать',

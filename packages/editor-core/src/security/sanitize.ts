@@ -23,8 +23,9 @@ const HTML_ATTRS = [
   'href', 'target', 'rel', 'download', 'src', 'alt', 'title', 'class', 'style',
   'colspan', 'rowspan', 'colwidth', 'span', 'width', 'height',
   'controls', 'preload', 'type', 'lang', 'dir', 'start', 'reversed', 'value',
-  // Editor node contracts.
-  'data-formula', 'data-formula-type', 'data-mathml',
+  // Editor node contracts. `aria-label` — имя формулы для читалки, которое
+  // редактор пишет в экспорт; терять его на обратном пути незачем.
+  'data-formula', 'data-formula-type', 'data-mathml', 'aria-label',
   'data-audio', 'data-duration', 'data-peaks', 'data-name', 'data-mime',
   'data-attachment', 'data-size', 'data-text-align', 'data-render-host',
   'data-legacy-embed', 'data-color',

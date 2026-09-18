@@ -1294,6 +1294,25 @@
   }
 }
 
+/*
+ * Режим принудительных цветов (высокая контрастность Windows) стирает фоны,
+ * а с ними — подсветку активного состояния. Рамка в нём остаётся, ею и
+ * сообщаем «включено»; образцы цвета без своих цветов бессмысленны.
+ */
+@media (forced-colors: active) {
+  .rte-btn--active,
+  .rte-menu__item--active,
+  .rte-formula-editor__tab--active,
+  .rte-formula-editor__category--active {
+    outline: 2px solid ButtonText;
+    outline-offset: -2px;
+  }
+
+  .rte-colors__swatch {
+    forced-color-adjust: none;
+  }
+}
+
 /* Панель у элемента: ссылка под курсором, размеры картинки и т. п. */
 .rte-popover {
   position: fixed;

@@ -1,4 +1,5 @@
 import { DEFAULT_FORMULA_FONT_SIZE_PX, renderMathML } from '../formula/mathjax';
+import { formulaAccessibleName } from '../nodes/formula';
 import { prepareIncomingHtml } from '../prepare-html';
 import { applyTheme, type EditorTheme } from './theme';
 
@@ -65,6 +66,16 @@ export function createRichContent(options: RichContentOptions): RichContent {
 
     await Promise.all(
       formulas.map(async (formula) => {
+        // Формула от бэкенда, знающего только MathML, приходит без имени —
+        // читалке она была бы «изображением». Имя редактора уважаем.
+        if (!formula.hasAttribute('aria-label')) {
+          formula.setAttribute('role', 'img');
+          formula.setAttribute(
+            'aria-label',
+            formulaAccessibleName(formula.getAttribute('data-mathml') ?? ''),
+          );
+        }
+
         const host =
           formula.querySelector<HTMLElement>('[data-render-host]') ??
           formula.appendChild(createRenderHost());
