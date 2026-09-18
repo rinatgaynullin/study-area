@@ -113,7 +113,9 @@ The packages are not published yet; everything below lands in the first release.
   (`visualViewport`), so it no longer hides behind Safari's address bar or the
   on-screen keyboard; its body scrolls when the content is taller than the
   screen (the flex item could not shrink before), and scrolling over the
-  overlay no longer scrolls the page underneath (`overscroll-behavior`).
+  overlay no longer scrolls the page underneath: the document is locked
+  while a dialog is open (`overflow: hidden` on `<html>`, scrollbar width
+  compensated) and the overlay contains overscroll.
 - Returning focus to the document (after a dialog closes, on `Escape` from the
   toolbar, the link popover or the audio player) no longer goes through
   TipTap's `focus()` command, which on Android and iOS focuses the view
