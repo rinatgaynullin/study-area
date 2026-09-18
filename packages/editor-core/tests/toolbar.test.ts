@@ -167,3 +167,79 @@ describe('состояние и доступность кнопок', () => {
     expect(bar.element.getAttribute('aria-label')).toBe('Панель форматирования');
   });
 });
+
+describe('клавиатура в тулбаре', () => {
+  const press = (key: string): void => {
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+    );
+  };
+  const activeLabel = (): string | null => document.activeElement?.getAttribute('aria-label') ?? null;
+
+  it('одна остановка Tab: tabindex 0 у одной кнопки, у остальных −1', () => {
+    const bar = mountToolbar();
+    const buttons = [...bar.element.querySelectorAll<HTMLButtonElement>('button')];
+    const stops = buttons.filter((button) => button.tabIndex === 0);
+
+    expect(stops).toHaveLength(1);
+    // Отменять пока нечего: остановка — первая доступная кнопка, а не «Отменить»,
+    // на которую нельзя встать.
+    expect(stops[0].getAttribute('aria-label')).toBe('Заголовок');
+    expect(buttons.filter((button) => button.tabIndex === -1)).toHaveLength(buttons.length - 1);
+  });
+
+  it('стрелки ходят по доступным кнопкам по кругу, Home и End — к краям', () => {
+    const bar = mountToolbar();
+    bar.focus();
+    expect(activeLabel()).toBe('Заголовок');
+
+    press('ArrowRight');
+    expect(activeLabel()).toBe('Полужирный');
+    press('ArrowLeft');
+    press('ArrowLeft');
+    // По кругу — на последнюю доступную; «Отменить» и «Повторить» пропущены.
+    expect(activeLabel()).toBe('Моноширинный текст');
+    press('Home');
+    expect(activeLabel()).toBe('Заголовок');
+    press('End');
+    expect(activeLabel()).toBe('Моноширинный текст');
+  });
+
+  it('остановка переезжает за фокусом и переживает пересборку', () => {
+    const bar = mountToolbar();
+    const italic = bar.element.querySelector<HTMLButtonElement>('[aria-label="Курсив"]')!;
+    italic.focus();
+    expect(italic.tabIndex).toBe(0);
+    expect(bar.element.querySelector<HTMLButtonElement>('[aria-label="Заголовок"]')!.tabIndex).toBe(-1);
+
+    bar.rebuild();
+    expect(bar.element.querySelector<HTMLButtonElement>('[aria-label="Курсив"]')!.tabIndex).toBe(0);
+  });
+
+  it('Escape возвращает каретку в документ', async () => {
+    const bar = mountToolbar();
+    bar.focus();
+    press('Escape');
+    // TipTap ставит фокус в следующем кадре.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(document.activeElement).toBe(core!.editor.view.dom);
+  });
+
+  it('в меню «⋯» переключатель остаётся переключателем', () => {
+    const bar = mountToolbar();
+    bar.layout(500);
+    overflowOf(bar)!.click();
+
+    // Подпись — в span: у иконки индекса есть свой текст «x2».
+    const items = [...bar.element.querySelectorAll<HTMLButtonElement>('.rte-menu__item')];
+    const byLabel = (label: string) =>
+      items.find((item) => item.querySelector('span')?.textContent === label)!;
+    const subscript = byLabel('Нижний индекс');
+    const undo = byLabel('Отменить');
+
+    expect(subscript.getAttribute('role')).toBe('menuitemcheckbox');
+    expect(subscript.getAttribute('aria-checked')).toBe('false');
+    expect(undo.getAttribute('role')).toBe('menuitem');
+    expect(undo.hasAttribute('aria-checked')).toBe(false);
+  });
+});

@@ -35,6 +35,12 @@ export interface Toolbar extends UiComponent {
    * это сам; снаружи нужно тестам и хосту с собственной раскладкой.
    */
   layout(width: number): void;
+  /**
+   * Переводит фокус на текущую кнопку тулбара — ту, на которой он был в
+   * прошлый раз, или первую доступную. Так из документа попадают в тулбар
+   * по Alt+F10, не проходя Tab'ом через всё, что стоит между ними.
+   */
+  focus(): void;
 }
 
 interface RenderedItem {
@@ -74,6 +80,12 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
   /** Сколько схлопываемых групп сейчас в меню «⋯», считая с конца. */
   let collapsedCount = 0;
   let lastWidth = 0;
+  /**
+   * Пункт, на котором стоит фокус тулбара. Тулбар — одна остановка Tab'а: в
+   * него входят на этот пункт, а между кнопками ходят стрелками. Иначе до
+   * документа пришлось бы пройти два десятка кнопок подряд.
+   */
+  let rovingId: string | null = null;
 
   function iconNameFor(descriptor: ToolbarItemDescriptor): string {
     return descriptor.dynamicIcon?.(context.editor) ?? descriptor.icon ?? 'more';
@@ -88,6 +100,7 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
       class: 'rte-btn',
       attrs: {
         type: 'button',
+        'data-item-id': descriptor.id,
         // Подсказка — с сочетанием клавиш, доступное имя — без него: читалке
         // сочетание сообщает aria-keyshortcuts.
         title: shortcut ? `${label} · ${shortcut}` : label,
@@ -125,6 +138,7 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
         text: descriptor.text?.(context),
         renderPanel: (close) => descriptor.renderPanel!(context, close),
       });
+      dropdown.button.dataset.itemId = descriptor.id;
       rendered.push({ descriptor, button: dropdown.button, dropdown });
       return dropdown.element;
     }
@@ -148,7 +162,10 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
               createMenuItem({
                 label: context.t(descriptor.labelKey),
                 iconName: iconNameFor(descriptor),
-                active: descriptor.isActive?.(context.editor) ?? false,
+                // Переключатель и в меню остаётся переключателем: пункт
+                // сообщает своё состояние, а не только подсвечивается.
+                role: descriptor.isActive ? 'menuitemcheckbox' : 'menuitem',
+                active: descriptor.isActive?.(context.editor),
                 disabled: isDisabled || (descriptor.isDisabled?.(context.editor) ?? false),
                 onSelect: () => {
                   descriptor.run?.(context);
@@ -162,12 +179,37 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
       },
     });
 
+    dropdown.button.dataset.itemId = 'more';
     rendered.push({
       descriptor: { id: 'more', labelKey: 'toolbar_more' },
       button: dropdown.button,
       dropdown,
     });
     return dropdown.element;
+  }
+
+  /** Кнопки, на которые можно встать: отключённые стрелки пропускают. */
+  function focusableButtons(): HTMLButtonElement[] {
+    return rendered.map((item) => item.button).filter((button) => !button.disabled);
+  }
+
+  /**
+   * Раздаёт tabindex: 0 — у текущего пункта, −1 — у остальных. Зовётся после
+   * каждой пересборки и синхронизации: пункт мог уехать в меню «⋯» или стать
+   * недоступным, и тогда остановка Tab'а переходит к первой доступной кнопке —
+   * иначе Tab перешагнул бы тулбар целиком.
+   */
+  function applyRoving(): void {
+    const buttons = focusableButtons();
+    const current = buttons.find((button) => button.dataset.itemId === rovingId) ?? buttons[0];
+    rovingId = current?.dataset.itemId ?? null;
+    for (const item of rendered) item.button.tabIndex = item.button === current ? 0 : -1;
+  }
+
+  function moveFocus(button: HTMLButtonElement): void {
+    rovingId = button.dataset.itemId ?? null;
+    applyRoving();
+    button.focus();
   }
 
   function render(): void {
@@ -227,7 +269,55 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
         }
       }
     }
+
+    applyRoving();
   }
+
+  // Стрелки ходят по кнопкам, Home/End — к краям, Escape возвращает каретку
+  // в документ. Открытое меню лежит внутри тулбара, но клавиши в нём свои.
+  disposer.add(
+    on(element, 'keydown', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.rte-popover')) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        // Без прокрутки: выделение было на виду, когда уходили в тулбар.
+        context.editor.commands.focus(null, { scrollIntoView: false });
+        return;
+      }
+
+      const buttons = focusableButtons();
+      if (buttons.length === 0) return;
+
+      const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const moves: Record<string, number> = {
+        ArrowRight: current + 1,
+        ArrowLeft: current - 1,
+        Home: 0,
+        End: buttons.length - 1,
+      };
+      const next = moves[event.key];
+      if (next === undefined) return;
+
+      event.preventDefault();
+      moveFocus(buttons[(next + buttons.length) % buttons.length]);
+    }),
+  );
+
+  // Пришли Tab'ом или щелчком на другую кнопку — она и становится остановкой:
+  // выйдя и вернувшись, пользователь попадает туда же, где был.
+  disposer.add(
+    on(element, 'focusin', (event) => {
+      const target = event.target as HTMLElement | null;
+      const id = target?.closest<HTMLElement>('.rte-toolbar__group > .rte-btn, .rte-dropdown > .rte-btn')
+        ?.dataset.itemId;
+      if (id && id !== rovingId) {
+        rovingId = id;
+        applyRoving();
+      }
+    }),
+  );
 
   /** Переносится ли тулбар на вторую строку. */
   function isWrapped(): boolean {
@@ -294,6 +384,12 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
     element,
     syncState,
     layout,
+    focus: () => {
+      applyRoving();
+      focusableButtons()
+        .find((button) => button.dataset.itemId === rovingId)
+        ?.focus();
+    },
     rebuild: () => {
       // Подписи сменились — ширины тоже: подбираем заново с полного тулбара.
       collapsedCount = 0;

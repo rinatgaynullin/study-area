@@ -62,6 +62,7 @@ function headingPanel(context: EditorUiContext, close: () => void): HTMLElement 
   panel.appendChild(
     createMenuItem({
       label: context.t('toolbar_paragraph'),
+      role: 'menuitemradio',
       active: context.editor.isActive('paragraph'),
       onSelect: () => {
         context.editor.chain().focus().setParagraph().run();
@@ -74,6 +75,7 @@ function headingPanel(context: EditorUiContext, close: () => void): HTMLElement 
     panel.appendChild(
       createMenuItem({
         label: context.t('toolbar_heading_level', { level }),
+        role: 'menuitemradio',
         active: context.editor.isActive('heading', { level }),
         // Подпись показывается кеглем своего уровня — так виден результат.
         labelClass: `rte-menu__heading--${level}`,
@@ -97,6 +99,7 @@ function alignPanel(context: EditorUiContext, close: () => void): HTMLElement {
       createMenuItem({
         label: context.t(`toolbar_align_${alignment}`),
         iconName: `align${suffix}`,
+        role: 'menuitemradio',
         active: context.editor.isActive({ textAlign: alignment }),
         onSelect: () => {
           context.editor.chain().focus().setTextAlign(alignment).run();
@@ -283,6 +286,8 @@ export function createPanelToolbarItems(
       icon: 'link',
       labelKey: 'toolbar_link',
       kind: 'button',
+      // Сочетание вешает оболочка редактора (createRichEditor), не расширение.
+      shortcut: 'Mod-K',
       isActive: (editor) => editor.isActive('link'),
       run: () => options.editLink(),
     },

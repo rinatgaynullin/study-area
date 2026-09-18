@@ -1,3 +1,4 @@
+import { Extension } from '@tiptap/core';
 import { RichEditorCore } from '../editor';
 import { DEFAULT_LOCALE } from '../i18n';
 import { IMAGE_ACCEPT, TEXT_FILE_ACCEPT } from '../media/upload';
@@ -67,6 +68,30 @@ export interface RichEditorUiOptions extends Omit<RichEditorCoreOptions, 'elemen
 
 /** Сколько держать ошибку в строке статуса: прочитать успеют, навсегда не останется. */
 const ERROR_VISIBLE_MS = 6000;
+
+/**
+ * Сочетания клавиш оболочки — про интерфейс, а не про документ, поэтому их
+ * вешает оболочка, а не расширения схемы. Alt+F10 ведёт из документа в
+ * тулбар, как в других редакторах; Mod+K открывает ссылку — иначе до неё с
+ * клавиатуры только через тулбар.
+ */
+function createUiShortcuts(handlers: { focusToolbar(): void; editLink(): void }) {
+  return Extension.create({
+    name: 'richEditorUiShortcuts',
+    addKeyboardShortcuts() {
+      return {
+        'Alt-F10': () => {
+          handlers.focusToolbar();
+          return true;
+        },
+        'Mod-k': () => {
+          handlers.editLink();
+          return true;
+        },
+      };
+    },
+  });
+}
 
 export interface RichEditorUi {
   /** Движок: документ, команды, загрузки. */
@@ -234,7 +259,13 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
       onFormulaEdit: (payload) => overlays.formula.open(payload),
     };
 
-    return [...own, ...features.flatMap((feature) => feature.extensions?.(build) ?? [])];
+    return [
+      ...own,
+      ...features.flatMap((feature) => feature.extensions?.(build) ?? []),
+      // Тулбар создаётся после движка, но обработчики зовутся ещё позже —
+      // когда всё уже собрано.
+      createUiShortcuts({ focusToolbar: () => toolbar.focus(), editLink }),
+    ];
   }
 
   const core = new RichEditorCore({
@@ -336,18 +367,22 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     items: feature.toolbarItems?.() ?? [],
   }));
 
+  /** Диалог ссылки: с кнопки тулбара и по Mod+K из документа. */
+  function editLink(): void {
+    overlays.link.open({
+      href: (core.editor.getAttributes('link').href as string) ?? '',
+      targetBlank: core.editor.getAttributes('link').target === '_blank',
+      canRemove: core.editor.isActive('link'),
+    });
+  }
+
   const items: Record<string, ToolbarItemDescriptor> = {
     ...SIMPLE_TOOLBAR_ITEMS,
     ...createPanelToolbarItems({
       textSwatches: options.textSwatches,
       highlightSwatches: options.highlightSwatches,
       insertTable: () => overlays.table.open(),
-      editLink: () =>
-        overlays.link.open({
-          href: (core.editor.getAttributes('link').href as string) ?? '',
-          targetBlank: core.editor.getAttributes('link').target === '_blank',
-          canRemove: core.editor.isActive('link'),
-        }),
+      editLink,
       pickImage: () => imageInput.click(),
       pickFile: (mode) => {
         fileMode = mode;

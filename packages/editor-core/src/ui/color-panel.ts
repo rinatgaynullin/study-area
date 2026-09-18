@@ -24,17 +24,24 @@ const FALLBACK_CUSTOM_COLOR = '#000000';
 export function createColorPanel(options: ColorPanelOptions): HTMLElement {
   const { t } = options;
 
-  const grid = el('div', { class: 'rte-colors__grid' });
+  // Число колонок объявлено для клавиатуры меню: стрелки вверх и вниз ходят
+  // по строкам сетки, а не по одному образцу.
+  const grid = el('div', { class: 'rte-colors__grid', attrs: { 'data-menu-columns': 6 } });
 
   for (const color of options.palette) {
+    const isActive = options.activeColor === color;
     const swatch = el('button', {
-      class:
-        options.activeColor === color
-          ? 'rte-colors__swatch rte-colors__swatch--active'
-          : 'rte-colors__swatch',
+      class: isActive ? 'rte-colors__swatch rte-colors__swatch--active' : 'rte-colors__swatch',
       // Цвет — единственное, чем образец отличается от соседа, поэтому он же
-      // и подпись для тех, кто читает страницу не глазами.
-      attrs: { type: 'button', title: color, 'aria-label': color },
+      // и подпись для тех, кто читает страницу не глазами. Образцы — пункты
+      // меню: по ним ходят стрелки, и выбранный сообщает о себе.
+      attrs: {
+        type: 'button',
+        role: 'menuitemradio',
+        'aria-checked': String(isActive),
+        title: color,
+        'aria-label': color,
+      },
     });
     swatch.style.background = color;
     swatch.addEventListener('click', () => options.onSelect(color));
@@ -43,7 +50,7 @@ export function createColorPanel(options: ColorPanelOptions): HTMLElement {
 
   const resetButton = el('button', {
     class: 'rte-colors__reset',
-    attrs: { type: 'button' },
+    attrs: { type: 'button', role: 'menuitem' },
     children: [icon('noColor', 16), el('span', { text: t('color_reset') })],
   });
   resetButton.addEventListener('click', () => options.onReset());
