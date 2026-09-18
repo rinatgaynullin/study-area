@@ -87,6 +87,10 @@ The packages are not published yet; everything below lands in the first release.
   own; the size limit finalizes the take like the duration limit; recorder
   errors reach the host's `onError`.
 - `v-model` no longer re-applies HTML the document already holds.
+- The heading button keeps one width whatever it shows (`H1` or the paragraph
+  label), so the toolbar no longer reflows when the caret moves between a
+  heading and a paragraph; `--rte-btn-text-width` sets it, longer labels get
+  an ellipsis.
 - `<RichEditor />` and `<RichContent />` have a single root element again: a
   template comment made them fragments in development builds, so `class` and
   other attributes from the host were not applied to the root.

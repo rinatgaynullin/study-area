@@ -39,6 +39,33 @@ test.describe('ванильный редактор', () => {
     await expect(page.locator(`${EDITOR} strong`).last()).toHaveText('жирный');
   });
 
+  test('кнопка заголовка не меняет ширину, когда подпись меняется', async ({ page }) => {
+    await openVanilla(page);
+    const button = page.locator('.rte-toolbar button[aria-label="Заголовок"]');
+    const toolbar = page.locator('.rte-toolbar');
+
+    await page.locator(`${EDITOR} h2`).click();
+    await expect(button).toHaveText(/H2/);
+    const onHeading = (await button.boundingBox())!;
+    const toolbarOnHeading = (await toolbar.boundingBox())!;
+
+    await page.locator(`${EDITOR} p`).click();
+    await expect(button).toHaveText('Обычный текст');
+    const onParagraph = (await button.boundingBox())!;
+    const toolbarOnParagraph = (await toolbar.boundingBox())!;
+
+    // Подпись стала в три раза длиннее, а тулбар не перестроился.
+    expect(onParagraph.width).toBe(onHeading.width);
+    expect(toolbarOnParagraph.height).toBe(toolbarOnHeading.height);
+
+    // Не влезающая подпись обрезается многоточием, а не растягивает кнопку.
+    // Влезает ли подпись по умолчанию, зависит от шрифта на машине, поэтому
+    // проверяется правило, а не факт обрезки.
+    const label = button.locator('.rte-btn__text');
+    await expect(label).toHaveCSS('overflow', 'hidden');
+    await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+  });
+
   test('открывает выпадающие меню', async ({ page }) => {
     await openVanilla(page);
 
