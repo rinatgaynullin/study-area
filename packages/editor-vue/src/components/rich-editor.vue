@@ -47,6 +47,8 @@ const props = withDefaults(
     /** Возможности поверх встроенных: расширения, пункты тулбара, диалоги. */
     features?: EditorFeature[];
     placeholder?: string;
+    /** Имя области ввода для читалки; в форме — подпись поля. */
+    ariaLabel?: string;
     /** Scales MathJax output relative to the surrounding text. */
     formulaScale?: number;
     /** Варианты оформления ссылки, доступные в поповере. */
@@ -108,6 +110,7 @@ onMounted(() => {
     messages: props.messages,
     limits: props.limits,
     placeholder: props.placeholder,
+    ariaLabel: props.ariaLabel,
     formulaScale: props.formulaScale,
     legacy: props.legacy,
     toolbar: props.toolbar,

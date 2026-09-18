@@ -83,6 +83,7 @@ export const en: Messages = {
   audio_unsupported: 'Audio recording is not supported in this browser',
   audio_remaining: '{time} left',
   audio_duration_limit: 'Maximum duration: {seconds}s',
+  audio_position: 'Playback position',
   file_attach: 'Attach as file',
   file_insert_content: 'Insert contents as text',
   file_download: 'Download',

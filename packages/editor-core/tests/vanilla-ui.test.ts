@@ -428,3 +428,67 @@ describe('доступность диалогов', () => {
     expect(href.getAttribute('aria-invalid')).toBe('true');
   });
 });
+
+describe('доступность узлов документа', () => {
+  const press = (target: Element, key: string): void => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  };
+
+  it('имя области ввода задаётся опцией ariaLabel', () => {
+    const editor = mountEditor({ ariaLabel: 'Ответ на задание' });
+    expect(editor.element.querySelector('.rte-content')?.getAttribute('aria-label')).toBe(
+      'Ответ на задание',
+    );
+    editor.destroy();
+
+    const plain = mountEditor();
+    expect(plain.element.querySelector('.rte-content')?.getAttribute('aria-label')).toBe(
+      'Текстовый редактор',
+    );
+  });
+
+  it('голосовое сообщение — группа с именем и ползунком, стрелки перематывают', () => {
+    const editor = mountEditor();
+    editor.core.editor.commands.insertAudio({
+      src: 'blob:audio',
+      name: 'Объяснение',
+      duration: 60,
+      peaks: '10,50,90',
+    });
+
+    const player = editor.element.querySelector<HTMLElement>('.rte-audio')!;
+    expect(player.getAttribute('role')).toBe('group');
+    expect(player.getAttribute('aria-label')).toBe('Объяснение');
+
+    const slider = player.querySelector<HTMLElement>('.rte-audio__waveform')!;
+    expect(slider.getAttribute('role')).toBe('slider');
+    expect(slider.tabIndex).toBe(0);
+    expect(slider.getAttribute('aria-label')).toBe('Позиция воспроизведения');
+    expect(slider.getAttribute('aria-valuemin')).toBe('0');
+    expect(slider.getAttribute('aria-valuemax')).toBe('60');
+    expect(slider.getAttribute('aria-valuenow')).toBe('0');
+
+    press(slider, 'ArrowRight');
+    expect(slider.getAttribute('aria-valuenow')).toBe('5');
+    expect(slider.getAttribute('aria-valuetext')).toBe('0:05 / 1:00');
+    press(slider, 'End');
+    expect(slider.getAttribute('aria-valuenow')).toBe('60');
+    press(slider, 'ArrowLeft');
+    expect(slider.getAttribute('aria-valuenow')).toBe('55');
+    press(slider, 'Home');
+    expect(slider.getAttribute('aria-valuenow')).toBe('0');
+
+    // Безымянное сообщение называется по типу.
+    editor.core.editor.commands.insertAudio({ src: 'blob:audio2', duration: 3 });
+    const players = editor.element.querySelectorAll<HTMLElement>('.rte-audio');
+    expect(players[players.length - 1].getAttribute('aria-label')).toBe('Голосовое сообщение');
+  });
+
+  it('вложение: ссылка называет и действие, и файл', () => {
+    const editor = mountEditor();
+    editor.core.editor.commands.insertAttachment({ href: 'blob:file', name: 'отчёт.txt', size: 12 });
+    const link = editor.element.querySelector<HTMLAnchorElement>('.rte-attachment__link')!;
+    expect(link.getAttribute('aria-label')).toBe('Скачать: отчёт.txt');
+    expect(link.textContent).toBe('отчёт.txt');
+  });
+});

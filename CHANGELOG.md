@@ -46,6 +46,14 @@ The packages are not published yet; everything below lands in the first release.
   value is its `aria-describedby`; the editing surface has `aria-placeholder`.
   `createMenuItem` takes `role`, `createPopover` takes `label` / `labelledBy`.
 - A visible focus ring on every control of the editor and viewer.
+- Document nodes for keyboards and screen readers: a selected formula opens
+  its editor on `Enter`; formulas are `role="img"` named by their LaTeX (in the
+  editor, the exported HTML and the viewer; `aria-label` survives the
+  sanitizer). The voice message is a named group whose waveform is a keyboard
+  slider (`←` / `→` / `Home` / `End`, `aria-valuetext`); the attachment link
+  names the action and the file. `ariaLabel` option on the core and
+  `<RichEditor />` names the editing surface. Active states keep an outline
+  under `forced-colors`.
 - Dialog accessibility: formula tabs and template categories are ARIA tab
   lists (roving `tabindex`, `←` / `→` / `Home` / `End`, `aria-controls`,
   `tabpanel`); template buttons are named by their LaTeX; the formula field is
