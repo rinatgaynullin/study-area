@@ -19,6 +19,9 @@ export interface PopoverOptions {
   role?: string;
   /** Дополнительный класс на элементе панели — под собственное оформление. */
   className?: string;
+  /** Имя панели для читалки: id элемента с подписью или сама строка. */
+  labelledBy?: string;
+  label?: string;
   /** По горизонтали: центр под якорем или от его левого края (меню). */
   align?: 'center' | 'start';
   /**
@@ -46,7 +49,11 @@ export function createPopover(options: PopoverOptions = {}): Popover {
   const body = el('div', { class: 'rte-popover__body' });
   const element = el('div', {
     class: 'rte-popover',
-    attrs: { role: options.role ?? 'dialog' },
+    attrs: {
+      role: options.role ?? 'dialog',
+      'aria-labelledby': options.labelledBy ?? null,
+      'aria-label': options.label ?? null,
+    },
     children: [body],
   });
   if (options.className) element.classList.add(options.className);

@@ -34,6 +34,19 @@ The packages are not published yet; everything below lands in the first release.
 - Accessibility: `aria-pressed` on toggles, `aria-labelledby` on dialogs,
   `aria-label` on the toolbar, `aria-keyshortcuts` and shortcuts in tooltips,
   arrow-key navigation in menus.
+- Keyboard model for the toolbar: a single Tab stop with `←` / `→` /
+  `Home` / `End` between buttons, `Escape` back to the document, `Alt+F10`
+  from the document into the toolbar (`Toolbar.focus()`); `Ctrl/Cmd+K` opens
+  the link dialog. Menu buttons open on `↓` / `↑`; the colour palette is
+  navigable as a grid.
+- Screen readers: menus are labelled by their button (`aria-labelledby`,
+  `aria-haspopup="menu"`); heading and alignment items are `menuitemradio`,
+  toggles in the `⋯` menu are `menuitemcheckbox`, colour swatches are
+  `menuitemradio` — all with `aria-checked`; the heading button's current
+  value is its `aria-describedby`; the editing surface has `aria-placeholder`.
+  `createMenuItem` takes `role`, `createPopover` takes `label` / `labelledBy`.
+- A visible focus ring on every control of the editor and viewer, and on the
+  editing surface while the caret is inside.
 - The toolbar measures itself above `collapseBelow` and folds groups one by
   one into the `⋯` menu instead of wrapping.
 

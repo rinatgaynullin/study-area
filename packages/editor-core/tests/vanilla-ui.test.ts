@@ -276,3 +276,38 @@ describe('возможности поверх встроенных', () => {
     expect(groups[0].querySelectorAll('button')).toHaveLength(2);
   });
 });
+
+describe('клавиатура из документа', () => {
+  const nextFrame = (): Promise<void> =>
+    new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+  function pressInEditor(content: HTMLElement, init: KeyboardEventInit): void {
+    content.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+  }
+
+  it('Alt+F10 переводит фокус в тулбар, Escape — обратно в документ', async () => {
+    const editor = mountEditor();
+    const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+    content.focus();
+
+    pressInEditor(content, { key: 'F10', altKey: true });
+    const active = document.activeElement as HTMLElement;
+    expect(active.closest('.rte-toolbar')).not.toBeNull();
+
+    active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await nextFrame();
+    expect(document.activeElement).toBe(content);
+  });
+
+  it('Ctrl+K открывает диалог ссылки, как кнопка тулбара', () => {
+    const editor = mountEditor();
+    const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+    content.focus();
+
+    pressInEditor(content, { key: 'k', ctrlKey: true });
+    const dialog = openDialog();
+    expect(dialog).not.toBeNull();
+    expect(dialog!.querySelector('.rte-modal__title')?.textContent).toBe('Ссылка');
+    expect(toolbarButton('Ссылка').getAttribute('aria-keyshortcuts')).toBe('Control+K');
+  });
+});

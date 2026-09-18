@@ -190,3 +190,105 @@ test.describe('видимость интерфейса', () => {
     await expect(page.locator('.rte-modal:not([hidden]) .rte-modal__title')).toHaveText('Link');
   });
 });
+
+test.describe('клавиатура', () => {
+  const focusedButton = (page: Page) => page.locator('.rte-toolbar button:focus');
+
+  /**
+   * Ставит каретку в абзац и ждёт, пока редактор это заметит: позицию клика
+   * ProseMirror читает асинхронно, и нажатая сразу клавиша застала бы каретку
+   * ещё в начале документа. Подпись кнопки заголовка меняется вслед за
+   * кареткой — по ней и ждём.
+   */
+  async function caretIntoParagraph(page: Page): Promise<void> {
+    await openVanilla(page);
+    await page.locator(`${EDITOR} p`).click();
+    await expect(page.locator(EDITOR)).toBeFocused();
+    await expect(page.locator('.rte-toolbar button[aria-label="Заголовок"]')).toHaveText(
+      'Обычный текст',
+    );
+  }
+
+  test('Alt+F10 ведёт в тулбар, стрелки ходят по кнопкам, Escape возвращает в документ', async ({
+    page,
+  }) => {
+    await caretIntoParagraph(page);
+
+    await page.keyboard.press('Alt+F10');
+    // Отменять нечего: первая доступная кнопка — заголовок.
+    await expect(focusedButton(page)).toHaveAttribute('aria-label', 'Заголовок');
+
+    await page.keyboard.press('ArrowRight');
+    await expect(focusedButton(page)).toHaveAttribute('aria-label', 'Полужирный');
+
+    // На телефоне последняя кнопка — «Ещё», на десктопе — последняя из групп.
+    const lastLabel = await page
+      .locator('.rte-toolbar button:not(:disabled)')
+      .last()
+      .getAttribute('aria-label');
+    await page.keyboard.press('End');
+    await expect(focusedButton(page)).toHaveAttribute('aria-label', lastLabel!);
+    await page.keyboard.press('Home');
+    await expect(focusedButton(page)).toHaveAttribute('aria-label', 'Заголовок');
+
+    // Тулбар — одна остановка Tab'а.
+    await expect(page.locator('.rte-toolbar button[tabindex="0"]')).toHaveCount(1);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator(EDITOR)).toBeFocused();
+  });
+
+  test('Enter на кнопке применяет форматирование к выделению и возвращает каретку', async ({
+    page,
+  }) => {
+    await caretIntoParagraph(page);
+    await page.keyboard.press('ControlOrMeta+a');
+
+    await page.keyboard.press('Alt+F10');
+    await page.keyboard.press('ArrowRight');
+    await expect(focusedButton(page)).toHaveAttribute('aria-label', 'Полужирный');
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator(`${EDITOR} p strong`)).toHaveText(/Набран/);
+    await expect(page.locator(EDITOR)).toBeFocused();
+  });
+
+  test('стрелка вниз открывает меню, пункты — переключатели, Escape возвращает на кнопку', async ({
+    page,
+  }) => {
+    await caretIntoParagraph(page);
+    await page.keyboard.press('Alt+F10');
+    await expect(focusedButton(page)).toHaveAttribute('aria-label', 'Заголовок');
+
+    await page.keyboard.press('ArrowDown');
+    const menu = page.locator('.rte-dropdown__panel:not([hidden])');
+    await expect(menu).toBeVisible();
+    await expect(menu).toHaveAttribute('aria-labelledby', /rte-dropdown-/);
+
+    const paragraph = menu.locator('[role="menuitemradio"]', { hasText: 'Обычный текст' });
+    await expect(paragraph).toBeFocused();
+    await expect(paragraph).toHaveAttribute('aria-checked', 'true');
+
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`${EDITOR} h1`)).toHaveText(/Набран/);
+    await expect(menu).toBeHidden();
+
+    await page.keyboard.press('Alt+F10');
+    await page.keyboard.press('ArrowDown');
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(focusedButton(page)).toHaveAttribute('aria-label', 'Заголовок');
+  });
+
+  test('Ctrl+K открывает диалог ссылки из документа', async ({ page }) => {
+    await caretIntoParagraph(page);
+
+    await page.keyboard.press('ControlOrMeta+k');
+    const dialog = page.locator('.rte-modal:not([hidden])');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.rte-modal__title')).toHaveText('Ссылка');
+    await expect(dialog.locator('input[type="url"]')).toBeFocused();
+  });
+});

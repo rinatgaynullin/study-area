@@ -172,10 +172,9 @@ text file and formula insertion.
 
 Standard hotkeys come from TipTap: `Ctrl/Cmd+B`, `I`, `U`, `Shift+Ctrl+S`,
 `Ctrl+Z` / `Shift+Ctrl+Z`, `Ctrl+Alt+1…6`, `Shift+Ctrl+7/8`, `Shift+Ctrl+B`,
-`Ctrl+E`, and so on. Each button's tooltip shows its shortcut (`⌘B` on a Mac,
-`Ctrl+B` elsewhere) and exposes it through `aria-keyshortcuts`; toggle buttons
-report their state through `aria-pressed`, the heading button shows the current
-level, and menus are navigable with the arrow keys.
+`Ctrl+E`, and so on; `Ctrl/Cmd+K` opens the link dialog. Each button's tooltip
+shows its shortcut (`⌘B` on a Mac, `Ctrl+B` elsewhere) and exposes it through
+`aria-keyshortcuts`. See [Accessibility](#accessibility) for the keyboard model.
 
 Build a custom toolbar from groups:
 
@@ -255,6 +254,39 @@ return components built with `createModal` or `createPopover`; they are mounted
 next to the built-in dialogs and destroyed with the editor. `toolbarItems`
 entries take precedence over feature items, so a host can still re-wire a single
 button of a feature it did not write.
+
+## Accessibility
+
+The editor is usable with a keyboard alone and announces its state to screen
+readers.
+
+**Keyboard.** The toolbar is a single Tab stop, as the ARIA toolbar pattern
+prescribes: `Tab` lands on the current button, `←` / `→` move between buttons
+(disabled ones are skipped), `Home` / `End` jump to the edges, `Enter` or
+`Space` activates a button and returns the caret to the document, `Escape`
+returns without doing anything. From the document, `Alt+F10` moves focus into
+the toolbar, so you never have to Tab through the page to reach it.
+
+A menu button (heading, alignment, colours, table, file, `⋯`) opens with
+`Enter`, `Space` or `↓` (`↑` opens on the last item); inside, `↑` / `↓` move
+between items, `Home` / `End` jump to the edges, `Enter` picks, `Escape` closes
+and returns focus to the button. The colour palette is a grid: `←` / `→` move
+between swatches, `↑` / `↓` between rows.
+
+Dialogs trap focus, close on `Escape` and return focus to the document. Text
+fields submit on `Enter`.
+
+**Screen readers.** The editing surface is a labelled multiline `textbox` with
+`aria-placeholder`; the toolbar has a name. Toggle buttons report their state
+through `aria-pressed`; the heading button's current value (`H2`, “Normal
+text”) is exposed as its description. Menus are named after their button;
+items that reflect the document state are `menuitemradio` (heading level,
+alignment, colour) or `menuitemcheckbox` (toggles in the `⋯` menu) with
+`aria-checked`. Dialogs are `aria-modal` and labelled by their title. Uploads
+and errors are announced through a polite live region (the status line).
+
+Focus is always visible: every control shows a ring (`--rte-focus-ring`), and
+the editing surface shows one while the caret is inside.
 
 ## Images and links
 

@@ -22,9 +22,16 @@ export interface Dropdown extends UiComponent {
   setIcon(name: string): void;
 }
 
-/** Пункты открытой панели, по которым ходят стрелки. */
+/** Счётчик для уникальных id кнопок: панель ссылается на свою кнопку по id. */
+let dropdownCount = 0;
+
+/** Пункты открытой панели, по которым ходят стрелки, в порядке разметки. */
 function menuItemsOf(panel: HTMLElement): HTMLButtonElement[] {
-  return [...panel.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
+  return [
+    ...panel.querySelectorAll<HTMLButtonElement>(
+      ':is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]):not(:disabled)',
+    ),
+  ];
 }
 
 /**
@@ -46,18 +53,26 @@ export function createDropdown(options: DropdownOptions): Dropdown {
   const caret = icon('chevronDown', 14);
   caret.classList.add('rte-btn__caret');
 
+  dropdownCount += 1;
+  const buttonId = `rte-dropdown-${dropdownCount}`;
+  const valueId = `${buttonId}-value`;
+
   let label: Element =
     options.text === undefined
       ? icon(options.iconName ?? 'more', 20)
-      : el('span', { class: 'rte-btn__text', text: options.text });
+      : el('span', { class: 'rte-btn__text', text: options.text, attrs: { id: valueId } });
 
   const button = el('button', {
     class: 'rte-btn',
     attrs: {
       type: 'button',
+      id: buttonId,
       title: options.label,
       'aria-label': options.label,
-      'aria-haspopup': 'true',
+      // Подпись на кнопке — текущее значение («H2», «Обычный текст»): имя
+      // кнопки остаётся постоянным, а значение читалка объявляет описанием.
+      'aria-describedby': options.text === undefined ? null : valueId,
+      'aria-haspopup': 'menu',
       'aria-expanded': 'false',
     },
     children: [label, caret],
@@ -70,6 +85,8 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     className: 'rte-dropdown__panel',
     align: 'start',
     offset: 4,
+    // Меню названо своей кнопкой: без имени читалка объявляет просто «меню».
+    labelledBy: buttonId,
     // Кнопка — «внутри»: иначе клик по ней закрыл бы панель по mousedown и
     // тут же открыл заново по click.
     isInside: (target) => element.contains(target),
@@ -109,10 +126,22 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       const items = menuItemsOf(popover.body);
       if (items.length === 0) return;
 
-      const current = items.indexOf(document.activeElement as HTMLButtonElement);
-      const moves: Record<string, number> = {
-        ArrowDown: current + 1,
-        ArrowUp: current - 1,
+      const active = document.activeElement as HTMLElement | null;
+      const current = items.indexOf(active as HTMLButtonElement);
+
+      // Сетка (палитра цветов) объявляет число колонок: вверх и вниз ходят
+      // по строкам, влево и вправо — по соседям, и упираются в края, а не
+      // перескакивают на другую колонку.
+      const columns = Number(
+        active?.closest<HTMLElement>('[data-menu-columns]')?.dataset.menuColumns ?? 1,
+      );
+      const isGrid = columns > 1;
+
+      const moves: Record<string, number | undefined> = {
+        ArrowDown: current + columns,
+        ArrowUp: current - columns,
+        ArrowRight: isGrid ? current + 1 : undefined,
+        ArrowLeft: isGrid ? current - 1 : undefined,
         Home: 0,
         End: items.length - 1,
       };
@@ -120,7 +149,22 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       if (next === undefined) return;
 
       event.preventDefault();
-      items[(next + items.length) % items.length].focus();
+      const index = isGrid
+        ? Math.max(0, Math.min(items.length - 1, next))
+        : (next + items.length) % items.length;
+      items[index].focus();
+    }),
+  );
+
+  // Стрелка вниз на закрытой кнопке открывает меню и встаёт на первый пункт,
+  // вверх — на последний: так ведут себя кнопки меню везде, где они есть.
+  disposer.add(
+    on(button, 'keydown', (event) => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      event.preventDefault();
+      if (!popover.isVisible) open();
+      const items = menuItemsOf(popover.body);
+      (event.key === 'ArrowDown' ? items[0] : items[items.length - 1])?.focus();
     }),
   );
 
@@ -169,11 +213,21 @@ export function createDropdown(options: DropdownOptions): Dropdown {
   };
 }
 
+/**
+ * Роль пункта. Обычное действие — `menuitem`; пункт, отражающий состояние
+ * документа, — переключатель: `menuitemradio`, если из группы выбран ровно
+ * один (уровень заголовка, выравнивание), `menuitemcheckbox` — если пункты
+ * независимы (полужирный и курсив в меню «⋯»). Тогда `active` уходит и в
+ * `aria-checked`, а не только в подсветку.
+ */
+export type MenuItemRole = 'menuitem' | 'menuitemradio' | 'menuitemcheckbox';
+
 export interface MenuItemOptions {
   label: string;
   iconName?: string;
   active?: boolean;
   disabled?: boolean;
+  role?: MenuItemRole;
   /** Класс для подписи — например, чтобы показать уровень заголовка его кеглем. */
   labelClass?: string;
   onSelect(): void;
@@ -181,9 +235,14 @@ export interface MenuItemOptions {
 
 /** Пункт выпадающего меню. Вынесен, потому что нужен каждой панели. */
 export function createMenuItem(options: MenuItemOptions): HTMLButtonElement {
+  const role = options.role ?? 'menuitem';
   const button = el('button', {
     class: options.active ? 'rte-menu__item rte-menu__item--active' : 'rte-menu__item',
-    attrs: { type: 'button', role: 'menuitem' },
+    attrs: {
+      type: 'button',
+      role,
+      'aria-checked': role === 'menuitem' ? null : String(options.active ?? false),
+    },
     children: [
       options.iconName ? icon(options.iconName, 18) : null,
       el('span', { class: options.labelClass ?? '', text: options.label }),

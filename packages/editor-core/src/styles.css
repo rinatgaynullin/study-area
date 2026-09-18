@@ -555,6 +555,24 @@
   box-sizing: border-box;
 }
 
+/*
+ * Кольцо фокуса у всего, на что можно встать с клавиатуры: образцы цвета,
+ * вкладки и шаблоны формул, кнопка плеера, ссылка вложения. Правило общее и
+ * с низкой специфичностью — у кнопок тулбара и пунктов меню своё, со
+ * смещением внутрь. `:where` не даёт ему перебить их.
+ */
+.rte-root :where(button, a, [tabindex]):focus-visible,
+.rte-content-root :where(button, a, [tabindex]):focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Область ввода тоже показывает, что каретка в ней, — как поле формы. */
+.rte-surface:focus-within {
+  outline: var(--rte-focus-ring);
+  outline-offset: -2px;
+}
+
 /* ----------------------------------------------------------------- toolbar */
 
 .rte-toolbar {

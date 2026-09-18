@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDropdown, createModal, createPopover } from '../src';
+import { createMenuItem } from '../src/ui/dropdown';
 
 /**
  * Примитивы интерфейса и документ: слушатели на `document`/`window` должны
@@ -138,5 +139,107 @@ describe('слушатели документа у оверлеев', () => {
     expect(removed).toHaveBeenCalledTimes(2);
     expect(windowRemoved).toHaveBeenCalledTimes(2);
     popover.destroy();
+  });
+});
+
+describe('доступность меню', () => {
+  const press = (key: string): void => {
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+    );
+  };
+
+  function menuWith(items: HTMLElement[]) {
+    return createDropdown({
+      label: 'Меню',
+      renderPanel: () => {
+        const panel = document.createElement('div');
+        panel.append(...items);
+        return panel;
+      },
+    });
+  }
+
+  it('переключатели сообщают состояние через aria-checked, действия — нет', () => {
+    const radio = createMenuItem({ label: 'H1', role: 'menuitemradio', active: true, onSelect: () => {} });
+    const box = createMenuItem({ label: 'Курсив', role: 'menuitemcheckbox', onSelect: () => {} });
+    const plain = createMenuItem({ label: 'Вставить', onSelect: () => {} });
+
+    expect(radio.getAttribute('role')).toBe('menuitemradio');
+    expect(radio.getAttribute('aria-checked')).toBe('true');
+    expect(box.getAttribute('aria-checked')).toBe('false');
+    expect(plain.getAttribute('role')).toBe('menuitem');
+    expect(plain.hasAttribute('aria-checked')).toBe(false);
+  });
+
+  it('меню названо своей кнопкой, а кнопка с подписью описывается ею', () => {
+    const dropdown = createDropdown({
+      label: 'Заголовок',
+      text: 'H2',
+      renderPanel: () => document.createElement('div'),
+    });
+    document.body.appendChild(dropdown.element);
+
+    const panel = dropdown.element.querySelector('[role="menu"]')!;
+    expect(dropdown.button.id).not.toBe('');
+    expect(panel.getAttribute('aria-labelledby')).toBe(dropdown.button.id);
+    expect(dropdown.button.getAttribute('aria-haspopup')).toBe('menu');
+
+    const value = document.getElementById(dropdown.button.getAttribute('aria-describedby')!)!;
+    expect(value.textContent).toBe('H2');
+    dropdown.setText('Обычный текст');
+    expect(value.textContent).toBe('Обычный текст');
+    dropdown.destroy();
+  });
+
+  it('стрелка вниз на кнопке открывает меню и встаёт на первый пункт, вверх — на последний', () => {
+    const items = ['один', 'два', 'три'].map((label) =>
+      createMenuItem({ label, onSelect: () => {} }),
+    );
+    const dropdown = menuWith(items);
+    document.body.appendChild(dropdown.element);
+
+    dropdown.button.focus();
+    press('ArrowDown');
+    expect(dropdown.button.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement?.textContent).toBe('один');
+
+    press('Escape');
+    expect(document.activeElement).toBe(dropdown.button);
+
+    press('ArrowUp');
+    expect(document.activeElement?.textContent).toBe('три');
+    dropdown.destroy();
+  });
+
+  it('в сетке стрелки вверх и вниз ходят по строкам и упираются в края', () => {
+    const grid = document.createElement('div');
+    grid.dataset.menuColumns = '3';
+    grid.append(
+      ...['1', '2', '3', '4', '5', '6'].map((label) =>
+        createMenuItem({ label, role: 'menuitemradio', active: false, onSelect: () => {} }),
+      ),
+    );
+    const reset = createMenuItem({ label: 'сброс', onSelect: () => {} });
+    const dropdown = menuWith([grid, reset]);
+    document.body.appendChild(dropdown.element);
+
+    dropdown.button.click();
+    expect(document.activeElement?.textContent).toBe('1');
+
+    press('ArrowDown');
+    expect(document.activeElement?.textContent).toBe('4');
+    press('ArrowRight');
+    expect(document.activeElement?.textContent).toBe('5');
+    // Ниже сетки — кнопка сброса, а не перескок на первую строку.
+    press('ArrowDown');
+    expect(document.activeElement?.textContent).toBe('сброс');
+    press('ArrowUp');
+    expect(document.activeElement?.textContent).toBe('6');
+    press('ArrowUp');
+    expect(document.activeElement?.textContent).toBe('3');
+    press('ArrowUp');
+    expect(document.activeElement?.textContent).toBe('1');
+    dropdown.destroy();
   });
 });
