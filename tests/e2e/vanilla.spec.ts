@@ -277,6 +277,9 @@ test.describe('клавиатура', () => {
     await page.keyboard.press('Enter');
     await expect(page.locator(`${EDITOR} h1`)).toHaveText(/Набран/);
     await expect(menu).toBeHidden();
+    // Команда пункта возвращает фокус в документ в следующем кадре — ждём его,
+    // иначе Alt+F10 уйдёт в пустоту.
+    await expect(page.locator(EDITOR)).toBeFocused();
 
     await page.keyboard.press('Alt+F10');
     await page.keyboard.press('ArrowDown');

@@ -744,3 +744,53 @@ test.describe('превью шаблонов формул', () => {
     await expect.poll(() => countPlaceholders(page)).toBe(0);
   });
 });
+
+/*
+ * Модалка на телефоне: экран короткий, страница под оверлеем длинная. Диалог
+ * должен целиком помещаться в видимую область, тело — прокручиваться внутри,
+ * а страница под оверлеем — стоять на месте.
+ */
+test.describe('модалка на телефоне', () => {
+  test.use({ viewport: { width: 440, height: 600 }, hasTouch: true, isMobile: true });
+
+  test('редактор формул помещается на экран, прокручивается сам, а не страница', async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await openDemo(page);
+    await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').first().click();
+    const dialog = page.locator('.rte-modal:not([hidden])');
+    await expect(dialog.locator('math-field')).toBeVisible({ timeout: 20000 });
+
+    const footer = dialog.locator('.rte-modal__footer');
+    const viewportHeight = page.viewportSize()!.height;
+    const footerBox = (await footer.boundingBox())!;
+    expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(viewportHeight);
+
+    const body = dialog.locator('.rte-modal__body');
+    const overflow = await body.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(overflow).toBeGreaterThan(0);
+
+    // Колесо над телом прокручивает тело, страница под оверлеем стоит.
+    const box = (await body.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 200);
+    await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    // Колесо над подложкой не уходит на страницу.
+    await page.mouse.move(220, 20);
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    // Закрытие возвращает фокус в документ без ошибок: на мобильном UA
+    // `commands.focus()` TipTap роняла «Applying a mismatched transaction».
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.locator(EDITOR)).toBeFocused();
+    expect(pageErrors).toEqual([]);
+  });
+});

@@ -77,6 +77,44 @@ export function createModal(options: ModalOptions): Modal {
   let lastFocused: HTMLElement | null = null;
   /** Escape и кольцо фокуса слушаются на документе только пока диалог открыт. */
   let releaseDocument: Unsubscribe | null = null;
+  /** Видимая область окна отслеживается только пока диалог открыт. */
+  let releaseViewport: Unsubscribe | null = null;
+  /** Отложенный автофокус: диалог могли закрыть раньше, чем кадр наступил. */
+  let focusFrame = 0;
+
+  /**
+   * Подгоняет оверлей под видимую часть окна.
+   *
+   * `position: fixed; inset: 0` растягивает его на layout-вьюпорт, а на
+   * телефоне видно меньше: часть уходит под адресную строку Safari, а с
+   * открытой клавиатурой — половина экрана. Диалог выше видимой области не
+   * прокрутить: пальцем едет страница под оверлеем, а подвал с кнопками
+   * остаётся за клавиатурой. visualViewport знает настоящие размеры и
+   * смещение; панель берёт от оверлея долю, тело прокручивается внутри.
+   */
+  function fitViewport(): void {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    element.style.top = `${viewport.offsetTop}px`;
+    element.style.left = `${viewport.offsetLeft}px`;
+    element.style.width = `${viewport.width}px`;
+    element.style.height = `${viewport.height}px`;
+  }
+
+  function followViewport(): Unsubscribe | null {
+    const viewport = window.visualViewport;
+    if (!viewport) return null;
+    fitViewport();
+    viewport.addEventListener('resize', fitViewport);
+    viewport.addEventListener('scroll', fitViewport);
+    return () => {
+      viewport.removeEventListener('resize', fitViewport);
+      viewport.removeEventListener('scroll', fitViewport);
+      for (const property of ['top', 'left', 'width', 'height'] as const) {
+        element.style[property] = '';
+      }
+    };
+  }
 
   function focusableItems(): HTMLElement[] {
     return [
@@ -120,9 +158,11 @@ export function createModal(options: ModalOptions): Modal {
     isVisible = true;
     element.hidden = false;
     releaseDocument = on(document, 'keydown', onKeydown);
+    releaseViewport = followViewport();
 
     // Ждём кадр: до отрисовки элементы ещё не фокусируемы.
-    requestAnimationFrame(() => {
+    focusFrame = requestAnimationFrame(() => {
+      if (!isVisible) return;
       const preferred = panel.querySelector<HTMLElement>('[data-autofocus]');
       (preferred ?? focusableItems()[0] ?? panel).focus();
     });
@@ -132,8 +172,13 @@ export function createModal(options: ModalOptions): Modal {
     if (!isVisible) return;
     isVisible = false;
     element.hidden = true;
+    // Закрыли до первого кадра — автофокус не должен перетянуть фокус на
+    // уже скрытый диалог у того, кому его только что вернули.
+    cancelAnimationFrame(focusFrame);
     releaseDocument?.();
     releaseDocument = null;
+    releaseViewport?.();
+    releaseViewport = null;
 
     const restoreLastFocused = element.dispatchEvent(
       new CustomEvent(MODAL_CLOSE_EVENT, { bubbles: true, cancelable: true }),
@@ -164,7 +209,9 @@ export function createModal(options: ModalOptions): Modal {
       titleElement.textContent = title;
     },
     destroy: () => {
+      cancelAnimationFrame(focusFrame);
       releaseDocument?.();
+      releaseViewport?.();
       disposer.dispose();
       element.remove();
     },

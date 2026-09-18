@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core';
+import { focusEditorView } from '../utils/focus-editor';
 import { createDisposer, el, icon, on } from './dom';
 import { DEFAULT_LINK_STYLES, type LinkStyle } from './link-styles';
 import { normalizeHref } from './links';
@@ -267,7 +268,7 @@ export function createLinkPopover(
       if (event.key !== 'Escape') return;
       event.stopPropagation();
       popover.close('escape');
-      editor.commands.focus(null, { scrollIntoView: false });
+      focusEditorView(editor);
     }),
   );
   disposer.add(on(openButton, 'click', openLink));

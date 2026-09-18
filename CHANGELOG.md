@@ -109,6 +109,18 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Fixed
 
+- Modals on phones: the dialog is sized to the visible part of the window
+  (`visualViewport`), so it no longer hides behind Safari's address bar or the
+  on-screen keyboard; its body scrolls when the content is taller than the
+  screen (the flex item could not shrink before), and scrolling over the
+  overlay no longer scrolls the page underneath (`overscroll-behavior`).
+- Returning focus to the document (after a dialog closes, on `Escape` from the
+  toolbar, the link popover or the audio player) no longer goes through
+  TipTap's `focus()` command, which on Android and iOS focuses the view
+  synchronously and then throws “Applying a mismatched transaction”.
+- The formula editor lost the vertical spacing between its field, templates
+  and preview when they were wrapped into a tab panel; restored.
+
 - `hidden` elements really are hidden: one stylesheet rule beats every
   `display` the UI sets (read-only mode hid nothing, the recorder showed all
   phases at once).

@@ -843,6 +843,13 @@
   justify-content: center;
   padding: 16px;
   font-family: var(--rte-font-family);
+  /*
+   * Оверлей — контейнер прокрутки, которому нечего прокручивать: колесо и
+   * палец над подложкой или над шапкой панели упираются в него и не уходят
+   * на страницу под диалогом.
+   */
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .rte-modal__backdrop {
@@ -856,7 +863,9 @@
   display: flex;
   flex-direction: column;
   width: min(var(--rte-modal-width), 100%);
-  max-height: min(90vh, 860px);
+  /* Доля оверлея, а не vh: оверлей подогнан под видимую часть окна, а vh на
+     телефоне считает и то, что под адресной строкой и под клавиатурой. */
+  max-height: min(90%, 860px);
   background: var(--rte-color-bg);
   color: var(--rte-color-text);
   border-radius: var(--rte-radius-lg);
@@ -904,7 +913,11 @@
 
 .rte-modal__body {
   flex: 1 1 auto;
+  /* Флекс-элемент не сжимается ниже содержимого, пока не разрешить: без
+     этого тело не прокручивалось, а панель обрезала его вместе с подвалом. */
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--rte-modal-padding-y) var(--rte-modal-padding-x);
 }
 
@@ -1043,7 +1056,8 @@
 
 /* --------------------------------------------------------- formula editor */
 
-.rte-formula-editor {
+.rte-formula-editor,
+.rte-formula-editor__panel {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1275,7 +1289,7 @@
   .rte-modal__panel,
   .rte-modal__panel--wide {
     width: 100%;
-    max-height: 92vh;
+    max-height: 92%;
     border-radius: var(--rte-radius-lg) var(--rte-radius-lg) 0 0;
   }
 
