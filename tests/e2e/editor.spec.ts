@@ -763,6 +763,10 @@ test.describe('модалка на телефоне', () => {
     await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').first().click();
     const dialog = page.locator('.rte-modal:not([hidden])');
     await expect(dialog.locator('math-field')).toBeVisible({ timeout: 20000 });
+    // Playwright сам подтягивает страницу к кнопке перед кликом, если та под
+    // сгибом (зависит от шрифтов машины) — отсчёт ведём от положения после
+    // открытия, а не от нуля.
+    const pageScrollY = await page.evaluate(() => window.scrollY);
 
     const footer = dialog.locator('.rte-modal__footer');
     const viewportHeight = page.viewportSize()!.height;
@@ -778,13 +782,13 @@ test.describe('модалка на телефоне', () => {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.wheel(0, 200);
     await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollY);
 
     // Колесо над подложкой не уходит на страницу.
     await page.mouse.move(220, 20);
     await page.mouse.wheel(0, 300);
     await page.waitForTimeout(200);
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollY);
 
     // Закрытие возвращает фокус в документ без ошибок: на мобильном UA
     // `commands.focus()` TipTap роняла «Applying a mismatched transaction».
