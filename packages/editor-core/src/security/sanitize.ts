@@ -6,7 +6,7 @@ let htmlPurifier: Purifier | null = null;
 let mathmlPurifier: Purifier | null = null;
 let svgPurifier: Purifier | null = null;
 
-const HTML_TAGS = [
+export const HTML_TAGS = [
   'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'strong', 'b', 'em', 'i', 'u', 's', 'del', 'ins', 'mark', 'small',
   'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a', 'span', 'div',
@@ -19,7 +19,7 @@ const HTML_TAGS = [
   'polygon', 'polyline', 'text', 'tspan', 'title',
 ];
 
-const HTML_ATTRS = [
+export const HTML_ATTRS = [
   'href', 'target', 'rel', 'download', 'src', 'alt', 'title', 'class', 'style',
   'colspan', 'rowspan', 'colwidth', 'span', 'width', 'height',
   'controls', 'preload', 'type', 'lang', 'dir', 'start', 'reversed', 'value',
@@ -41,7 +41,7 @@ const HTML_ATTRS = [
  * carry `encoding="text/html"` and is the classic MathML mXSS vector. `mglyph`
  * is excluded because it can load external resources.
  */
-const MATHML_TAGS = [
+export const MATHML_TAGS = [
   'math', 'semantics', 'annotation',
   'mrow', 'mi', 'mn', 'mo', 'ms', 'mtext', 'mspace',
   'mfrac', 'msqrt', 'mroot', 'mstyle', 'merror', 'mpadded', 'mphantom', 'menclose',
@@ -49,7 +49,7 @@ const MATHML_TAGS = [
   'mtable', 'mtr', 'mtd', 'mlabeledtr', 'maligngroup', 'malignmark', 'mfenced', 'maction',
 ];
 
-const MATHML_ATTRS = [
+export const MATHML_ATTRS = [
   'xmlns', 'display', 'displaystyle', 'scriptlevel', 'mathvariant', 'mathsize',
   'mathcolor', 'mathbackground', 'dir', 'encoding', 'linethickness',
   'stretchy', 'fence', 'separator', 'accent', 'accentunder', 'largeop',
@@ -61,7 +61,7 @@ const MATHML_ATTRS = [
   'data-formula-type',
 ];
 
-const SVG_EXTRA_ATTRS = [
+export const SVG_EXTRA_ATTRS = [
   'viewbox', 'xmlns', 'xmlns:xlink', 'xlink:href', 'href', 'd', 'transform',
   'focusable', 'role', 'aria-hidden', 'data-c', 'data-mml-node', 'data-variant',
   'stroke-width', 'stroke', 'fill', 'font-family', 'font-size', 'text-anchor',
@@ -73,6 +73,13 @@ const SVG_EXTRA_ATTRS = [
  * pipeline relies on for images, audio and attachments. Widen it here and let
  * the per-element hook below apply the stricter, element-aware rules.
  */
+/**
+ * Схемы ссылок, которые проходят санитайзер. Списки выше и эта константа —
+ * контракт документа: серверный санитайзер в django-rich-editor повторяет
+ * их, а тест sanitize-contract следит, чтобы копии не разошлись.
+ */
+export const ALLOWED_URI_SCHEMES = ['http', 'https', 'mailto', 'tel', 'ftp', 'blob', 'data'];
+
 const ALLOWED_URI_REGEXP =
   /^(?:(?:https?|mailto|tel|ftp|blob|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
 

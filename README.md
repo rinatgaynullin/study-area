@@ -605,6 +605,33 @@ forbidden outright, and MathJax's SVG output is sanitized before insertion.
 
 Details and rationale: [ADR 0004](docs/adr/0004-formula-html-contract.md).
 
+## Without a bundler: Django and other server-rendered hosts
+
+`@rich-editor/standalone` is the same editor built with every dependency
+inside: ES modules with lazy chunks (MathLive and MathJax load on the first
+formula), `styles.css`, `legacy.css` and the MathLive fonts next to the
+bundle. Serve the `dist` folder as static files and load it with one module
+script:
+
+```html
+<link rel="stylesheet" href="/static/rich-editor/styles.css" />
+<script type="module">
+  import { createRichEditor } from '/static/rich-editor/editor.js';
+  createRichEditor({ element: document.querySelector('#editor') });
+</script>
+```
+
+`viewer.js` is the light entry for pages that only display a document.
+`npm run smoke:standalone` opens the built files in a browser as a static
+site and checks that the chunks, the fonts and the viewer work.
+
+`django-rich-editor` (`packages/django-rich-editor`) packages that build for
+Django: a form widget with `Media`, a form field that sanitizes on the server
+with `nh3` using the editor's own allowlist, a `RichTextField` for models and
+admin `formfield_overrides`, upload views and template tags. Its README has
+the setup; `legacy=True` reads Froala and Wiris markup, so it drops in where
+`django-froala-editor` used to be.
+
 ## Using the core without Vue
 
 The whole editor — toolbar, dialogs, popovers — is built in `@rich-editor/core`

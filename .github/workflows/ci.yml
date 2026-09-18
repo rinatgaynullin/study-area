@@ -24,11 +24,34 @@ jobs:
 
       - run: npm ci
 
-      # typecheck + vitest + build both packages
+      # typecheck + vitest + build all packages, including the standalone one
       - run: npm run ci
 
       - name: Build demo
         run: npm run build:demo
+
+      # The standalone build is meant for hosts without a bundler: check it in
+      # a real browser served as plain static files.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke-test the standalone build
+        run: npm run smoke:standalone
+
+  django:
+    name: django-rich-editor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -e 'packages/django-rich-editor[test]'
+
+      - run: pytest
+        working-directory: packages/django-rich-editor
 
   e2e:
     name: End-to-end (${{ matrix.project }})

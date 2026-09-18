@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-rich-editor"
+version = "0.1.0"
+description = "Django widget, form field, upload views and template tags for the rich editor: formulas (MathML), media, Froala-compatible legacy mode"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "django>=4.2",
+    "nh3>=0.2.15",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "pytest-django>=4.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["rich_editor"]
+# Сборка редактора кладётся в static скриптом sync-static.mjs перед сборкой
+# колеса; без неё пакет неполон.
+artifacts = ["rich_editor/static/rich_editor/**"]
+
+[tool.hatch.build.targets.sdist]
+include = ["rich_editor", "README.md", "pyproject.toml"]
+artifacts = ["rich_editor/static/rich_editor/**"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+testpaths = ["tests"]
+pythonpath = ["."]

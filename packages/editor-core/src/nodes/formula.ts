@@ -7,7 +7,7 @@ import {
   getCachedFormulaSvg,
   renderMathML,
 } from '../formula/mathjax';
-import { extractFormulaType, extractTexAnnotation, normalizeMathML } from '../formula/mathml';
+import { extractFormulaType, formulaAccessibleName, normalizeMathML } from '../formula/mathml';
 
 export interface FormulaOptions {
   /** Opens the host's visual editor for a new or existing formula. */
@@ -40,15 +40,7 @@ function formulaFontSize(scale: number): number {
   return DEFAULT_FORMULA_FONT_SIZE_PX * scale;
 }
 
-/**
- * Имя формулы для читалки. Картинка MathJax ей ни о чём не говорит, а
- * вложенный LaTeX — самая честная запись формулы, какая у нас есть без
- * речевого движка. Без аннотации остаётся текст MathML: символы без структуры,
- * но лучше, чем «изображение».
- */
-export function formulaAccessibleName(mathml: string): string {
-  return extractTexAnnotation(mathml) ?? mathml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-}
+export { formulaAccessibleName } from '../formula/mathml';
 
 /** Формула под выделением узла — та, которую можно открыть по Enter. */
 function selectedFormula(state: EditorState): { node: PMNode; pos: number } | null {

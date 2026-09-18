@@ -294,6 +294,9 @@ test.describe('клавиатура', () => {
     await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').click();
     const dialog = page.locator('.rte-modal:not([hidden])');
     await expect(dialog).toBeVisible();
+    // MathLive грузится лениво и, догрузившись, забирает фокус в поле формулы.
+    // Дождёмся этого, иначе он перехватит фокус уже у вкладки.
+    await expect(dialog.locator('math-field')).toBeFocused({ timeout: 20_000 });
 
     const math = dialog.getByRole('tab', { name: 'Математика' });
     const chem = dialog.getByRole('tab', { name: 'Химия' });

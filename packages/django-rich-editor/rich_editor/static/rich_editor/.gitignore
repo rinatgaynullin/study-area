@@ -1,0 +1,6 @@
+# Сборка редактора кладётся сюда скриптом scripts/sync-static.mjs из
+# @rich-editor/standalone. Руками написаны только связки ниже.
+*
+!.gitignore
+!rich_editor.js
+!rich_editor_viewer.js
