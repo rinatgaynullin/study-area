@@ -465,6 +465,7 @@
   --rte-toolbar-gap: 2px;
   --rte-toolbar-padding: 4px 6px;
   --rte-btn-size: 36px;
+  --rte-btn-text-width: 8.5em;
   --rte-btn-hover-bg: var(--rte-color-subtle-bg);
   --rte-btn-active-bg: var(--rte-color-primary-soft);
   --rte-btn-active-color: var(--rte-color-primary);
@@ -622,7 +623,14 @@
 .rte-btn__text {
   font-weight: var(--rte-title-font-weight);
   padding: 0 2px;
-  min-width: 2.5em;
+  /* Ширина фиксирована: подпись меняется вслед за кареткой («H1» →
+     «Обычный текст»), и тулбар не должен перестраиваться под неё.
+     Не влезло — многоточие. */
+  width: var(--rte-btn-text-width);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .rte-btn__caret {
