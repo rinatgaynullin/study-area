@@ -58,11 +58,12 @@ test.describe('ванильный редактор', () => {
     expect(onParagraph.width).toBe(onHeading.width);
     expect(toolbarOnParagraph.height).toBe(toolbarOnHeading.height);
 
-    // Русская подпись по умолчанию влезает целиком — многоточие для тех, что длиннее.
-    const truncated = await button.locator('.rte-btn__text').evaluate(
-      (span) => span.scrollWidth > span.clientWidth,
-    );
-    expect(truncated).toBe(false);
+    // Не влезающая подпись обрезается многоточием, а не растягивает кнопку.
+    // Влезает ли подпись по умолчанию, зависит от шрифта на машине, поэтому
+    // проверяется правило, а не факт обрезки.
+    const label = button.locator('.rte-btn__text');
+    await expect(label).toHaveCSS('overflow', 'hidden');
+    await expect(label).toHaveCSS('text-overflow', 'ellipsis');
   });
 
   test('открывает выпадающие меню', async ({ page }) => {

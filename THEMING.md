@@ -122,7 +122,7 @@ the link dialog, the colour input, scrollbars — follow.
 | `--rte-toolbar-gap` | `2px` | Gap between buttons and between groups |
 | `--rte-toolbar-padding` | `4px 6px` | Toolbar padding |
 | `--rte-btn-size` | `36px` | Toolbar button height and minimum width; `40px` on screens up to 640 px |
-| `--rte-btn-text-width` | `8.5em` | Fixed width of a toolbar button's text label (the heading button shows `H1`…`H6` or the paragraph label), so the toolbar does not reflow when the caret moves; a longer label is cut with an ellipsis |
+| `--rte-btn-text-width` | `9.5em` | Fixed width of a toolbar button's text label (the heading button shows `H1`…`H6` or the paragraph label), so the toolbar does not reflow when the caret moves; a longer label is cut with an ellipsis |
 | `--rte-btn-hover-bg` | `var(--rte-color-subtle-bg)` | Toolbar buttons, menu items, colour reset and the dialog close button on hover |
 | `--rte-btn-active-bg` | `var(--rte-color-primary-soft)` | Background of a toggled toolbar button |
 | `--rte-btn-active-color` | `var(--rte-color-primary)` | Icon colour of a toggled toolbar button |
