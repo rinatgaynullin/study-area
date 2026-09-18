@@ -1,3 +1,4 @@
+import { focusEditorView } from '../utils/focus-editor';
 import { createDisposer, el, icon, on } from './dom';
 import { createDropdown, createMenuItem, type Dropdown } from './dropdown';
 import { ariaKeyshortcuts, formatShortcut } from './shortcuts';
@@ -282,8 +283,7 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
 
       if (event.key === 'Escape') {
         event.preventDefault();
-        // Без прокрутки: выделение было на виду, когда уходили в тулбар.
-        context.editor.commands.focus(null, { scrollIntoView: false });
+        focusEditorView(context.editor);
         return;
       }
 

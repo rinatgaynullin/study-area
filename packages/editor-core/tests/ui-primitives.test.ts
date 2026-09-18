@@ -88,6 +88,78 @@ describe('панель дропдауна', () => {
   });
 });
 
+describe('модалка и видимая область окна', () => {
+  /** Подделка visualViewport: jsdom его не знает. */
+  function fakeViewport(size: { width: number; height: number; offsetTop: number }) {
+    const target = new EventTarget();
+    return Object.assign(target, { ...size, offsetLeft: 0 });
+  }
+
+  it('подгоняется под visualViewport, пока открыта, и отпускает его при закрытии', () => {
+    const viewport = fakeViewport({ width: 400, height: 700, offsetTop: 0 });
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+
+    const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+    document.body.appendChild(modal.element);
+    expect(modal.element.style.height).toBe('');
+
+    modal.open();
+    expect(modal.element.style.height).toBe('700px');
+    expect(modal.element.style.width).toBe('400px');
+
+    // Открылась клавиатура: видимая область стала ниже и сдвинулась.
+    viewport.height = 380;
+    viewport.offsetTop = 120;
+    viewport.dispatchEvent(new Event('resize'));
+    expect(modal.element.style.height).toBe('380px');
+    expect(modal.element.style.top).toBe('120px');
+
+    modal.close();
+    expect(modal.element.style.height).toBe('');
+    expect(modal.element.style.top).toBe('');
+    viewport.height = 500;
+    viewport.dispatchEvent(new Event('resize'));
+    expect(modal.element.style.height).toBe('');
+
+    modal.destroy();
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined });
+  });
+
+  it('запирает прокрутку документа, пока открыт хоть один диалог', () => {
+    const html = document.documentElement;
+    html.style.overflow = 'auto';
+    const first = createModal({ title: 'Первый', closeLabel: 'Закрыть' });
+    const second = createModal({ title: 'Второй', closeLabel: 'Закрыть' });
+    document.body.append(first.element, second.element);
+
+    first.open();
+    expect(html.style.overflow).toBe('hidden');
+    second.open();
+    first.close();
+    // Второй ещё открыт — замок остаётся.
+    expect(html.style.overflow).toBe('hidden');
+    second.close();
+    expect(html.style.overflow).toBe('auto');
+
+    // Уничтожение открытого диалога тоже снимает замок.
+    first.open();
+    expect(html.style.overflow).toBe('hidden');
+    first.destroy();
+    expect(html.style.overflow).toBe('auto');
+    second.destroy();
+    html.style.overflow = '';
+  });
+
+  it('без visualViewport остаётся на inset: 0 из стилей', () => {
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined });
+    const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+    document.body.appendChild(modal.element);
+    modal.open();
+    expect(modal.element.getAttribute('style')).toBeNull();
+    modal.destroy();
+  });
+});
+
 describe('панель модалки', () => {
   it('фокусируема сама: есть куда встать, пока содержимое грузится', () => {
     const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });

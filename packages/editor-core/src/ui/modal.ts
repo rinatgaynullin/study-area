@@ -11,6 +11,40 @@ export const MODAL_CLOSE_EVENT = 'rte:modal-close';
 /** Счётчик для уникальных id заголовков: на странице несколько диалогов. */
 let modalCount = 0;
 
+/** Сколько диалогов открыто на странице: замок с документа снимает последний. */
+let openModals = 0;
+let savedOverflow = '';
+let savedPaddingRight = '';
+
+/**
+ * Запирает прокрутку документа, пока открыт хоть один диалог.
+ *
+ * `overscroll-behavior` на оверлее гасит цепочку прокрутки не везде: в
+ * Chromium на Linux остаток колеса, не поместившийся в тело диалога, всё
+ * равно уезжает на страницу. Документ без прокрутки не уедет. Ширину
+ * пропавшего скроллбара добираем отступом, чтобы страница не дёргалась.
+ */
+function lockDocumentScroll(): void {
+  openModals += 1;
+  if (openModals > 1) return;
+
+  const html = document.documentElement;
+  savedOverflow = html.style.overflow;
+  savedPaddingRight = html.style.paddingRight;
+  const scrollbarWidth = window.innerWidth - html.clientWidth;
+  html.style.overflow = 'hidden';
+  if (scrollbarWidth > 0) html.style.paddingRight = `${scrollbarWidth}px`;
+}
+
+function unlockDocumentScroll(): void {
+  openModals = Math.max(0, openModals - 1);
+  if (openModals > 0) return;
+
+  const html = document.documentElement;
+  html.style.overflow = savedOverflow;
+  html.style.paddingRight = savedPaddingRight;
+}
+
 export interface ModalOptions {
   title: string;
   closeLabel: string;
@@ -77,6 +111,44 @@ export function createModal(options: ModalOptions): Modal {
   let lastFocused: HTMLElement | null = null;
   /** Escape и кольцо фокуса слушаются на документе только пока диалог открыт. */
   let releaseDocument: Unsubscribe | null = null;
+  /** Видимая область окна отслеживается только пока диалог открыт. */
+  let releaseViewport: Unsubscribe | null = null;
+  /** Отложенный автофокус: диалог могли закрыть раньше, чем кадр наступил. */
+  let focusFrame = 0;
+
+  /**
+   * Подгоняет оверлей под видимую часть окна.
+   *
+   * `position: fixed; inset: 0` растягивает его на layout-вьюпорт, а на
+   * телефоне видно меньше: часть уходит под адресную строку Safari, а с
+   * открытой клавиатурой — половина экрана. Диалог выше видимой области не
+   * прокрутить: пальцем едет страница под оверлеем, а подвал с кнопками
+   * остаётся за клавиатурой. visualViewport знает настоящие размеры и
+   * смещение; панель берёт от оверлея долю, тело прокручивается внутри.
+   */
+  function fitViewport(): void {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    element.style.top = `${viewport.offsetTop}px`;
+    element.style.left = `${viewport.offsetLeft}px`;
+    element.style.width = `${viewport.width}px`;
+    element.style.height = `${viewport.height}px`;
+  }
+
+  function followViewport(): Unsubscribe | null {
+    const viewport = window.visualViewport;
+    if (!viewport) return null;
+    fitViewport();
+    viewport.addEventListener('resize', fitViewport);
+    viewport.addEventListener('scroll', fitViewport);
+    return () => {
+      viewport.removeEventListener('resize', fitViewport);
+      viewport.removeEventListener('scroll', fitViewport);
+      for (const property of ['top', 'left', 'width', 'height'] as const) {
+        element.style[property] = '';
+      }
+    };
+  }
 
   function focusableItems(): HTMLElement[] {
     return [
@@ -120,9 +192,12 @@ export function createModal(options: ModalOptions): Modal {
     isVisible = true;
     element.hidden = false;
     releaseDocument = on(document, 'keydown', onKeydown);
+    releaseViewport = followViewport();
+    lockDocumentScroll();
 
     // Ждём кадр: до отрисовки элементы ещё не фокусируемы.
-    requestAnimationFrame(() => {
+    focusFrame = requestAnimationFrame(() => {
+      if (!isVisible) return;
       const preferred = panel.querySelector<HTMLElement>('[data-autofocus]');
       (preferred ?? focusableItems()[0] ?? panel).focus();
     });
@@ -132,8 +207,14 @@ export function createModal(options: ModalOptions): Modal {
     if (!isVisible) return;
     isVisible = false;
     element.hidden = true;
+    // Закрыли до первого кадра — автофокус не должен перетянуть фокус на
+    // уже скрытый диалог у того, кому его только что вернули.
+    cancelAnimationFrame(focusFrame);
     releaseDocument?.();
     releaseDocument = null;
+    releaseViewport?.();
+    releaseViewport = null;
+    unlockDocumentScroll();
 
     const restoreLastFocused = element.dispatchEvent(
       new CustomEvent(MODAL_CLOSE_EVENT, { bubbles: true, cancelable: true }),
@@ -164,7 +245,12 @@ export function createModal(options: ModalOptions): Modal {
       titleElement.textContent = title;
     },
     destroy: () => {
+      // Уничтожили открытым — замок с документа всё равно снимаем.
+      if (isVisible) unlockDocumentScroll();
+      isVisible = false;
+      cancelAnimationFrame(focusFrame);
       releaseDocument?.();
+      releaseViewport?.();
       disposer.dispose();
       element.remove();
     },

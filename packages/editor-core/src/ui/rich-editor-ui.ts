@@ -10,6 +10,7 @@ import type {
   RichEditorError,
   UploadKind,
 } from '../types';
+import { focusEditorView } from '../utils/focus-editor';
 import { createDisposer, el, on } from './dom';
 import { createAudioRecorderDialog } from './dialogs/audio-recorder-dialog';
 import { createFormulaDialog } from './dialogs/formula-dialog';
@@ -435,7 +436,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
       event.preventDefault();
       // Без прокрутки: выделение было на виду, когда диалог открывали, и
       // возвращать к нему экран не надо.
-      core.editor.commands.focus(null, { scrollIntoView: false });
+      focusEditorView(core.editor);
     }),
   );
 

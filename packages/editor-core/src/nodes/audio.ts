@@ -1,5 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import type { AudioAttributes, Translate } from '../types';
+import { focusEditorView } from '../utils/focus-editor';
 import { formatDuration } from '../utils/format';
 
 export interface AudioOptions {
@@ -240,7 +241,7 @@ export const AudioNode = Node.create<AudioOptions>({
         };
         if (event.key === 'Escape') {
           event.preventDefault();
-          editor.commands.focus(null, { scrollIntoView: false });
+          focusEditorView(editor);
           return;
         }
         const next = moves[event.key];
