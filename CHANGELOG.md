@@ -45,8 +45,17 @@ The packages are not published yet; everything below lands in the first release.
   `menuitemradio` — all with `aria-checked`; the heading button's current
   value is its `aria-describedby`; the editing surface has `aria-placeholder`.
   `createMenuItem` takes `role`, `createPopover` takes `label` / `labelledBy`.
-- A visible focus ring on every control of the editor and viewer, and on the
-  editing surface while the caret is inside.
+- A visible focus ring on every control of the editor and viewer.
+- Dialog accessibility: formula tabs and template categories are ARIA tab
+  lists (roving `tabindex`, `←` / `→` / `Home` / `End`, `aria-controls`,
+  `tabpanel`); template buttons are named by their LaTeX; the formula field is
+  labelled; loading and parse messages are live. The voice recorder moves focus
+  to the next phase's button when the pressed one hides; its error is an
+  alert. The link popover is a named dialog; `Escape` from its field returns
+  the caret and keeps the popover dismissed until the caret leaves the link
+  (`createPopover` reports the close reason to `onClose`). Link validation
+  errors are alerts with `aria-invalid`. The status line stays in the DOM while
+  empty so screen readers announce what appears in it.
 - The toolbar measures itself above `collapseBelow` and folds groups one by
   one into the `⋯` menu instead of wrapping.
 

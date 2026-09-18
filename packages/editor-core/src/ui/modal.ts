@@ -55,7 +55,9 @@ export function createModal(options: ModalOptions): Modal {
   const panel = el('div', {
     class: options.wide ? 'rte-modal__panel rte-modal__panel--wide' : 'rte-modal__panel',
     // Имя диалога — его заголовок: без него читалка объявляет просто «диалог».
-    attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
+    // tabindex −1 — чтобы панель можно было сфокусировать, когда в ней нет
+    // ничего фокусируемого (например, пока грузится редактор формул).
+    attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId, tabindex: -1 },
     children: [
       el('header', { class: 'rte-modal__header', children: [titleElement, closeButton] }),
       body,

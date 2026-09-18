@@ -180,11 +180,14 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
    * через onUpload и onError, но пользователь должен видеть, что файл
    * грузится и почему не вставился, без обвязки со стороны хоста.
    */
+  // Живая область должна существовать до того, как в ней появится текст:
+  // регион, который показывают и наполняют одновременно, читалки часто
+  // пропускают. Поэтому строка не прячется атрибутом hidden — пустую её
+  // схлопывают стили.
   const status = el('div', {
     class: 'rte-status',
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
-  status.hidden = true;
   const hasStatusLine = options.statusLine !== false;
 
   /** Загрузки в полёте, по видам: параллельных может быть несколько. */
@@ -198,7 +201,6 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
     const text = errorText || (busy ? core.t(`upload_${busy}`) : '');
     status.textContent = text;
     status.classList.toggle('rte-status--error', errorText !== '');
-    status.hidden = text === '';
   }
 
   function reportError(error: RichEditorError): void {

@@ -150,3 +150,37 @@ describe('диалог записи на пределах', () => {
     );
   });
 });
+
+describe('диалог записи с клавиатуры', () => {
+  it('фокус переходит на кнопку новой фазы, когда нажатая прячется', async () => {
+    const dialog = openRecorder();
+    // Модалка отдаёт фокус помеченной кнопке в следующем кадре.
+    await vi.advanceTimersByTimeAsync(50);
+
+    const record = control(dialog, ru.audio_record);
+    expect(document.activeElement).toBe(record);
+
+    // «Записать» спряталась — фокус ушёл бы в никуда, а кольцо модалки
+    // с ним. Он должен оказаться на «Остановить».
+    record.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(record.hidden).toBe(true);
+    expect(document.activeElement).toBe(control(dialog, ru.audio_stop));
+
+    // Дубль записан — «Остановить» прячется, фокус переходит на «Записать заново».
+    MockMediaRecorder.instances[0].emitChunk(150);
+    control(dialog, ru.audio_stop).click();
+    await vi.runAllTimersAsync();
+    expect(control(dialog, ru.audio_stop).hidden).toBe(true);
+    expect(document.activeElement).toBe(control(dialog, ru.audio_rerecord));
+  });
+
+  it('ошибка объявляется сразу, индикатор для читалки не существует', () => {
+    const dialog = openRecorder();
+    expect(dialog.querySelector('.rte-field__error:not([hidden])')).toBeNull();
+    expect(
+      [...dialog.querySelectorAll('.rte-field__error')].some((p) => p.getAttribute('role') === 'alert'),
+    ).toBe(true);
+    expect(dialog.querySelector('.rte-recorder__indicator')?.getAttribute('aria-hidden')).toBe('true');
+  });
+});
