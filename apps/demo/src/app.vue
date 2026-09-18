@@ -171,6 +171,11 @@ async function reloadSample(): Promise<void> {
 <template>
   <main class="demo" :class="{ 'demo--dark': theme === 'dark' }">
     <header class="demo__header">
+      <nav class="demo__variants" aria-label="Варианты сборки">
+        <a href="./" aria-current="page">Vue</a>
+        <a href="./vanilla.html">Vanilla</a>
+        <a href="./standalone.html">Standalone</a>
+      </nav>
       <h1>@rich-editor/vue</h1>
       <p class="demo__subtitle">
         Rich text editor на Vue 3 с формулами (MathML + MathJax), изображениями,

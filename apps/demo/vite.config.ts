@@ -2,6 +2,8 @@ import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
+const page = (name: string) => fileURLToPath(new URL(name, import.meta.url));
+
 const fromRoot = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
@@ -10,6 +12,17 @@ export default defineConfig({
   // Playwright suite on `/`.
   base: process.env.DEMO_BASE || '/',
   plugins: [vue()],
+  build: {
+    // Три страницы — три сборки редактора: Vue, ванильная и автономная. Без
+    // явного списка в dist попадает только index.html.
+    rollupOptions: {
+      input: {
+        index: page('index.html'),
+        vanilla: page('vanilla.html'),
+        standalone: page('standalone.html'),
+      },
+    },
+  },
   resolve: {
     // The demo runs against package sources so changes hot-reload without a
     // build. Subpath entries come first: alias matching is order-sensitive.

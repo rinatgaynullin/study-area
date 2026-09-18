@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Автономная сборка, скопированная в демо скриптом sync-standalone.mjs
+apps/demo/public/standalone/
 coverage/
 .vite/
 *.local

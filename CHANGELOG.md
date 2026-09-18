@@ -12,6 +12,10 @@ The packages are not published yet; everything below lands in the first release.
   chunks, `styles.css`, `legacy.css` and the MathLive fonts next to the
   bundle (`mathliveFontsDirectory` defaults to that folder). `npm run
   smoke:standalone` checks the built files in a browser served as static.
+- Demo pages for every build: `vanilla.html` and `standalone.html` are now
+  part of the demo build (and the GitHub Pages site) next to the Vue page,
+  with a switcher between them; the standalone page loads the built `dist`
+  as static files, the way a host without a bundler would.
 - `django-rich-editor`: Django widget (`RichEditorWidget`), form field with
   server-side sanitization (`RichTextFormField`, `nh3`, the editor's own
   allowlist — a test keeps the Python copy equal to the TypeScript source),
