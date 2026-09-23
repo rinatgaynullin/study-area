@@ -32,12 +32,26 @@
   line-height: 1.25;
 }
 
-.rte-content h1 { font-size: 1.9em; }
-.rte-content h2 { font-size: 1.6em; }
-.rte-content h3 { font-size: 1.35em; }
-.rte-content h4 { font-size: 1.15em; }
-.rte-content h5 { font-size: 1em; }
-.rte-content h6 { font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.04em; }
+.rte-content h1 {
+  font-size: 1.9em;
+}
+.rte-content h2 {
+  font-size: 1.6em;
+}
+.rte-content h3 {
+  font-size: 1.35em;
+}
+.rte-content h4 {
+  font-size: 1.15em;
+}
+.rte-content h5 {
+  font-size: 1em;
+}
+.rte-content h6 {
+  font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 .rte-content ul,
 .rte-content ol {
@@ -166,7 +180,9 @@
   cursor: pointer;
   user-select: none;
   line-height: 1;
-  transition: background-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .rte-formula:hover {
@@ -609,7 +625,9 @@
   font: inherit;
   font-size: var(--rte-ui-font-size-xs);
   line-height: 1;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -703,12 +721,31 @@
   background: var(--rte-color-border);
 }
 
-.rte-menu__heading--1 { font-size: 1.5em; font-weight: 700; }
-.rte-menu__heading--2 { font-size: 1.3em; font-weight: 700; }
-.rte-menu__heading--3 { font-size: 1.15em; font-weight: 600; }
-.rte-menu__heading--4 { font-size: 1.05em; font-weight: 600; }
-.rte-menu__heading--5 { font-size: 1em; font-weight: 600; }
-.rte-menu__heading--6 { font-size: 0.9em; font-weight: 600; text-transform: uppercase; }
+.rte-menu__heading--1 {
+  font-size: 1.5em;
+  font-weight: 700;
+}
+.rte-menu__heading--2 {
+  font-size: 1.3em;
+  font-weight: 700;
+}
+.rte-menu__heading--3 {
+  font-size: 1.15em;
+  font-weight: 600;
+}
+.rte-menu__heading--4 {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.rte-menu__heading--5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+.rte-menu__heading--6 {
+  font-size: 0.9em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
 
 /* ------------------------------------------------------------------ colors */
 
@@ -1015,7 +1052,9 @@
   font-size: var(--rte-ui-font-size);
   font-weight: var(--rte-ui-font-weight);
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .rte-button:hover:not(:disabled) {

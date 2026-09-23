@@ -24,25 +24,32 @@ afterEach(() => {
   host = undefined;
 });
 
-function mountEditor(options: Record<string, unknown> = {}): RichEditorUi {
+const mountEditor = (options: Record<string, unknown> = {}): RichEditorUi => {
   host = document.createElement('div');
   document.body.appendChild(host);
   ui = createRichEditor({ element: host, content: '<p>привет</p>', ...options });
+
   return ui;
-}
+};
 
 /** Открытый диалог: закрытые остаются в DOM под атрибутом `hidden`. */
-function openDialog(): HTMLElement | null {
-  return document.querySelector('.rte-modal:not([hidden])');
-}
+const openDialog = (): HTMLElement | null => document.querySelector('.rte-modal:not([hidden])');
 
-function toolbarButton(label: string): HTMLButtonElement {
+const toolbarButton = (label: string): HTMLButtonElement => {
   const found = [...document.querySelectorAll<HTMLButtonElement>('.rte-toolbar button')].find(
     (button) => button.getAttribute('aria-label') === label,
   );
+
   if (!found) throw new Error(`Нет кнопки тулбара с подписью «${label}»`);
+
   return found;
-}
+};
+
+/** TipTap ставит фокус в следующем кадре, чтобы не спорить с отрисовкой. */
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
 
 describe('ванильная оболочка редактора', () => {
   it('собирает тулбар и область ввода без фреймворка', () => {
@@ -69,6 +76,7 @@ describe('ванильная оболочка редактора', () => {
   it('пересобирает подписи тулбара при смене локали', () => {
     // Английская таблица встроена: хосту достаточно сменить локаль.
     const editor = mountEditor();
+
     expect(toolbarButton('Полужирный')).toBeTruthy();
 
     editor.setLocale('en');
@@ -82,6 +90,7 @@ describe('ванильная оболочка редактора', () => {
     expect(document.querySelectorAll('.rte-modal').length).toBeGreaterThan(1);
 
     toolbarButton('Математическая формула').click();
+
     expect(openDialog()?.querySelector('.rte-modal__title')?.textContent).toContain(
       'Математическая',
     );
@@ -92,6 +101,7 @@ describe('ванильная оболочка редактора', () => {
     const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
 
     const button = toolbarButton('Математическая формула');
+
     button.focus();
     button.click();
     expect(openDialog()).not.toBeNull();
@@ -100,7 +110,7 @@ describe('ванильная оболочка редактора', () => {
     expect(openDialog()).toBeNull();
 
     // TipTap ставит фокус в следующем кадре, чтобы не спорить с отрисовкой.
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await nextFrame();
 
     // Фокус на кнопке тулбара оставил бы клавиатуру без документа: Backspace
     // после «Отмены» не удалил бы выделенный узел.
@@ -109,6 +119,7 @@ describe('ванильная оболочка редактора', () => {
 
   it('уничтожается целиком: ни оболочки, ни диалогов в DOM', () => {
     const editor = mountEditor();
+
     expect(document.querySelectorAll('.rte-modal').length).toBeGreaterThan(0);
 
     editor.destroy();
@@ -126,6 +137,7 @@ describe('оверлеи', () => {
     toolbarButton('Математическая формула').click();
 
     const backdrop = openDialog()!.querySelector<HTMLElement>('.rte-modal__backdrop');
+
     expect(backdrop).not.toBeNull();
 
     backdrop!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -134,16 +146,20 @@ describe('оверлеи', () => {
 
   it('смена локали переводит диалоги, а не только тулбар', () => {
     const editor = mountEditor();
+
     editor.setLocale('en');
 
     toolbarButton('Link').click();
+
     const dialog = openDialog()!;
+
     expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Link');
     expect(dialog.querySelector('.rte-button--primary')?.textContent).toBe('Apply');
   });
 
   it('смена таблицы переводов тоже пересобирает диалоги', () => {
     const editor = mountEditor();
+
     editor.setMessages({ ru: { link_title: 'Гиперссылка' } });
 
     toolbarButton('Ссылка').click();
@@ -161,6 +177,7 @@ describe('оверлеи', () => {
 describe('тема', () => {
   it('опция theme ставит класс на корень, setTheme его переключает', () => {
     const editor = mountEditor({ theme: 'dark' });
+
     expect(editor.element.classList.contains('rte-theme-dark')).toBe(true);
 
     editor.setTheme('light');
@@ -171,9 +188,15 @@ describe('тема', () => {
 describe('строка статуса', () => {
   it('показывает идущую загрузку и последнюю ошибку', async () => {
     let finish!: (result: { url: string }) => void;
-    const uploadImage = () => new Promise<{ url: string }>((resolve) => { finish = resolve; });
+
+    const uploadImage = () =>
+      new Promise<{ url: string }>((resolve) => {
+        finish = resolve;
+      });
+
     const editor = mountEditor({ uploadImage });
     const status = editor.element.querySelector<HTMLElement>('.rte-status')!;
+
     // Живая область существует и пустой: читалка объявляет только то, что
     // появилось в уже существующем регионе. Пустую строку схлопывают стили.
     expect(status.hidden).toBe(false);
@@ -182,6 +205,7 @@ describe('строка статуса', () => {
 
     const file = new File([new Uint8Array(16)], 'a.png', { type: 'image/png' });
     const pending = editor.core.insertImageFile(file);
+
     expect(status.textContent).toBe('Загрузка изображения…');
 
     finish({ url: 'https://cdn.example.com/a.png' });
@@ -190,6 +214,7 @@ describe('строка статуса', () => {
     expect(status.hidden).toBe(false);
 
     const huge = new File([new Uint8Array(16)], 'big.png', { type: 'image/png' });
+
     Object.defineProperty(huge, 'size', { value: 100 * 1024 * 1024 });
     await editor.core.insertImageFile(huge);
     expect(status.classList.contains('rte-status--error')).toBe(true);
@@ -198,14 +223,17 @@ describe('строка статуса', () => {
 
   it('выключается опцией — у хоста свои уведомления', () => {
     const editor = mountEditor({ statusLine: false });
+
     expect(editor.element.querySelector('.rte-status')).toBeNull();
   });
 
   it('диалог назван своим заголовком', () => {
     mountEditor();
     toolbarButton('Математическая формула').click();
+
     const dialog = openDialog()!.querySelector('[role="dialog"]')!;
     const title = dialog.querySelector('.rte-modal__title')!;
+
     expect(dialog.getAttribute('aria-labelledby')).toBe(title.id);
     expect(title.id).not.toBe('');
   });
@@ -215,15 +243,18 @@ describe('возможности поверх встроенных', () => {
   it('подключает возможность одним объявлением: расширение, пункт, диалог', () => {
     const plain = mountEditor();
     const builtInDialogs = document.querySelectorAll('.rte-modal').length;
+
     plain.destroy();
     ui = undefined;
 
     const seenAtBuild: string[] = [];
+
     const feature: EditorFeature = {
       id: 'shout',
       extensions: ({ t }) => {
         // Переводчик доступен уже при сборке, а не только в рантайме.
         seenAtBuild.push(t('toolbar_bold'));
+
         return [Extension.create({ name: 'shoutProbe' })];
       },
       toolbarItems: () => [
@@ -232,7 +263,9 @@ describe('возможности поверх встроенных', () => {
           icon: 'bold',
           labelKey: 'shout_label',
           kind: 'button',
-          run: ({ editor }) => void editor.chain().focus().insertContent('!').run(),
+          run: ({ editor }) => {
+            editor.chain().focus().insertContent('!').run();
+          },
         },
       ],
       dialogs: (context) => [
@@ -246,12 +279,14 @@ describe('возможности поверх встроенных', () => {
     });
 
     expect(seenAtBuild).toEqual(['Полужирный']);
+
     expect(
       editor.core.editor.extensionManager.extensions.some((item) => item.name === 'shoutProbe'),
     ).toBe(true);
 
     // Пункт не упомянут в пресете — встал отдельной группой в конце.
     const groups = editor.element.querySelectorAll('.rte-toolbar__group');
+
     expect(groups[groups.length - 1].querySelector('button')?.title).toBe('Крикнуть');
 
     toolbarButton('Крикнуть').click();
@@ -275,29 +310,35 @@ describe('возможности поверх встроенных', () => {
     });
 
     const groups = editor.element.querySelectorAll('.rte-toolbar__group');
+
     expect(groups).toHaveLength(1);
     expect(groups[0].querySelectorAll('button')).toHaveLength(2);
   });
 });
 
 describe('клавиатура из документа', () => {
-  const nextFrame = (): Promise<void> =>
-    new Promise((resolve) => requestAnimationFrame(() => resolve()));
-
-  function pressInEditor(content: HTMLElement, init: KeyboardEventInit): void {
-    content.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
-  }
+  const pressInEditor = (content: HTMLElement, init: KeyboardEventInit): void => {
+    content.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }),
+    );
+  };
 
   it('Alt+F10 переводит фокус в тулбар, Escape — обратно в документ', async () => {
     const editor = mountEditor();
     const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+
     content.focus();
 
     pressInEditor(content, { key: 'F10', altKey: true });
+
     const active = document.activeElement as HTMLElement;
+
     expect(active.closest('.rte-toolbar')).not.toBeNull();
 
-    active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    active.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+
     await nextFrame();
     expect(document.activeElement).toBe(content);
   });
@@ -305,10 +346,13 @@ describe('клавиатура из документа', () => {
   it('Ctrl+K открывает диалог ссылки, как кнопка тулбара', () => {
     const editor = mountEditor();
     const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+
     content.focus();
 
     pressInEditor(content, { key: 'k', ctrlKey: true });
+
     const dialog = openDialog();
+
     expect(dialog).not.toBeNull();
     expect(dialog!.querySelector('.rte-modal__title')?.textContent).toBe('Ссылка');
     expect(toolbarButton('Ссылка').getAttribute('aria-keyshortcuts')).toBe('Control+K');
@@ -316,8 +360,6 @@ describe('клавиатура из документа', () => {
 });
 
 describe('доступность диалогов', () => {
-  const nextFrame = (): Promise<void> =>
-    new Promise((resolve) => requestAnimationFrame(() => resolve()));
   const press = (target: Element, key: string): void => {
     target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
   };
@@ -325,9 +367,13 @@ describe('доступность диалогов', () => {
   it('вкладки редактора формул — список вкладок со стрелками и панелью', () => {
     mountEditor();
     toolbarButton('Математическая формула').click();
+
     const dialog = openDialog()!;
 
-    const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__tabs [role="tab"]')];
+    const tabs = [
+      ...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__tabs [role="tab"]'),
+    ];
+
     const [math, chem] = tabs;
     const panel = dialog.querySelector<HTMLElement>('[role="tabpanel"]')!;
 
@@ -354,10 +400,15 @@ describe('доступность диалогов', () => {
   it('категории шаблонов — второй список вкладок, шаблоны названы своим LaTeX', () => {
     mountEditor();
     toolbarButton('Математическая формула').click();
+
     const dialog = openDialog()!;
 
-    const categories = [...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__categories [role="tab"]')];
+    const categories = [
+      ...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__categories [role="tab"]'),
+    ];
+
     const gallery = dialog.querySelector<HTMLElement>('.rte-formula-editor__gallery')!;
+
     expect(categories.length).toBeGreaterThan(1);
     expect(gallery.getAttribute('role')).toBe('tabpanel');
     expect(gallery.getAttribute('aria-labelledby')).toBe(categories[0].id);
@@ -366,31 +417,48 @@ describe('доступность диалогов', () => {
 
     categories[0].focus();
     press(categories[0], 'ArrowRight');
-    const reRendered = [...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__categories [role="tab"]')];
+
+    const reRendered = [
+      ...dialog.querySelectorAll<HTMLButtonElement>('.rte-formula-editor__categories [role="tab"]'),
+    ];
+
     expect(document.activeElement).toBe(reRendered[1]);
     expect(reRendered[1].getAttribute('aria-selected')).toBe('true');
     expect(gallery.getAttribute('aria-labelledby')).toBe(reRendered[1].id);
 
     const template = gallery.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!;
+
     expect(template.getAttribute('aria-label')).not.toBe('');
     expect(template.getAttribute('aria-label')).toBe(template.title);
-    expect(template.querySelector('.rte-formula-editor__template-preview')?.getAttribute('aria-hidden')).toBe('true');
-    expect(dialog.querySelector('.rte-formula-editor__status')?.getAttribute('role')).toBe('status');
+
+    expect(
+      template.querySelector('.rte-formula-editor__template-preview')?.getAttribute('aria-hidden'),
+    ).toBe('true');
+
+    expect(dialog.querySelector('.rte-formula-editor__status')?.getAttribute('role')).toBe(
+      'status',
+    );
   });
 
   it('поповер ссылки назван, Escape из его поля возвращает каретку в текст', async () => {
     const editor = mountEditor({
       content: '<p><a href="https://example.com">ссылка</a> и текст</p>',
     });
+
     const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+
     editor.core.editor.commands.setTextSelection(3);
 
-    const popover = editor.element.querySelector<HTMLElement>('.rte-popover:not(.rte-dropdown__panel)')!;
+    const popover = editor.element.querySelector<HTMLElement>(
+      '.rte-popover:not(.rte-dropdown__panel)',
+    )!;
+
     expect(popover.hidden).toBe(false);
     expect(popover.getAttribute('role')).toBe('dialog');
     expect(popover.getAttribute('aria-label')).toBe('Ссылка');
 
     const href = popover.querySelector<HTMLInputElement>('input[type="url"]')!;
+
     href.focus();
     expect(document.activeElement).toBe(href);
 
@@ -411,6 +479,7 @@ describe('доступность диалогов', () => {
   it('недопустимый адрес в диалоге ссылки объявляется и помечает поле', () => {
     mountEditor();
     toolbarButton('Ссылка').click();
+
     const dialog = openDialog()!;
     const href = dialog.querySelector<HTMLInputElement>('input[type="url"]')!;
     const error = dialog.querySelector<HTMLElement>('.rte-field__error')!;
@@ -418,7 +487,9 @@ describe('доступность диалогов', () => {
     expect(error.getAttribute('role')).toBe('alert');
     expect(error.hidden).toBe(true);
 
+    // eslint-disable-next-line no-script-url -- проверяем опасную схему намеренно
     href.value = 'javascript:alert(1)';
+
     [...dialog.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent === 'Применить')!
       .click();
@@ -436,12 +507,15 @@ describe('доступность узлов документа', () => {
 
   it('имя области ввода задаётся опцией ariaLabel', () => {
     const editor = mountEditor({ ariaLabel: 'Ответ на задание' });
+
     expect(editor.element.querySelector('.rte-content')?.getAttribute('aria-label')).toBe(
       'Ответ на задание',
     );
+
     editor.destroy();
 
     const plain = mountEditor();
+
     expect(plain.element.querySelector('.rte-content')?.getAttribute('aria-label')).toBe(
       'Текстовый редактор',
     );
@@ -449,6 +523,7 @@ describe('доступность узлов документа', () => {
 
   it('голосовое сообщение — группа с именем и ползунком, стрелки перематывают', () => {
     const editor = mountEditor();
+
     editor.core.editor.commands.insertAudio({
       src: 'blob:audio',
       name: 'Объяснение',
@@ -457,10 +532,12 @@ describe('доступность узлов документа', () => {
     });
 
     const player = editor.element.querySelector<HTMLElement>('.rte-audio')!;
+
     expect(player.getAttribute('role')).toBe('group');
     expect(player.getAttribute('aria-label')).toBe('Объяснение');
 
     const slider = player.querySelector<HTMLElement>('.rte-audio__waveform')!;
+
     expect(slider.getAttribute('role')).toBe('slider');
     expect(slider.tabIndex).toBe(0);
     expect(slider.getAttribute('aria-label')).toBe('Позиция воспроизведения');
@@ -480,14 +557,23 @@ describe('доступность узлов документа', () => {
 
     // Безымянное сообщение называется по типу.
     editor.core.editor.commands.insertAudio({ src: 'blob:audio2', duration: 3 });
+
     const players = editor.element.querySelectorAll<HTMLElement>('.rte-audio');
+
     expect(players[players.length - 1].getAttribute('aria-label')).toBe('Голосовое сообщение');
   });
 
   it('вложение: ссылка называет и действие, и файл', () => {
     const editor = mountEditor();
-    editor.core.editor.commands.insertAttachment({ href: 'blob:file', name: 'отчёт.txt', size: 12 });
+
+    editor.core.editor.commands.insertAttachment({
+      href: 'blob:file',
+      name: 'отчёт.txt',
+      size: 12,
+    });
+
     const link = editor.element.querySelector<HTMLAnchorElement>('.rte-attachment__link')!;
+
     expect(link.getAttribute('aria-label')).toBe('Скачать: отчёт.txt');
     expect(link.textContent).toBe('отчёт.txt');
   });

@@ -1,5 +1,4 @@
-import { normalizeMathML } from './mathml';
-import { extractFormulaType } from './mathml';
+import { normalizeMathML, extractFormulaType } from './mathml';
 
 /**
  * Rewrites raw `<math>` elements in incoming HTML into the editor's formula
@@ -8,17 +7,20 @@ import { extractFormulaType } from './mathml';
  *
  * Runs before `sanitizeHtml`; the MathML itself is sanitized here.
  */
-export function inlineMathMLToFormulaNodes(html: string): string {
+export const inlineMathMLToFormulaNodes = (html: string): string => {
   if (!html || !/<math[\s>]/i.test(html)) return html;
+
   if (typeof DOMParser === 'undefined') return html;
 
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const mathElements = Array.from(doc.querySelectorAll('math'));
+
   if (mathElements.length === 0) return html;
 
-  for (const element of mathElements) {
+  // Список уже скопирован через Array.from, поэтому замена узлов в обходе безопасна.
+  mathElements.forEach((element) => {
     // A nested <math> is already covered by its ancestor's serialization.
-    if (element.closest('span[data-formula]')) continue;
+    if (element.closest('span[data-formula]')) return;
 
     const mathml = normalizeMathML(element.outerHTML);
     const span = doc.createElement('span');
@@ -32,7 +34,7 @@ export function inlineMathMLToFormulaNodes(html: string): string {
     }
 
     element.replaceWith(span);
-  }
+  });
 
   return doc.body.innerHTML;
-}
+};

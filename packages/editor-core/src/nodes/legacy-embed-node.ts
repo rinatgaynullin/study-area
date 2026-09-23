@@ -1,11 +1,11 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { sanitizeHtml } from '../security/sanitize';
 
-export interface LegacyEmbedOptions {
+interface LegacyEmbedOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
-export const LEGACY_EMBED_NODE_NAME = 'legacyEmbed';
+const LEGACY_EMBED_NODE_NAME = 'legacyEmbed';
 
 /**
  * Атомарный узел для фрагментов старого редактора, которые нечем смоделировать:
@@ -28,50 +28,48 @@ export const LegacyEmbedNode = Node.create<LegacyEmbedOptions>({
   selectable: true,
   draggable: false,
 
-  addOptions() {
-    return { HTMLAttributes: {} };
-  },
+  addOptions: () => ({ HTMLAttributes: {} }),
 
-  addAttributes() {
-    return {
-      html: {
-        default: '',
-        // Разметка уже прошла санитайзер на входе, но узел могут наполнить и
-        // программно, поэтому чистим ещё раз перед тем, как положить в модель.
-        parseHTML: (element) => sanitizeHtml(element.innerHTML),
-        renderHTML: () => ({}),
-      },
-    };
-  },
+  addAttributes: () => ({
+    html: {
+      default: '',
+      // Разметка уже прошла санитайзер на входе, но узел могут наполнить и
+      // программно, поэтому чистим ещё раз перед тем, как положить в модель.
+      parseHTML: (element) => sanitizeHtml(element.innerHTML),
+      renderHTML: () => ({}),
+    },
+  }),
 
-  parseHTML() {
-    return [
-      {
-        tag: 'span[data-legacy-embed]',
-        getAttrs: (element) => (sanitizeHtml((element as HTMLElement).innerHTML) ? null : false),
-      },
-    ];
-  },
+  parseHTML: () => [
+    {
+      tag: 'span[data-legacy-embed]',
+      getAttrs: (element) => (sanitizeHtml((element as HTMLElement).innerHTML) ? null : false),
+    },
+  ],
 
   renderHTML({ node, HTMLAttributes }) {
     const dom = document.createElement('span');
+
     const attrs = mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
       'data-legacy-embed': 'true',
       class: 'rte-legacy-embed',
       contenteditable: 'false',
     });
 
-    for (const [key, value] of Object.entries(attrs)) {
+    Object.entries(attrs).forEach(([key, value]) => {
       if (value !== null && value !== undefined) dom.setAttribute(key, String(value));
-    }
+    });
 
     dom.innerHTML = (node.attrs.html as string) ?? '';
+
     return dom;
   },
 
-  addNodeView() {
-    return ({ node }) => {
+  addNodeView:
+    () =>
+    ({ node }) => {
       const dom = document.createElement('span');
+
       dom.className = 'rte-legacy-embed';
       dom.setAttribute('data-legacy-embed', 'true');
       dom.contentEditable = 'false';
@@ -83,6 +81,5 @@ export const LegacyEmbedNode = Node.create<LegacyEmbedOptions>({
         // правку нельзя.
         ignoreMutation: () => true,
       };
-    };
-  },
+    },
 });

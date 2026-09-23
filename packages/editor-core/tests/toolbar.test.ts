@@ -17,15 +17,19 @@ beforeAll(() => {
     configurable: true,
     get(this: HTMLElement) {
       const parent = this.parentElement;
+
       if (!parent || !this.classList.contains('rte-toolbar__group')) return 0;
+
       const perRow = Math.max(1, Math.floor(fakeWidth / GROUP_WIDTH));
+
       return Math.floor([...parent.children].indexOf(this) / perRow) * 32;
     },
   });
 });
 
 afterAll(() => {
-  if (originalOffsetTop) Object.defineProperty(HTMLElement.prototype, 'offsetTop', originalOffsetTop);
+  if (originalOffsetTop)
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', originalOffsetTop);
 });
 
 let core: RichEditorCore | undefined;
@@ -36,15 +40,18 @@ afterEach(() => {
   toolbar?.destroy();
   core?.destroy();
   host?.remove();
-  toolbar = core = host = undefined;
+  toolbar = undefined;
+  core = undefined;
+  host = undefined;
 });
 
 const noop = (): void => {};
 
-function mountToolbar(): Toolbar {
+const mountToolbar = (): Toolbar => {
   host = document.createElement('div');
   document.body.appendChild(host);
   core = new RichEditorCore({ element: host, content: '<p>текст</p>' });
+
   const instance = core;
 
   const context: EditorUiContext = {
@@ -76,11 +83,14 @@ function mountToolbar(): Toolbar {
       }),
     },
   });
+
   host.appendChild(toolbar.element);
+
   return toolbar;
-}
+};
 
 const groupsOf = (bar: Toolbar) => bar.element.querySelectorAll(':scope > .rte-toolbar__group');
+
 const overflowOf = (bar: Toolbar) =>
   [...bar.element.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.getAttribute('aria-label') === 'Ещё',
@@ -102,13 +112,16 @@ describe('раскладка тулбара', () => {
     expect(overflowOf(bar)).toBeDefined();
 
     overflowOf(bar)!.click();
+
     const menu = bar.element.querySelector('.rte-dropdown__panel:not([hidden])')!;
+
     expect(menu.textContent).toContain('Отменить');
     expect(menu.textContent).toContain('Цитата');
   });
 
   it('возвращает группы из меню, когда места снова хватает', () => {
     const bar = mountToolbar();
+
     fakeWidth = 800;
     bar.layout(800);
     expect(groupsOf(bar)).toHaveLength(4);
@@ -121,6 +134,7 @@ describe('раскладка тулбара', () => {
 
   it('ниже порога схлопывает все схлопываемые группы сразу', () => {
     const bar = mountToolbar();
+
     fakeWidth = 2000;
     bar.layout(500);
     expect(groupsOf(bar)).toHaveLength(4);
@@ -131,9 +145,11 @@ describe('раскладка тулбара', () => {
 describe('состояние и доступность кнопок', () => {
   it('переключатели сообщают состояние через aria-pressed', () => {
     const bar = mountToolbar();
+
     const bold = [...bar.element.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.getAttribute('aria-label') === 'Полужирный',
     )!;
+
     expect(bold.getAttribute('aria-pressed')).toBe('false');
 
     core!.editor.commands.selectAll();
@@ -145,9 +161,11 @@ describe('состояние и доступность кнопок', () => {
 
   it('подсказка несёт сочетание клавиш, доступное имя — нет', () => {
     const bar = mountToolbar();
+
     const bold = [...bar.element.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.getAttribute('aria-label') === 'Полужирный',
     )!;
+
     expect(bold.title).toBe('Полужирный · Ctrl+B');
     expect(bold.getAttribute('aria-keyshortcuts')).toBe('Control+B');
   });
@@ -155,6 +173,7 @@ describe('состояние и доступность кнопок', () => {
   it('кнопка заголовка показывает текущий уровень, выравнивание — текущую иконку', () => {
     const bar = mountToolbar();
     const heading = bar.element.querySelector<HTMLButtonElement>('[aria-label="Заголовок"]')!;
+
     expect(heading.textContent?.trim()).toBe('Обычный текст');
 
     core!.editor.commands.toggleHeading({ level: 2 });
@@ -164,6 +183,7 @@ describe('состояние и доступность кнопок', () => {
 
   it('у тулбара есть имя', () => {
     const bar = mountToolbar();
+
     expect(bar.element.getAttribute('aria-label')).toBe('Панель форматирования');
   });
 });
@@ -174,7 +194,9 @@ describe('клавиатура в тулбаре', () => {
       new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
     );
   };
-  const activeLabel = (): string | null => document.activeElement?.getAttribute('aria-label') ?? null;
+
+  const activeLabel = (): string | null =>
+    document.activeElement?.getAttribute('aria-label') ?? null;
 
   it('одна остановка Tab: tabindex 0 у одной кнопки, у остальных −1', () => {
     const bar = mountToolbar();
@@ -190,6 +212,7 @@ describe('клавиатура в тулбаре', () => {
 
   it('стрелки ходят по доступным кнопкам по кругу, Home и End — к краям', () => {
     const bar = mountToolbar();
+
     bar.focus();
     expect(activeLabel()).toBe('Заголовок');
 
@@ -208,9 +231,13 @@ describe('клавиатура в тулбаре', () => {
   it('остановка переезжает за фокусом и переживает пересборку', () => {
     const bar = mountToolbar();
     const italic = bar.element.querySelector<HTMLButtonElement>('[aria-label="Курсив"]')!;
+
     italic.focus();
     expect(italic.tabIndex).toBe(0);
-    expect(bar.element.querySelector<HTMLButtonElement>('[aria-label="Заголовок"]')!.tabIndex).toBe(-1);
+
+    expect(bar.element.querySelector<HTMLButtonElement>('[aria-label="Заголовок"]')!.tabIndex).toBe(
+      -1,
+    );
 
     bar.rebuild();
     expect(bar.element.querySelector<HTMLButtonElement>('[aria-label="Курсив"]')!.tabIndex).toBe(0);
@@ -218,22 +245,30 @@ describe('клавиатура в тулбаре', () => {
 
   it('Escape возвращает каретку в документ', async () => {
     const bar = mountToolbar();
+
     bar.focus();
     press('Escape');
+
     // TipTap ставит фокус в следующем кадре.
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => {
+      requestAnimationFrame(resolve);
+    });
+
     expect(document.activeElement).toBe(core!.editor.view.dom);
   });
 
   it('в меню «⋯» переключатель остаётся переключателем', () => {
     const bar = mountToolbar();
+
     bar.layout(500);
     overflowOf(bar)!.click();
 
     // Подпись — в span: у иконки индекса есть свой текст «x2».
     const items = [...bar.element.querySelectorAll<HTMLButtonElement>('.rte-menu__item')];
+
     const byLabel = (label: string) =>
       items.find((item) => item.querySelector('span')?.textContent === label)!;
+
     const subscript = byLabel('Нижний индекс');
     const undo = byLabel('Отменить');
 

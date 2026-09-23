@@ -24,9 +24,8 @@ const cache = new LruCache<string, string>(MAX_PREVIEW_ENTRIES);
 /** Разделитель частей ключа: в LaTeX и в типе формулы его быть не может. */
 const KEY_SEPARATOR = '\u0000';
 
-function buildCacheKey(latex: string, type: FormulaType, scale: number): string {
-  return [type, scale, latex].join(KEY_SEPARATOR);
-}
+const buildCacheKey = (latex: string, type: FormulaType, scale: number): string =>
+  [type, scale, latex].join(KEY_SEPARATOR);
 
 /**
  * Возвращает уже отрисованное превью, не запуская рендер.
@@ -34,13 +33,11 @@ function buildCacheKey(latex: string, type: FormulaType, scale: number): string 
  * Нужен галерее шаблонов: при повторном открытии диалога она сразу показывает
  * формулы, а не моргает заглушкой в ожидании микрозадачи.
  */
-export function getCachedLatexPreview(
+export const getCachedLatexPreview = (
   latex: string,
   type: FormulaType = 'math',
   scale = 1,
-): string | undefined {
-  return cache.get(buildCacheKey(latex, type, scale));
-}
+): string | undefined => cache.get(buildCacheKey(latex, type, scale));
 
 /**
  * Отрисовывает LaTeX в тот же SVG от MathJax, которым пользуется документ,
@@ -48,13 +45,14 @@ export function getCachedLatexPreview(
  *
  * Пустая строка в ответе означает «отрисовать не удалось».
  */
-export async function renderLatexPreview(
+export const renderLatexPreview = async (
   latex: string,
   type: FormulaType = 'math',
   scale = 1,
-): Promise<string> {
+): Promise<string> => {
   const key = buildCacheKey(latex, type, scale);
   const cached = cache.get(key);
+
   if (cached !== undefined) return cached;
 
   // Незаполненные слоты шаблона после конвертации читаются как «??», а пустая
@@ -62,6 +60,7 @@ export async function renderLatexPreview(
   const previewLatex = latex.replace(/\\placeholder\{\}/g, '\\square');
 
   const mathml = await latexToMathML(previewLatex, type);
+
   if (!mathml) return '';
 
   const svg = await renderMathML(mathml, {
@@ -72,10 +71,11 @@ export async function renderLatexPreview(
   // кэшировать нельзя: превью осталось бы заглушкой навсегда, хотя со второй
   // попытки отрисовалось бы.
   if (svg) cache.set(key, svg);
+
   return svg;
-}
+};
 
 /** Тестовый шов: сбрасывает кэш превью. */
-export function clearPreviewCache(): void {
+export const clearPreviewCache = (): void => {
   cache.clear();
-}
+};

@@ -1,7 +1,7 @@
 import type { Translate } from '../types';
 import { el, icon } from './dom';
 
-export interface ColorPanelOptions {
+interface ColorPanelOptions {
   t: Translate;
   /** Образцы, из которых собирается сетка. */
   palette: string[];
@@ -21,15 +21,16 @@ const FALLBACK_CUSTOM_COLOR = '#000000';
  * ровно столько, сколько открыт дропдаун, и пересобирается на каждом открытии.
  * Значит, подписки уходят вместе с узлом и снимать их отдельно не нужно.
  */
-export function createColorPanel(options: ColorPanelOptions): HTMLElement {
+export const createColorPanel = (options: ColorPanelOptions): HTMLElement => {
   const { t } = options;
 
   // Число колонок объявлено для клавиатуры меню: стрелки вверх и вниз ходят
   // по строкам сетки, а не по одному образцу.
   const grid = el('div', { class: 'rte-colors__grid', attrs: { 'data-menu-columns': 6 } });
 
-  for (const color of options.palette) {
+  options.palette.forEach((color) => {
     const isActive = options.activeColor === color;
+
     const swatch = el('button', {
       class: isActive ? 'rte-colors__swatch rte-colors__swatch--active' : 'rte-colors__swatch',
       // Цвет — единственное, чем образец отличается от соседа, поэтому он же
@@ -43,19 +44,22 @@ export function createColorPanel(options: ColorPanelOptions): HTMLElement {
         'aria-label': color,
       },
     });
+
     swatch.style.background = color;
     swatch.addEventListener('click', () => options.onSelect(color));
     grid.appendChild(swatch);
-  }
+  });
 
   const resetButton = el('button', {
     class: 'rte-colors__reset',
     attrs: { type: 'button', role: 'menuitem' },
     children: [icon('noColor', 16), el('span', { text: t('color_reset') })],
   });
+
   resetButton.addEventListener('click', () => options.onReset());
 
   const customInput = el('input', { attrs: { type: 'color' } });
+
   // Поле принимает только #rrggbb: всё остальное браузер молча заменит чёрным.
   customInput.value = options.activeColor || FALLBACK_CUSTOM_COLOR;
   // Слушаем change, а не input: иначе цвет применялся бы на каждое движение
@@ -77,4 +81,4 @@ export function createColorPanel(options: ColorPanelOptions): HTMLElement {
       }),
     ],
   });
-}
+};

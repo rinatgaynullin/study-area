@@ -16,19 +16,25 @@ export class LruCache<K, V> {
 
   get(key: K): V | undefined {
     const value = this.entries.get(key);
+
     if (value === undefined) return undefined;
+
     // Map хранит порядок вставки: перевставка делает запись самой свежей.
     this.entries.delete(key);
     this.entries.set(key, value);
+
     return value;
   }
 
   set(key: K, value: V): void {
     this.entries.delete(key);
+
     if (this.entries.size >= this.limit) {
       const oldest = this.entries.keys().next();
+
       if (!oldest.done) this.entries.delete(oldest.value);
     }
+
     this.entries.set(key, value);
   }
 

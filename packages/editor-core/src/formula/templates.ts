@@ -34,14 +34,12 @@ export interface TemplateCategory {
   templates: FormulaTemplate[];
 }
 
-function t(
+const t = (
   category: TemplateCategoryId,
   id: string,
   latex: string,
   preview = latex,
-): FormulaTemplate {
-  return { id: `${category}.${id}`, category, latex, preview };
-}
+): FormulaTemplate => ({ id: `${category}.${id}`, category, latex, preview });
 
 const P = '\\placeholder{}';
 
@@ -295,7 +293,12 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
         `${P}\\rightleftharpoons ${P}`,
         '\\mathrm{A}\\rightleftharpoons\\mathrm{B}',
       ),
-      t('chemReactions', 'reversible', `${P}\\rightleftarrows ${P}`, '\\mathrm{A}\\rightleftarrows\\mathrm{B}'),
+      t(
+        'chemReactions',
+        'reversible',
+        `${P}\\rightleftarrows ${P}`,
+        '\\mathrm{A}\\rightleftarrows\\mathrm{B}',
+      ),
       t(
         'chemReactions',
         'catalyst',
@@ -303,7 +306,11 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
         `${P}\\overset{${P}}{\\rightarrow}${P}`,
         '\\mathrm{A}\\overset{\\Delta}{\\rightarrow}\\mathrm{B}',
       ),
-      t('chemReactions', 'water', '2\\mathrm{H}_2+\\mathrm{O}_2\\rightarrow 2\\mathrm{H}_2\\mathrm{O}'),
+      t(
+        'chemReactions',
+        'water',
+        '2\\mathrm{H}_2+\\mathrm{O}_2\\rightarrow 2\\mathrm{H}_2\\mathrm{O}',
+      ),
       t(
         'chemReactions',
         'neutralization',
@@ -338,7 +345,12 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
     type: 'chem',
     labelKey: 'formula_categories_chem_isotopes',
     templates: [
-      t('chemIsotopes', 'isotope', `{\\,}^{${P}}_{${P}}\\mathrm{${P}}`, '{\\,}^{14}_{6}\\mathrm{C}'),
+      t(
+        'chemIsotopes',
+        'isotope',
+        `{\\,}^{${P}}_{${P}}\\mathrm{${P}}`,
+        '{\\,}^{14}_{6}\\mathrm{C}',
+      ),
       t('chemIsotopes', 'massNumber', `{\\,}^{${P}}\\mathrm{${P}}`, '{\\,}^{14}\\mathrm{C}'),
       t('chemIsotopes', 'uranium', '{\\,}^{235}_{92}\\mathrm{U}'),
       t('chemIsotopes', 'alpha', '{\\,}^{4}_{2}\\mathrm{He}'),
@@ -374,14 +386,10 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
 
 export const TEMPLATE_CATEGORIES: TemplateCategory[] = [...MATH_CATEGORIES, ...CHEM_CATEGORIES];
 
-export function getTemplateCategories(type: FormulaType): TemplateCategory[] {
-  return TEMPLATE_CATEGORIES.filter((category) => category.type === type);
-}
+export const getTemplateCategories = (type: FormulaType): TemplateCategory[] =>
+  TEMPLATE_CATEGORIES.filter((category) => category.type === type);
 
-export function findTemplate(id: string): FormulaTemplate | undefined {
-  for (const category of TEMPLATE_CATEGORIES) {
-    const found = category.templates.find((template) => template.id === id);
-    if (found) return found;
-  }
-  return undefined;
-}
+export const findTemplate = (id: string): FormulaTemplate | undefined =>
+  TEMPLATE_CATEGORIES.flatMap((category) => category.templates).find(
+    (template) => template.id === id,
+  );

@@ -3,16 +3,16 @@
  * needs no icon font or external asset, and everything inherits `currentColor`.
  */
 
-const S = 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+const S =
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+
 const TEXT = 'fill="currentColor" stroke="none" text-anchor="middle" font-family="Georgia, serif"';
 
-function glyph(char: string, attrs = ''): string {
-  return `<text x="12" y="17" font-size="16" ${TEXT} ${attrs}>${char}</text>`;
-}
+const glyph = (char: string, attrs = ''): string =>
+  `<text x="12" y="17" font-size="16" ${TEXT} ${attrs}>${char}</text>`;
 
-function lines(...rows: Array<[number, number, number]>): string {
-  return rows.map(([y, x1, x2]) => `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" ${S} />`).join('');
-}
+const lines = (...rows: Array<[number, number, number]>): string =>
+  rows.map(([y, x1, x2]) => `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" ${S} />`).join('');
 
 export const ICONS: Record<string, string> = {
   bold: glyph('B', 'font-weight="700"'),

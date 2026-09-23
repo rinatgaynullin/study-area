@@ -10,23 +10,23 @@ import { RichEditorCore, decodeWirisMathml, prepareIncomingHtml } from '../src';
 
 /** Как Wiris пишет формулу: HTML-экранирование, зачастую двойное. */
 const WIRIS_DOUBLE_ESCAPED =
-  '<p>Найдите <img class="Wirisformula" src="w.png" data-mathml="' +
-  '&amp;lt;math xmlns=&amp;quot;http://www.w3.org/1998/Math/MathML&amp;quot;&amp;gt;' +
-  '&amp;lt;mfrac&amp;gt;&amp;lt;mi&amp;gt;a&amp;lt;/mi&amp;gt;&amp;lt;mi&amp;gt;b&amp;lt;/mi&amp;gt;' +
-  '&amp;lt;/mfrac&amp;gt;&amp;lt;/math&amp;gt;"> при a = 2.</p>';
+  '<p>Найдите <img class="Wirisformula" src="w.png" data-mathml="'
+  + '&amp;lt;math xmlns=&amp;quot;http://www.w3.org/1998/Math/MathML&amp;quot;&amp;gt;'
+  + '&amp;lt;mfrac&amp;gt;&amp;lt;mi&amp;gt;a&amp;lt;/mi&amp;gt;&amp;lt;mi&amp;gt;b&amp;lt;/mi&amp;gt;'
+  + '&amp;lt;/mfrac&amp;gt;&amp;lt;/math&amp;gt;"> при a = 2.</p>';
 
 /** Второй вариант кодировки Wiris — «безопасный XML». */
 const WIRIS_SAFE_XML =
-  '<p><img class="Wirisformula" src="w.png" data-mathml="' +
-  '«math xmlns=¨http://www.w3.org/1998/Math/MathML¨»«msqrt»«mi»x«/mi»«/msqrt»«/math»"></p>';
+  '<p><img class="Wirisformula" src="w.png" data-mathml="'
+  + '«math xmlns=¨http://www.w3.org/1998/Math/MathML¨»«msqrt»«mi»x«/mi»«/msqrt»«/math»"></p>';
 
 const MATHJAX_OUTPUT =
-  '<p>До <span class="formula-rendered"><svg viewBox="0 0 10 10"><path d="M0 0"></path></svg>' +
-  '</span> после.</p>';
+  '<p>До <span class="formula-rendered"><svg viewBox="0 0 10 10"><path d="M0 0"></path></svg>'
+  + '</span> после.</p>';
 
 const CHEMISTRY_STRUCTURE =
-  '<div class="formula-chemistry-structure"><svg viewBox="0 0 20 20"><rect x="1" y="1"></rect>' +
-  '</svg></div>';
+  '<div class="formula-chemistry-structure"><svg viewBox="0 0 20 20"><rect x="1" y="1"></rect>'
+  + '</svg></div>';
 
 let core: RichEditorCore | undefined;
 let element: HTMLElement | undefined;
@@ -38,26 +38,33 @@ afterEach(() => {
   element = undefined;
 });
 
-function mount(content: string, legacy = true) {
+const mount = (content: string, legacy = true) => {
   element = document.createElement('div');
   document.body.appendChild(element);
   core = new RichEditorCore({ element, content, legacy });
+
   return core;
-}
+};
 
 describe('декодирование MathML из Wiris', () => {
   it('снимает двойное HTML-экранирование', () => {
-    const decoded = decodeWirisMathml('&amp;lt;math&amp;gt;&amp;lt;mi&amp;gt;x&amp;lt;/mi&amp;gt;&amp;lt;/math&amp;gt;');
+    const decoded = decodeWirisMathml(
+      '&amp;lt;math&amp;gt;&amp;lt;mi&amp;gt;x&amp;lt;/mi&amp;gt;&amp;lt;/math&amp;gt;',
+    );
+
     expect(decoded).toContain('<math>');
     expect(decoded).toContain('<mi>x</mi>');
   });
 
   it('снимает одинарное экранирование', () => {
-    expect(decodeWirisMathml('&lt;math&gt;&lt;mi&gt;x&lt;/mi&gt;&lt;/math&gt;')).toContain('<mi>x</mi>');
+    expect(decodeWirisMathml('&lt;math&gt;&lt;mi&gt;x&lt;/mi&gt;&lt;/math&gt;')).toContain(
+      '<mi>x</mi>',
+    );
   });
 
   it('разбирает «безопасный XML» Wiris', () => {
     const decoded = decodeWirisMathml('«math»«mi»x«/mi»«/math»');
+
     expect(decoded).toBe('<math><mi>x</mi></math>');
   });
 
@@ -91,7 +98,10 @@ describe('формулы Wiris переживают редактор', () => {
   });
 
   it('остаются картинкой, если MathML разобрать не удалось', () => {
-    const html = mount('<p><img class="Wirisformula" src="w.png" data-mathml="мусор"></p>').getHTML();
+    const html = mount(
+      '<p><img class="Wirisformula" src="w.png" data-mathml="мусор"></p>',
+    ).getHTML();
+
     expect(html).toContain('<img');
   });
 });
@@ -147,16 +157,18 @@ describe('legacy-режим выключен по умолчанию', () => {
  * прогоняем один и тот же HTML обоими путями и сверяем результат.
  */
 const MIXED_INLINE_STYLES =
-  '<p style="text-align: center;"><strong><span style="font-size: 72px;">1321321' +
-  '<s>321</s><u>131&reg;&AElig;</u></span></strong><br><strong>' +
-  '<span style="font-size: 30px;"><em><sup>121</sup>1321231<sup>1232131</sup></em></span>' +
-  '</strong><br><br><br><span style="font-size: 96px;"><sup>132132131</sup></span></p>';
+  '<p style="text-align: center;"><strong><span style="font-size: 72px;">1321321'
+  + '<s>321</s><u>131&reg;&AElig;</u></span></strong><br><strong>'
+  + '<span style="font-size: 30px;"><em><sup>121</sup>1321231<sup>1232131</sup></em></span>'
+  + '</strong><br><br><br><span style="font-size: 96px;"><sup>132132131</sup></span></p>';
 
 describe('смешанное инлайновое оформление', () => {
   it('выглядит одинаково в legacy-режиме и без него', () => {
     const asLegacy = mount(MIXED_INLINE_STYLES).getHTML();
+
     core?.destroy();
     element?.remove();
+
     const asNew = mount(MIXED_INLINE_STYLES, false).getHTML();
 
     expect(asLegacy).toBe(asNew);

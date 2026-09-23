@@ -1,8 +1,9 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import type { AudioAttributes, Translate } from '../types';
-import { focusEditorView } from '../utils/focus-editor';
+import { focusEditorView } from '../utils/focus-editor-view';
 import { formatDuration } from '../utils/format';
 
+/** Настройки узла: переводчик подписей плеера и атрибуты обёртки. */
 export interface AudioOptions {
   t: Translate;
   HTMLAttributes: Record<string, unknown>;
@@ -16,18 +17,20 @@ declare module '@tiptap/core' {
   }
 }
 
+/** Имя узла голосового сообщения в схеме. */
 export const AUDIO_NODE_NAME = 'audioMessage';
 
 /** Шаг перемотки с клавиатуры, секунды. */
 const SEEK_STEP_SEC = 5;
 
-function parsePeaks(raw: string | null): number[] {
+const parsePeaks = (raw: string | null): number[] => {
   if (!raw) return [];
+
   return raw
     .split(',')
     .map((value) => Number.parseInt(value, 10))
     .filter((value) => Number.isFinite(value) && value >= 0 && value <= 99);
-}
+};
 
 /**
  * Voice message block. Exported HTML carries a plain `<audio controls>` so the
@@ -41,68 +44,65 @@ export const AudioNode = Node.create<AudioOptions>({
   draggable: true,
   selectable: true,
 
-  addOptions() {
-    return { t: (key: string) => key, HTMLAttributes: {} };
-  },
+  addOptions: () => ({ t: (key: string) => key, HTMLAttributes: {} }),
 
-  addAttributes() {
-    return {
-      src: {
-        default: '',
-        parseHTML: (element) =>
-          element.getAttribute('data-src') ??
-          element.querySelector('audio')?.getAttribute('src') ??
-          '',
-        renderHTML: () => ({}),
-      },
-      name: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('data-name'),
-        renderHTML: (attributes) =>
-          attributes.name ? { 'data-name': attributes.name as string } : {},
-      },
-      mime: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('data-mime'),
-        renderHTML: (attributes) =>
-          attributes.mime ? { 'data-mime': attributes.mime as string } : {},
-      },
-      duration: {
-        default: null,
-        parseHTML: (element) => {
-          const raw = element.getAttribute('data-duration');
-          const value = raw === null ? Number.NaN : Number.parseFloat(raw);
-          return Number.isFinite(value) ? value : null;
-        },
-        renderHTML: (attributes) =>
-          attributes.duration === null || attributes.duration === undefined
-            ? {}
-            : { 'data-duration': String(attributes.duration) },
-      },
-      peaks: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('data-peaks'),
-        renderHTML: (attributes) =>
-          attributes.peaks ? { 'data-peaks': attributes.peaks as string } : {},
-      },
-    };
-  },
+  addAttributes: () => ({
+    src: {
+      default: '',
+      parseHTML: (element) =>
+        element.getAttribute('data-src')
+        ?? element.querySelector('audio')?.getAttribute('src')
+        ?? '',
+      renderHTML: () => ({}),
+    },
+    name: {
+      default: null,
+      parseHTML: (element) => element.getAttribute('data-name'),
+      renderHTML: (attributes) =>
+        attributes.name ? { 'data-name': attributes.name as string } : {},
+    },
+    mime: {
+      default: null,
+      parseHTML: (element) => element.getAttribute('data-mime'),
+      renderHTML: (attributes) =>
+        attributes.mime ? { 'data-mime': attributes.mime as string } : {},
+    },
+    duration: {
+      default: null,
+      parseHTML: (element) => {
+        const raw = element.getAttribute('data-duration');
+        const value = raw === null ? Number.NaN : Number.parseFloat(raw);
 
-  parseHTML() {
-    return [
-      {
-        tag: 'div[data-audio]',
-        getAttrs: (element) => {
-          const el = element as HTMLElement;
-          const src = el.getAttribute('data-src') ?? el.querySelector('audio')?.getAttribute('src');
-          return src ? null : false;
-        },
+        return Number.isFinite(value) ? value : null;
       },
-    ];
-  },
+      renderHTML: (attributes) =>
+        attributes.duration === null || attributes.duration === undefined
+          ? {}
+          : { 'data-duration': String(attributes.duration) },
+    },
+    peaks: {
+      default: null,
+      parseHTML: (element) => element.getAttribute('data-peaks'),
+      renderHTML: (attributes) =>
+        attributes.peaks ? { 'data-peaks': attributes.peaks as string } : {},
+    },
+  }),
+
+  parseHTML: () => [
+    {
+      tag: 'div[data-audio]',
+      getAttrs: (element) => {
+        const el = element as HTMLElement;
+        const src = el.getAttribute('data-src') ?? el.querySelector('audio')?.getAttribute('src');
+
+        return src ? null : false;
+      },
+    },
+  ],
 
   renderHTML({ node, HTMLAttributes }) {
     const src = (node.attrs.src as string) ?? '';
+
     return [
       'div',
       mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
@@ -115,11 +115,13 @@ export const AudioNode = Node.create<AudioOptions>({
   },
 
   addNodeView() {
+    const { t } = this.options;
+
     return ({ node, editor }) => {
-      const t = this.options.t;
       const attrs = node.attrs as unknown as AudioAttributes;
 
       const dom = document.createElement('div');
+
       dom.className = 'rte-audio';
       dom.setAttribute('data-audio', 'true');
       dom.setAttribute('data-src', attrs.src);
@@ -130,10 +132,12 @@ export const AudioNode = Node.create<AudioOptions>({
       dom.setAttribute('aria-label', attrs.name || t('audio_title'));
 
       const audio = new Audio();
+
       audio.preload = 'metadata';
       audio.src = attrs.src;
 
       const button = document.createElement('button');
+
       button.type = 'button';
       button.className = 'rte-audio__toggle';
       button.setAttribute('aria-label', t('audio_play'));
@@ -141,6 +145,7 @@ export const AudioNode = Node.create<AudioOptions>({
 
       // Осциллограмма — ползунок: по ней и мышью ищут место, и клавиатурой.
       const waveform = document.createElement('div');
+
       waveform.className = 'rte-audio__waveform';
       waveform.setAttribute('role', 'slider');
       waveform.setAttribute('tabindex', '0');
@@ -148,28 +153,35 @@ export const AudioNode = Node.create<AudioOptions>({
       waveform.setAttribute('aria-valuemin', '0');
 
       const peaks = parsePeaks(attrs.peaks ?? null);
-      const bars: HTMLElement[] = [];
       const barValues = peaks.length > 0 ? peaks : Array.from({ length: 40 }, () => 30);
-      for (const value of barValues) {
+
+      const bars = barValues.map((value) => {
         const bar = document.createElement('span');
+
         bar.className = 'rte-audio__bar';
         bar.style.height = `${Math.max(8, Math.min(100, value))}%`;
         waveform.appendChild(bar);
-        bars.push(bar);
-      }
+
+        return bar;
+      });
 
       const time = document.createElement('span');
+
       time.className = 'rte-audio__time';
       time.textContent = formatDuration(attrs.duration ?? 0);
 
       const name = document.createElement('span');
+
       name.className = 'rte-audio__name';
+
       if (attrs.name) name.textContent = attrs.name;
 
       const controls = document.createElement('div');
+
       controls.className = 'rte-audio__controls';
       controls.append(button, waveform, time);
       dom.append(controls);
+
       if (attrs.name) dom.append(name);
 
       const totalDuration = () => audio.duration || attrs.duration || 0;
@@ -178,14 +190,18 @@ export const AudioNode = Node.create<AudioOptions>({
         const total = totalDuration();
         const ratio = total > 0 ? audio.currentTime / total : 0;
         const played = Math.round(ratio * bars.length);
+
         bars.forEach((bar, index) => {
           bar.classList.toggle('rte-audio__bar--played', index < played);
         });
+
         time.textContent = formatDuration(
           audio.currentTime > 0 ? audio.currentTime : (attrs.duration ?? 0),
         );
+
         waveform.setAttribute('aria-valuemax', String(Math.round(total)));
         waveform.setAttribute('aria-valuenow', String(Math.round(audio.currentTime)));
+
         waveform.setAttribute(
           'aria-valuetext',
           `${formatDuration(audio.currentTime)} / ${formatDuration(total)}`,
@@ -194,7 +210,9 @@ export const AudioNode = Node.create<AudioOptions>({
 
       const seekTo = (seconds: number) => {
         const total = totalDuration();
+
         if (total <= 0) return;
+
         audio.currentTime = Math.min(total, Math.max(0, seconds));
         paintProgress();
       };
@@ -202,18 +220,27 @@ export const AudioNode = Node.create<AudioOptions>({
       const onToggle = (event: MouseEvent) => {
         event.preventDefault();
         event.stopPropagation();
-        if (audio.paused) void audio.play();
-        else audio.pause();
+
+        if (audio.paused) {
+          // play() отклоняется, если браузер запретил воспроизведение или его
+          // тут же прервали паузой. Кнопка синхронизируется по событиям
+          // play/pause, поэтому ошибку достаточно не выпускать наружу.
+          audio.play().catch(() => undefined);
+        } else {
+          audio.pause();
+        }
       };
 
       const onPlay = () => {
         button.textContent = '❚❚';
         button.setAttribute('aria-label', t('audio_pause'));
       };
+
       const onPause = () => {
         button.textContent = '▶';
         button.setAttribute('aria-label', t('audio_play'));
       };
+
       const onEnded = () => {
         onPause();
         audio.currentTime = 0;
@@ -222,8 +249,11 @@ export const AudioNode = Node.create<AudioOptions>({
 
       const onSeek = (event: MouseEvent) => {
         const rect = waveform.getBoundingClientRect();
+
         if (rect.width === 0) return;
+
         const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+
         seekTo(ratio * totalDuration());
       };
 
@@ -239,13 +269,18 @@ export const AudioNode = Node.create<AudioOptions>({
           Home: 0,
           End: totalDuration(),
         };
+
         if (event.key === 'Escape') {
           event.preventDefault();
           focusEditorView(editor);
+
           return;
         }
+
         const next = moves[event.key];
+
         if (next === undefined) return;
+
         event.preventDefault();
         seekTo(next);
       };
@@ -285,12 +320,15 @@ export const AudioNode = Node.create<AudioOptions>({
   },
 
   addCommands() {
+    const { name } = this;
+
     return {
       insertAudio:
         (attributes) =>
         ({ commands }) => {
           if (!attributes.src) return false;
-          return commands.insertContent({ type: this.name, attrs: attributes });
+
+          return commands.insertContent({ type: name, attrs: attributes });
         },
     };
   },

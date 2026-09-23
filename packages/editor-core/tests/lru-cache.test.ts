@@ -4,6 +4,7 @@ import { LruCache } from '../src/utils/lru-cache';
 describe('LruCache', () => {
   it('вытесняет самую давнюю запись при переполнении', () => {
     const cache = new LruCache<string, number>(2);
+
     cache.set('a', 1);
     cache.set('b', 2);
     cache.set('c', 3);
@@ -15,6 +16,7 @@ describe('LruCache', () => {
 
   it('чтение делает запись свежей', () => {
     const cache = new LruCache<string, number>(2);
+
     cache.set('a', 1);
     cache.set('b', 2);
     // «a» прочитали — теперь давняя запись «b».
@@ -27,7 +29,9 @@ describe('LruCache', () => {
 
   it('перезапись не раздувает кэш', () => {
     const cache = new LruCache<string, number>(2);
+
     cache.set('a', 1);
+    // eslint-disable-next-line sonarjs/no-element-overwrite -- проверяется перезапись ключа
     cache.set('a', 2);
     cache.set('b', 3);
 

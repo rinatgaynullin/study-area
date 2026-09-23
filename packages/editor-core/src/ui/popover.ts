@@ -48,109 +48,144 @@ const VIEWPORT_MARGIN = 8;
  *
  * В отличие от модалки не забирает фокус: поповер сопровождает то, что
  * пользователь правит сейчас, и каретка должна оставаться в тексте.
+ *
+ * Видимость, текущий якорь и подписки на документ и окно — поля; обработчики
+ * закрывают панель через `this`, поэтому порядок объявлений не важен.
  */
-export function createPopover(options: PopoverOptions = {}): Popover {
-  const disposer = createDisposer();
-  const offset = options.offset ?? 8;
+class PopoverController implements Popover {
+  readonly element: HTMLElement;
 
-  const body = el('div', { class: 'rte-popover__body' });
-  const element = el('div', {
-    class: 'rte-popover',
-    attrs: {
-      role: options.role ?? 'dialog',
-      'aria-labelledby': options.labelledBy ?? null,
-      'aria-label': options.label ?? null,
-    },
-    children: [body],
-  });
-  if (options.className) element.classList.add(options.className);
-  element.hidden = true;
+  readonly body: HTMLElement;
 
-  let isVisible = false;
-  let currentAnchor: DOMRect | null = null;
+  private readonly disposer = createDisposer();
+
+  private readonly offset: number;
+
+  private isOpen = false;
+
+  private currentAnchor: DOMRect | null = null;
+
   /** Документ и окно слушаются только пока панель видна. */
-  let releaseDocument: Unsubscribe | null = null;
+  private releaseDocument: Unsubscribe | null = null;
 
-  function reposition(anchor: DOMRect): void {
-    currentAnchor = anchor;
-    if (!isVisible) return;
+  constructor(private readonly options: PopoverOptions) {
+    this.offset = options.offset ?? 8;
 
-    const { width, height } = element.getBoundingClientRect();
+    this.body = el('div', { class: 'rte-popover__body' });
+
+    this.element = el('div', {
+      class: 'rte-popover',
+      attrs: {
+        role: options.role ?? 'dialog',
+        'aria-labelledby': options.labelledBy ?? null,
+        'aria-label': options.label ?? null,
+      },
+      children: [this.body],
+    });
+
+    if (options.className) this.element.classList.add(options.className);
+
+    this.element.hidden = true;
+  }
+
+  get isVisible(): boolean {
+    return this.isOpen;
+  }
+
+  /** Показывает панель у якоря и начинает слушать документ и окно. */
+  open(anchor: DOMRect): void {
+    this.currentAnchor = anchor;
+
+    if (!this.isOpen) {
+      this.isOpen = true;
+      this.element.hidden = false;
+      this.listenDocument();
+    }
+
+    // Сразу — чтобы панель не мелькнула в углу; и ещё раз через кадр, когда
+    // подгрузится содержимое, от которого зависит её размер.
+    this.reposition(anchor);
+    requestAnimationFrame(() => this.reposition(anchor));
+  }
+
+  /** Скрывает панель, отпускает документ и окно и сообщает причину наружу. */
+  close(reason: PopoverCloseReason = 'api'): void {
+    if (!this.isOpen) return;
+
+    this.isOpen = false;
+    this.element.hidden = true;
+    this.releaseDocument?.();
+    this.releaseDocument = null;
+    this.options.onClose?.(reason);
+  }
+
+  /** Ставит панель под якорь (или над ним), не давая вылезти за края окна. */
+  reposition(anchor: DOMRect): void {
+    this.currentAnchor = anchor;
+
+    if (!this.isOpen) return;
+
+    const { width, height } = this.element.getBoundingClientRect();
 
     // По горизонтали центрируем по якорю, но не даём вылезти за края окна.
     const preferred =
-      options.align === 'start' ? anchor.left : anchor.left + anchor.width / 2 - width / 2;
+      this.options.align === 'start' ? anchor.left : anchor.left + anchor.width / 2 - width / 2;
+
     const maxLeft = Math.max(window.innerWidth - width - VIEWPORT_MARGIN, VIEWPORT_MARGIN);
-    element.style.left = `${Math.min(Math.max(preferred, VIEWPORT_MARGIN), maxLeft)}px`;
+
+    this.element.style.left = `${Math.min(Math.max(preferred, VIEWPORT_MARGIN), maxLeft)}px`;
 
     // Снизу, если там есть место; иначе сверху — иначе панель уедет под экран.
-    const below = anchor.bottom + offset;
+    const below = anchor.bottom + this.offset;
     const fitsBelow = below + height + VIEWPORT_MARGIN <= window.innerHeight;
-    element.style.top = `${
-      fitsBelow ? below : Math.max(anchor.top - height - offset, VIEWPORT_MARGIN)
+
+    this.element.style.top = `${
+      fitsBelow ? below : Math.max(anchor.top - height - this.offset, VIEWPORT_MARGIN)
     }px`;
   }
 
-  // Якорь двигается вместе с текстом — при скролле и смене размера окна.
-  const follow = (): void => {
-    if (currentAnchor) reposition(currentAnchor);
-  };
+  destroy(): void {
+    this.releaseDocument?.();
+    this.disposer.dispose();
+    this.element.remove();
+  }
 
-  function listenDocument(): void {
-    const offs = [
-      on(document, 'mousedown', (event) => {
-        const target = event.target as Node | null;
-        if (target && (options.isInside?.(target) ?? element.contains(target))) return;
-        close('outside');
-      }),
-      on(document, 'keydown', (event) => {
-        if (event.key !== 'Escape') return;
-        event.stopPropagation();
-        close('escape');
-      }),
-      on(window, 'scroll', follow, { capture: true }),
-      on(window, 'resize', follow),
+  /** Вешает слушатели на документ и окно; снять их — `releaseDocument`. */
+  private listenDocument(): void {
+    const subscriptions = [
+      on(document, 'mousedown', this.onDocumentMousedown),
+      on(document, 'keydown', this.onDocumentKeydown),
+      on(window, 'scroll', this.onViewportChange, { capture: true }),
+      on(window, 'resize', this.onViewportChange),
     ];
-    releaseDocument = () => {
-      for (const off of offs) off();
+
+    this.releaseDocument = () => {
+      subscriptions.forEach((unsubscribe) => unsubscribe());
     };
   }
 
-  function open(anchor: DOMRect): void {
-    currentAnchor = anchor;
-    if (!isVisible) {
-      isVisible = true;
-      element.hidden = false;
-      listenDocument();
-    }
-    // Сразу — чтобы панель не мелькнула в углу; и ещё раз через кадр, когда
-    // подгрузится содержимое, от которого зависит её размер.
-    reposition(anchor);
-    requestAnimationFrame(() => reposition(anchor));
-  }
+  /** Клик мимо панели (и мимо того, что опции считают «внутри») закрывает её. */
+  private readonly onDocumentMousedown = (event: MouseEvent): void => {
+    const target = event.target as Node | null;
 
-  function close(reason: PopoverCloseReason = 'api'): void {
-    if (!isVisible) return;
-    isVisible = false;
-    element.hidden = true;
-    releaseDocument?.();
-    releaseDocument = null;
-    options.onClose?.(reason);
-  }
+    if (target && (this.options.isInside?.(target) ?? this.element.contains(target))) return;
 
-  return {
-    element,
-    body,
-    open,
-    close,
-    reposition,
-    get isVisible() {
-      return isVisible;
-    },
-    destroy: () => {
-      releaseDocument?.();
-      disposer.dispose();
-      element.remove();
-    },
+    this.close('outside');
+  };
+
+  private readonly onDocumentKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+
+    event.stopPropagation();
+    this.close('escape');
+  };
+
+  /** Якорь двигается вместе с текстом — при скролле и смене размера окна. */
+  private readonly onViewportChange = (): void => {
+    if (this.currentAnchor) this.reposition(this.currentAnchor);
   };
 }
+
+/** Создаёт поповер. Тонкая обёртка над контроллером ради прежнего API. */
+export const createPopover = (options: PopoverOptions = {}): Popover =>
+  new PopoverController(options);

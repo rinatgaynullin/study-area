@@ -14,11 +14,14 @@ const REGEX_SCHEME = /^([a-z][a-z0-9+.-]*):/i;
  *
  * @returns Нормализованный адрес или `null`, если адрес использовать нельзя.
  */
-export function normalizeHref(value: string): string | null {
+export const normalizeHref = (value: string): string | null => {
   const trimmed = value.trim();
+
   if (!trimmed) return null;
 
-  const scheme = REGEX_SCHEME.exec(trimmed)?.[1].toLowerCase();
+  const scheme = REGEX_SCHEME.exec(trimmed)?.[1]?.toLowerCase();
+
   if (!scheme) return `https://${trimmed}`;
+
   return NAVIGABLE_SCHEMES.includes(scheme) ? trimmed : null;
-}
+};

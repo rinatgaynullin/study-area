@@ -11,10 +11,10 @@ import { createMenuItem } from '../src/ui/dropdown';
 let added: ReturnType<typeof vi.spyOn>;
 let removed: ReturnType<typeof vi.spyOn>;
 
-function watchDocument(): void {
+const watchDocument = (): void => {
   added = vi.spyOn(document, 'addEventListener');
   removed = vi.spyOn(document, 'removeEventListener');
-}
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -27,20 +27,26 @@ describe('клавиатура в меню', () => {
       label: 'Меню',
       renderPanel: () => {
         const panel = document.createElement('div');
-        for (const text of ['один', 'два', 'три']) {
+
+        ['один', 'два', 'три'].forEach((text) => {
           const item = document.createElement('button');
+
           item.setAttribute('role', 'menuitem');
           item.textContent = text;
           panel.appendChild(item);
-        }
+        });
+
         return panel;
       },
     });
+
     document.body.appendChild(dropdown.element);
 
     // Синтетический клик — как с клавиатуры: фокус уходит в меню.
     dropdown.button.click();
+
     const items = [...dropdown.element.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+
     expect(document.activeElement).toBe(items[0]);
 
     const press = (key: string) =>
@@ -67,9 +73,11 @@ describe('панель дропдауна', () => {
       label: 'Меню',
       renderPanel: () => document.createElement('div'),
     });
+
     document.body.appendChild(dropdown.element);
 
     const panel = dropdown.element.querySelector('.rte-dropdown__panel')!;
+
     expect(panel.classList.contains('rte-popover')).toBe(true);
     expect(panel.getAttribute('role')).toBe('menu');
     expect(panel.hasAttribute('hidden')).toBe(true);
@@ -90,16 +98,19 @@ describe('панель дропдауна', () => {
 
 describe('модалка и видимая область окна', () => {
   /** Подделка visualViewport: jsdom его не знает. */
-  function fakeViewport(size: { width: number; height: number; offsetTop: number }) {
+  const fakeViewport = (size: { width: number; height: number; offsetTop: number }) => {
     const target = new EventTarget();
+
     return Object.assign(target, { ...size, offsetLeft: 0 });
-  }
+  };
 
   it('подгоняется под visualViewport, пока открыта, и отпускает его при закрытии', () => {
     const viewport = fakeViewport({ width: 400, height: 700, offsetTop: 0 });
+
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
 
     const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+
     document.body.appendChild(modal.element);
     expect(modal.element.style.height).toBe('');
 
@@ -127,9 +138,12 @@ describe('модалка и видимая область окна', () => {
 
   it('запирает прокрутку документа, пока открыт хоть один диалог', () => {
     const html = document.documentElement;
+
     html.style.overflow = 'auto';
+
     const first = createModal({ title: 'Первый', closeLabel: 'Закрыть' });
     const second = createModal({ title: 'Второй', closeLabel: 'Закрыть' });
+
     document.body.append(first.element, second.element);
 
     first.open();
@@ -152,7 +166,9 @@ describe('модалка и видимая область окна', () => {
 
   it('без visualViewport остаётся на inset: 0 из стилей', () => {
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined });
+
     const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+
     document.body.appendChild(modal.element);
     modal.open();
     expect(modal.element.getAttribute('style')).toBeNull();
@@ -163,8 +179,11 @@ describe('модалка и видимая область окна', () => {
 describe('панель модалки', () => {
   it('фокусируема сама: есть куда встать, пока содержимое грузится', () => {
     const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+
     document.body.appendChild(modal.element);
+
     const panel = modal.element.querySelector<HTMLElement>('[role="dialog"]')!;
+
     expect(panel.tabIndex).toBe(-1);
     modal.destroy();
   });
@@ -173,10 +192,12 @@ describe('панель модалки', () => {
 describe('слушатели документа у оверлеев', () => {
   it('дропдаун слушает документ только пока открыт', () => {
     watchDocument();
+
     const dropdown = createDropdown({
       label: 'Меню',
       renderPanel: () => document.createElement('div'),
     });
+
     document.body.appendChild(dropdown.element);
     expect(added).not.toHaveBeenCalled();
 
@@ -190,7 +211,9 @@ describe('слушатели документа у оверлеев', () => {
 
   it('модалка слушает Escape только пока открыта', () => {
     watchDocument();
+
     const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+
     document.body.appendChild(modal.element);
     expect(added).not.toHaveBeenCalled();
 
@@ -205,10 +228,12 @@ describe('слушатели документа у оверлеев', () => {
 
   it('поповер отпускает документ и окно при закрытии', () => {
     watchDocument();
+
     const windowAdded = vi.spyOn(window, 'addEventListener');
     const windowRemoved = vi.spyOn(window, 'removeEventListener');
 
     const popover = createPopover();
+
     document.body.appendChild(popover.element);
     expect(added).not.toHaveBeenCalled();
     expect(windowAdded).not.toHaveBeenCalled();
@@ -231,19 +256,26 @@ describe('доступность меню', () => {
     );
   };
 
-  function menuWith(items: HTMLElement[]) {
-    return createDropdown({
+  const menuWith = (items: HTMLElement[]) =>
+    createDropdown({
       label: 'Меню',
       renderPanel: () => {
         const panel = document.createElement('div');
+
         panel.append(...items);
+
         return panel;
       },
     });
-  }
 
   it('переключатели сообщают состояние через aria-checked, действия — нет', () => {
-    const radio = createMenuItem({ label: 'H1', role: 'menuitemradio', active: true, onSelect: () => {} });
+    const radio = createMenuItem({
+      label: 'H1',
+      role: 'menuitemradio',
+      active: true,
+      onSelect: () => {},
+    });
+
     const box = createMenuItem({ label: 'Курсив', role: 'menuitemcheckbox', onSelect: () => {} });
     const plain = createMenuItem({ label: 'Вставить', onSelect: () => {} });
 
@@ -260,14 +292,17 @@ describe('доступность меню', () => {
       text: 'H2',
       renderPanel: () => document.createElement('div'),
     });
+
     document.body.appendChild(dropdown.element);
 
     const panel = dropdown.element.querySelector('[role="menu"]')!;
+
     expect(dropdown.button.id).not.toBe('');
     expect(panel.getAttribute('aria-labelledby')).toBe(dropdown.button.id);
     expect(dropdown.button.getAttribute('aria-haspopup')).toBe('menu');
 
     const value = document.getElementById(dropdown.button.getAttribute('aria-describedby')!)!;
+
     expect(value.textContent).toBe('H2');
     dropdown.setText('Обычный текст');
     expect(value.textContent).toBe('Обычный текст');
@@ -278,7 +313,9 @@ describe('доступность меню', () => {
     const items = ['один', 'два', 'три'].map((label) =>
       createMenuItem({ label, onSelect: () => {} }),
     );
+
     const dropdown = menuWith(items);
+
     document.body.appendChild(dropdown.element);
 
     dropdown.button.focus();
@@ -296,14 +333,18 @@ describe('доступность меню', () => {
 
   it('в сетке стрелки вверх и вниз ходят по строкам и упираются в края', () => {
     const grid = document.createElement('div');
+
     grid.dataset.menuColumns = '3';
+
     grid.append(
       ...['1', '2', '3', '4', '5', '6'].map((label) =>
         createMenuItem({ label, role: 'menuitemradio', active: false, onSelect: () => {} }),
       ),
     );
+
     const reset = createMenuItem({ label: 'сброс', onSelect: () => {} });
     const dropdown = menuWith([grid, reset]);
+
     document.body.appendChild(dropdown.element);
 
     dropdown.button.click();

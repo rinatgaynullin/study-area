@@ -9,6 +9,7 @@ import {
 } from '../formula/mathjax';
 import { extractFormulaType, formulaAccessibleName, normalizeMathML } from '../formula/mathml';
 
+/** Настройки узла: колбэк открытия редактора формул, масштаб, атрибуты обёртки. */
 export interface FormulaOptions {
   /** Opens the host's visual editor for a new or existing formula. */
   onEdit: ((payload: FormulaPayload) => void) | null;
@@ -26,6 +27,7 @@ declare module '@tiptap/core' {
   }
 }
 
+/** Имя узла формулы в схеме. */
 export const FORMULA_NODE_NAME = 'formula';
 
 /**
@@ -36,20 +38,18 @@ export const FORMULA_NODE_NAME = 'formula';
  * чтобы формула не зависела от окружения, — и на `font-size` уже не реагирует.
  * Поэтому масштаб входит в сам рендер.
  */
-function formulaFontSize(scale: number): number {
-  return DEFAULT_FORMULA_FONT_SIZE_PX * scale;
-}
-
-export { formulaAccessibleName } from '../formula/mathml';
+const formulaFontSize = (scale: number): number => DEFAULT_FORMULA_FONT_SIZE_PX * scale;
 
 /** Формула под выделением узла — та, которую можно открыть по Enter. */
-function selectedFormula(state: EditorState): { node: PMNode; pos: number } | null {
+const selectedFormula = (state: EditorState): { node: PMNode; pos: number } | null => {
   const { selection } = state;
+
   if (!(selection instanceof NodeSelection) || selection.node.type.name !== FORMULA_NODE_NAME) {
     return null;
   }
+
   return { node: selection.node, pos: selection.from };
-}
+};
 
 /**
  * Atomic inline node holding a formula. The MathML in `data-mathml` is the
@@ -65,43 +65,40 @@ export const FormulaNode = Node.create<FormulaOptions>({
   selectable: true,
   draggable: false,
 
-  addOptions() {
-    return { onEdit: null, scale: 1, HTMLAttributes: {} };
-  },
+  addOptions: () => ({ onEdit: null, scale: 1, HTMLAttributes: {} }),
 
-  addAttributes() {
-    return {
-      mathml: {
-        default: '',
-        parseHTML: (element) => normalizeMathML(element.getAttribute('data-mathml') ?? ''),
-        renderHTML: (attributes) => ({ 'data-mathml': attributes.mathml as string }),
-      },
-      formulaType: {
-        default: 'math' as FormulaType,
-        parseHTML: (element) =>
-          element.getAttribute('data-formula-type') === 'chem' ? 'chem' : 'math',
-        renderHTML: (attributes) => ({ 'data-formula-type': attributes.formulaType as string }),
-      },
-    };
-  },
+  addAttributes: () => ({
+    mathml: {
+      default: '',
+      parseHTML: (element) => normalizeMathML(element.getAttribute('data-mathml') ?? ''),
+      renderHTML: (attributes) => ({ 'data-mathml': attributes.mathml as string }),
+    },
+    formulaType: {
+      default: 'math' as FormulaType,
+      parseHTML: (element) =>
+        element.getAttribute('data-formula-type') === 'chem' ? 'chem' : 'math',
+      renderHTML: (attributes) => ({ 'data-formula-type': attributes.formulaType as string }),
+    },
+  }),
 
-  parseHTML() {
-    return [
-      {
-        tag: 'span[data-formula]',
-        getAttrs: (element) => {
-          const mathml = normalizeMathML((element as HTMLElement).getAttribute('data-mathml') ?? '');
-          // Rejecting here keeps malformed or hostile MathML out of the document.
-          if (!mathml) return false;
-          return null;
-        },
+  parseHTML: () => [
+    {
+      tag: 'span[data-formula]',
+      getAttrs: (element) => {
+        const mathml = normalizeMathML((element as HTMLElement).getAttribute('data-mathml') ?? '');
+
+        // Rejecting here keeps malformed or hostile MathML out of the document.
+        if (!mathml) return false;
+
+        return null;
       },
-    ];
-  },
+    },
+  ],
 
   renderHTML({ node, HTMLAttributes }) {
     const mathml = (node.attrs.mathml as string) ?? '';
     const dom = document.createElement('span');
+
     const attrs = mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
       'data-formula': 'true',
       class: 'rte-formula',
@@ -111,36 +108,43 @@ export const FormulaNode = Node.create<FormulaOptions>({
       'aria-label': formulaAccessibleName(mathml),
     });
 
-    for (const [key, value] of Object.entries(attrs)) {
+    Object.entries(attrs).forEach(([key, value]) => {
       if (value !== null && value !== undefined) dom.setAttribute(key, String(value));
-    }
+    });
 
     const host = document.createElement('span');
+
     host.className = 'rte-formula__render';
     host.setAttribute('data-render-host', 'true');
 
     const svg = getCachedFormulaSvg(mathml, formulaFontSize(this.options.scale));
+
     // Already sanitized when it entered the cache.
     if (svg) host.innerHTML = svg;
 
     dom.appendChild(host);
+
     return dom;
   },
 
   addNodeView() {
+    const { options } = this;
+
     return ({ node, getPos, editor }) => {
       const dom = document.createElement('span');
+
       dom.className = 'rte-formula';
       dom.setAttribute('data-formula', 'true');
       dom.setAttribute('contenteditable', 'false');
       dom.setAttribute('role', 'img');
 
       const host = document.createElement('span');
+
       host.className = 'rte-formula__render';
       host.setAttribute('data-render-host', 'true');
       dom.appendChild(host);
 
-      const fontSizePx = formulaFontSize(this.options.scale);
+      const fontSizePx = formulaFontSize(options.scale);
 
       let destroyed = false;
       let currentMathml = '';
@@ -152,34 +156,44 @@ export const FormulaNode = Node.create<FormulaOptions>({
         dom.setAttribute('aria-label', formulaAccessibleName(mathml));
 
         const cached = getCachedFormulaSvg(mathml, fontSizePx);
+
         if (cached !== undefined) {
           host.innerHTML = cached;
+
           return;
         }
 
         host.textContent = '…';
-        void renderMathML(mathml, { fontSizePx }).then((svg) => {
-          // Guard against a stale render landing after the node changed again.
-          if (destroyed || currentMathml !== mathml) return;
-          if (svg) host.innerHTML = svg;
-          else host.textContent = '⚠';
-        });
+
+        renderMathML(mathml, { fontSizePx })
+          // Не загрузился движок — тот же маркер, что и при неудачном рендере.
+          .catch(() => '')
+          .then((svg) => {
+            // Guard against a stale render landing after the node changed again.
+            if (destroyed || currentMathml !== mathml) return;
+
+            if (svg) host.innerHTML = svg;
+            else host.textContent = '⚠';
+          });
       };
 
       paint(node.attrs.mathml as string, node.attrs.formulaType as FormulaType);
 
       const openEditor = (event: MouseEvent) => {
         if (!editor.isEditable) return;
+
         event.preventDefault();
         event.stopPropagation();
 
         const pos = typeof getPos === 'function' ? getPos() : null;
+
         if (typeof pos === 'number') {
           editor.view.dispatch(
             editor.view.state.tr.setSelection(NodeSelection.create(editor.view.state.doc, pos)),
           );
         }
-        this.options.onEdit?.({
+
+        options.onEdit?.({
           mathml: currentMathml,
           type: dom.getAttribute('data-formula-type') === 'chem' ? 'chem' : 'math',
           pos: typeof pos === 'number' ? pos : null,
@@ -195,10 +209,13 @@ export const FormulaNode = Node.create<FormulaOptions>({
         dom,
         update: (updated) => {
           if (updated.type.name !== FORMULA_NODE_NAME) return false;
+
           const mathml = updated.attrs.mathml as string;
           const type = updated.attrs.formulaType as FormulaType;
+
           if (mathml !== currentMathml) paint(mathml, type);
           else dom.setAttribute('data-formula-type', type);
+
           return true;
         },
         selectNode: () => dom.classList.add('rte-formula--selected'),
@@ -214,32 +231,40 @@ export const FormulaNode = Node.create<FormulaOptions>({
   },
 
   addKeyboardShortcuts() {
+    const { editor, options } = this;
+
     return {
       // Стрелки выделяют формулу как узел; Enter открывает её редактор —
       // иначе с клавиатуры до правки формулы не добраться: клик ей нужен.
       Enter: () => {
-        const selected = selectedFormula(this.editor.state);
-        if (!selected || !this.editor.isEditable || !this.options.onEdit) return false;
+        const selected = selectedFormula(editor.state);
 
-        this.options.onEdit({
+        if (!selected || !editor.isEditable || !options.onEdit) return false;
+
+        options.onEdit({
           mathml: selected.node.attrs.mathml as string,
           type: selected.node.attrs.formulaType as FormulaType,
           pos: selected.pos,
         });
+
         return true;
       },
     };
   },
 
   addCommands() {
+    const { name } = this;
+
     return {
       insertFormula:
         ({ mathml, type }) =>
         ({ commands }) => {
           const safe = normalizeMathML(mathml);
+
           if (!safe) return false;
+
           return commands.insertContent({
-            type: this.name,
+            type: name,
             attrs: { mathml: safe, formulaType: type ?? extractFormulaType(safe) },
           });
         },
@@ -248,9 +273,12 @@ export const FormulaNode = Node.create<FormulaOptions>({
         ({ pos, mathml, type }) =>
         ({ tr, dispatch, state }) => {
           const safe = normalizeMathML(mathml);
+
           if (!safe) return false;
+
           const node = state.doc.nodeAt(pos);
-          if (!node || node.type.name !== this.name) return false;
+
+          if (!node || node.type.name !== name) return false;
 
           if (dispatch) {
             tr.setNodeMarkup(pos, undefined, {
@@ -259,6 +287,7 @@ export const FormulaNode = Node.create<FormulaOptions>({
               formulaType: type ?? (node.attrs.formulaType as FormulaType),
             });
           }
+
           return true;
         },
 
@@ -266,8 +295,11 @@ export const FormulaNode = Node.create<FormulaOptions>({
         (pos) =>
         ({ tr, dispatch, state }) => {
           const node = state.doc.nodeAt(pos);
-          if (!node || node.type.name !== this.name) return false;
+
+          if (!node || node.type.name !== name) return false;
+
           if (dispatch) tr.delete(pos, pos + node.nodeSize);
+
           return true;
         },
     };

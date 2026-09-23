@@ -28,61 +28,53 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
   draggable: true,
   selectable: true,
 
-  addOptions() {
-    return { t: (key: string) => key, HTMLAttributes: {} };
-  },
+  addOptions: () => ({ t: (key: string) => key, HTMLAttributes: {} }),
 
-  addAttributes() {
-    return {
-      href: {
-        default: '',
-        parseHTML: (element) =>
-          element.getAttribute('data-href') ??
-          element.querySelector('a')?.getAttribute('href') ??
-          '',
-        renderHTML: () => ({}),
-      },
-      name: {
-        default: '',
-        parseHTML: (element) =>
-          element.getAttribute('data-name') ??
-          element.querySelector('a')?.textContent?.trim() ??
-          '',
-        renderHTML: (attributes) => ({ 'data-name': attributes.name as string }),
-      },
-      size: {
-        default: null,
-        parseHTML: (element) => {
-          const raw = element.getAttribute('data-size');
-          const value = raw === null ? Number.NaN : Number.parseInt(raw, 10);
-          return Number.isFinite(value) ? value : null;
-        },
-        renderHTML: (attributes) =>
-          attributes.size === null || attributes.size === undefined
-            ? {}
-            : { 'data-size': String(attributes.size) },
-      },
-      mime: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('data-mime'),
-        renderHTML: (attributes) =>
-          attributes.mime ? { 'data-mime': attributes.mime as string } : {},
-      },
-    };
-  },
+  addAttributes: () => ({
+    href: {
+      default: '',
+      parseHTML: (element) =>
+        element.getAttribute('data-href') ?? element.querySelector('a')?.getAttribute('href') ?? '',
+      renderHTML: () => ({}),
+    },
+    name: {
+      default: '',
+      parseHTML: (element) =>
+        element.getAttribute('data-name') ?? element.querySelector('a')?.textContent?.trim() ?? '',
+      renderHTML: (attributes) => ({ 'data-name': attributes.name as string }),
+    },
+    size: {
+      default: null,
+      parseHTML: (element) => {
+        const raw = element.getAttribute('data-size');
+        const value = raw === null ? Number.NaN : Number.parseInt(raw, 10);
 
-  parseHTML() {
-    return [
-      {
-        tag: 'div[data-attachment]',
-        getAttrs: (element) => {
-          const el = element as HTMLElement;
-          const href = el.getAttribute('data-href') ?? el.querySelector('a')?.getAttribute('href');
-          return href ? null : false;
-        },
+        return Number.isFinite(value) ? value : null;
       },
-    ];
-  },
+      renderHTML: (attributes) =>
+        attributes.size === null || attributes.size === undefined
+          ? {}
+          : { 'data-size': String(attributes.size) },
+    },
+    mime: {
+      default: null,
+      parseHTML: (element) => element.getAttribute('data-mime'),
+      renderHTML: (attributes) =>
+        attributes.mime ? { 'data-mime': attributes.mime as string } : {},
+    },
+  }),
+
+  parseHTML: () => [
+    {
+      tag: 'div[data-attachment]',
+      getAttrs: (element) => {
+        const el = element as HTMLElement;
+        const href = el.getAttribute('data-href') ?? el.querySelector('a')?.getAttribute('href');
+
+        return href ? null : false;
+      },
+    },
+  ],
 
   renderHTML({ node, HTMLAttributes }) {
     const href = (node.attrs.href as string) ?? '';
@@ -105,46 +97,57 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
   },
 
   addNodeView() {
+    const { t } = this.options;
+
     return ({ node }) => {
       const attrs = node.attrs as unknown as AttachmentAttributes;
 
       const dom = document.createElement('div');
+
       dom.className = 'rte-attachment';
       dom.setAttribute('data-attachment', 'true');
       dom.setAttribute('data-href', attrs.href);
       dom.contentEditable = 'false';
 
       const icon = document.createElement('span');
+
       icon.className = 'rte-attachment__icon';
       icon.setAttribute('aria-hidden', 'true');
       icon.textContent = '📄';
 
       const link = document.createElement('a');
+
       link.className = 'rte-attachment__link';
       link.href = attrs.href;
       link.download = attrs.name;
       link.rel = 'noopener noreferrer';
       link.textContent = attrs.name;
-      link.title = this.options.t('file_download');
+      link.title = t('file_download');
       // Видимый текст — имя файла; читалке нужно и действие: «Скачать отчёт.txt».
-      link.setAttribute('aria-label', `${this.options.t('file_download')}: ${attrs.name}`);
+      link.setAttribute('aria-label', `${t('file_download')}: ${attrs.name}`);
 
       const meta = document.createElement('span');
+
       meta.className = 'rte-attachment__meta';
+
       if (attrs.size) meta.textContent = formatBytes(attrs.size);
 
       dom.append(icon, link, meta);
+
       return { dom, ignoreMutation: () => true };
     };
   },
 
   addCommands() {
+    const { name } = this;
+
     return {
       insertAttachment:
         (attributes) =>
         ({ commands }) => {
           if (!attributes.href) return false;
-          return commands.insertContent({ type: this.name, attrs: attributes });
+
+          return commands.insertContent({ type: name, attrs: attributes });
         },
     };
   },

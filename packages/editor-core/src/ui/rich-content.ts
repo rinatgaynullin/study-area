@@ -30,12 +30,14 @@ export interface RichContent {
   destroy(): void;
 }
 
-function createRenderHost(): HTMLElement {
+const createRenderHost = (): HTMLElement => {
   const host = document.createElement('span');
+
   host.className = 'rte-formula__render';
   host.setAttribute('data-render-host', 'true');
+
   return host;
-}
+};
 
 /**
  * Вьюер сохранённого документа — без фреймворка и без редакторского стека.
@@ -45,7 +47,7 @@ function createRenderHost(): HTMLElement {
  * MathJax для них не грузится; формулы с одним `data-mathml` — например, от
  * бэкенда, который хранит только источник, — отрисовываются по месту.
  */
-export function createRichContent(options: RichContentOptions): RichContent {
+export const createRichContent = (options: RichContentOptions): RichContent => {
   const { element } = options;
   let html = options.html ?? '';
   let formulaScale = options.formulaScale ?? 1;
@@ -53,15 +55,16 @@ export function createRichContent(options: RichContentOptions): RichContent {
   let destroyed = false;
 
   element.classList.add('rte-content-root', 'rte-content');
+
   let releaseTheme = applyTheme(element, options.theme ?? 'light');
 
-  function paint(): void {
+  const paint = (): void => {
     element.classList.toggle('rte-legacy', legacy);
     // Тот же единственный путь входа, что и у редактора.
     element.innerHTML = prepareIncomingHtml(html, { legacy });
-  }
+  };
 
-  async function renderPendingFormulas(): Promise<void> {
+  const renderPendingFormulas = async (): Promise<void> => {
     const formulas = [...element.querySelectorAll<HTMLElement>('span[data-formula]')];
 
     await Promise.all(
@@ -70,6 +73,7 @@ export function createRichContent(options: RichContentOptions): RichContent {
         // читалке она была бы «изображением». Имя редактора уважаем.
         if (!formula.hasAttribute('aria-label')) {
           formula.setAttribute('role', 'img');
+
           formula.setAttribute(
             'aria-label',
             formulaAccessibleName(formula.getAttribute('data-mathml') ?? ''),
@@ -77,8 +81,8 @@ export function createRichContent(options: RichContentOptions): RichContent {
         }
 
         const host =
-          formula.querySelector<HTMLElement>('[data-render-host]') ??
-          formula.appendChild(createRenderHost());
+          formula.querySelector<HTMLElement>('[data-render-host]')
+          ?? formula.appendChild(createRenderHost());
 
         // SVG, приехавший с документом, уже нужного размера — если только не
         // просили другой масштаб: пиксели в разметке на font-size не
@@ -88,27 +92,34 @@ export function createRichContent(options: RichContentOptions): RichContent {
         const svg = await renderMathML(formula.getAttribute('data-mathml') ?? '', {
           fontSizePx: DEFAULT_FORMULA_FONT_SIZE_PX * formulaScale,
         });
+
         if (!destroyed && svg) host.innerHTML = svg;
       }),
     );
 
     if (!destroyed) options.onRendered?.();
-  }
+  };
 
-  async function update(next: RichContentUpdate): Promise<void> {
+  const update = async (next: RichContentUpdate): Promise<void> => {
     if (next.html !== undefined) html = next.html;
+
     if (next.formulaScale !== undefined) formulaScale = next.formulaScale;
+
     if (next.legacy !== undefined) legacy = next.legacy;
+
     if (next.theme !== undefined) {
       releaseTheme();
       releaseTheme = applyTheme(element, next.theme);
     }
+
     paint();
     await renderPendingFormulas();
-  }
+  };
 
   paint();
-  void renderPendingFormulas();
+  // Первую отрисовку не ждём: вьюер готов сразу. Неудачный рендер
+  // renderMathML не пробрасывает — формула остаётся без SVG.
+  renderPendingFormulas();
 
   return {
     element,
@@ -121,4 +132,4 @@ export function createRichContent(options: RichContentOptions): RichContent {
       element.classList.remove('rte-content-root', 'rte-content', 'rte-legacy', 'rte-theme-dark');
     },
   };
-}
+};

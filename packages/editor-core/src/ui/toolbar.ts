@@ -1,4 +1,4 @@
-import { focusEditorView } from '../utils/focus-editor';
+import { focusEditorView } from '../utils/focus-editor-view';
 import { createDisposer, el, icon, on } from './dom';
 import { createDropdown, createMenuItem, type Dropdown } from './dropdown';
 import { ariaKeyshortcuts, formatShortcut } from './shortcuts';
@@ -48,9 +48,25 @@ interface RenderedItem {
   descriptor: ToolbarItemDescriptor;
   button: HTMLButtonElement;
   dropdown?: Dropdown;
-  /** Иконка обычной кнопки — чтобы подменять её при смене состояния. */
-  iconNode?: SVGElement;
 }
+
+/** Ширина по умолчанию, ниже которой схлопываемые группы уходят в меню сразу. */
+const DEFAULT_COLLAPSE_BELOW = 760;
+
+/** Размер иконок на кнопках тулбара. */
+const ICON_SIZE = 20;
+
+/**
+ * Подменяет иконку обычной кнопки, если имя сменилось. Имя лежит на самом
+ * узле (data-icon), поэтому ссылку на иконку держать отдельно не нужно.
+ */
+const refreshButtonIcon = (button: HTMLButtonElement, name: string): void => {
+  const current = button.querySelector('.rte-icon');
+
+  if (!current || current.getAttribute('data-icon') === name) return;
+
+  current.replaceWith(icon(name, ICON_SIZE));
+};
 
 /**
  * Тулбар, собранный из дескрипторов возможностей.
@@ -58,44 +74,186 @@ interface RenderedItem {
  * Пункты не зашиты в разметку: тулбар получает список идентификаторов и берёт
  * поведение из реестра. Поэтому набор кнопок задаётся конфигурацией, а не
  * правкой этого файла, и одна и та же возможность не описывается дважды.
+ *
+ * Класс, а не набор замыканий: пересборка, синхронизация состояния, раскладка
+ * и roving tabindex делят одно состояние и зовут друг друга в любом порядке.
  */
-export function createToolbar(context: EditorUiContext, options: ToolbarOptions): Toolbar {
-  const disposer = createDisposer();
-  const collapseBelow = options.collapseBelow ?? 760;
+class ToolbarController implements Toolbar {
+  readonly element = el('div', { class: 'rte-toolbar', attrs: { role: 'toolbar' } });
 
-  const element = el('div', { class: 'rte-toolbar', attrs: { role: 'toolbar' } });
-  const rendered: RenderedItem[] = [];
+  private readonly disposer = createDisposer();
 
-  /** Схлопывать можно только группы из обычных кнопок: панель в меню не влезет. */
-  function isCollapsible(group: ToolbarGroupConfig): boolean {
-    return (
-      group.collapsible === true &&
-      group.items.every((id) => options.items[id]?.kind !== 'dropdown')
-    );
-  }
+  private readonly collapseBelow: number;
 
   /** Схлопываемые группы в порядке следования; в меню уходят с конца. */
-  const collapsibleGroups = options.groups.filter(isCollapsible);
+  private readonly collapsibleGroups: ToolbarGroupConfig[];
 
-  let isDisabled = false;
+  private readonly rendered: RenderedItem[] = [];
+
+  private isDisabled = false;
+
   /** Сколько схлопываемых групп сейчас в меню «⋯», считая с конца. */
-  let collapsedCount = 0;
-  let lastWidth = 0;
+  private collapsedCount = 0;
+
+  private lastWidth = 0;
+
   /**
    * Пункт, на котором стоит фокус тулбара. Тулбар — одна остановка Tab'а: в
    * него входят на этот пункт, а между кнопками ходят стрелками. Иначе до
    * документа пришлось бы пройти два десятка кнопок подряд.
    */
-  let rovingId: string | null = null;
+  private rovingId: string | null = null;
 
-  function iconNameFor(descriptor: ToolbarItemDescriptor): string {
-    return descriptor.dynamicIcon?.(context.editor) ?? descriptor.icon ?? 'more';
+  private observer: ResizeObserver | null = null;
+
+  private frame = 0;
+
+  constructor(
+    private readonly context: EditorUiContext,
+    private readonly options: ToolbarOptions,
+  ) {
+    this.collapseBelow = options.collapseBelow ?? DEFAULT_COLLAPSE_BELOW;
+    this.collapsibleGroups = options.groups.filter((group) => this.isCollapsible(group));
+
+    // Стрелки ходят по кнопкам, Home/End — к краям, Escape возвращает каретку
+    // в документ. Открытое меню лежит внутри тулбара, но клавиши в нём свои.
+    this.disposer.add(on(this.element, 'keydown', this.onKeydown));
+
+    // Пришли Tab'ом или щелчком на другую кнопку — она и становится остановкой:
+    // выйдя и вернувшись, пользователь попадает туда же, где был.
+    this.disposer.add(on(this.element, 'focusin', this.onFocusIn));
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.observer = new ResizeObserver(this.onResize);
+      this.observer.observe(this.element);
+    }
+
+    this.render();
   }
 
-  function buildButton(descriptor: ToolbarItemDescriptor): RenderedItem {
-    const label = context.t(descriptor.labelKey);
+  /** Перечитывает состояние документа и обновляет подсветку и доступность. */
+  syncState(): void {
+    this.rendered.forEach((item) => {
+      const { descriptor, button, dropdown } = item;
+      const active = descriptor.isActive?.(this.context.editor) ?? false;
+      const disabled = this.isDisabled || (descriptor.isDisabled?.(this.context.editor) ?? false);
+
+      if (dropdown) {
+        dropdown.setActive(active);
+        dropdown.setDisabled(disabled);
+
+        if (descriptor.text) dropdown.setText(descriptor.text(this.context));
+
+        if (descriptor.dynamicIcon) dropdown.setIcon(descriptor.dynamicIcon(this.context.editor));
+
+        return;
+      }
+
+      button.classList.toggle('rte-btn--active', active);
+
+      if (descriptor.isActive) button.setAttribute('aria-pressed', String(active));
+
+      button.disabled = disabled;
+
+      if (descriptor.dynamicIcon) {
+        refreshButtonIcon(button, descriptor.dynamicIcon(this.context.editor));
+      }
+    });
+
+    this.applyRoving();
+  }
+
+  /** Блокирует или разблокирует все кнопки разом (режим «только чтение»). */
+  setDisabled(disabled: boolean): void {
+    this.isDisabled = disabled;
+    this.syncState();
+  }
+
+  /** Пересобирает кнопки: подписи и подсказки берутся из переводчика заново. */
+  rebuild(): void {
+    // Подписи сменились — ширины тоже: подбираем заново с полного тулбара.
+    this.collapsedCount = 0;
+    this.render();
+    this.layout(this.lastWidth);
+  }
+
+  /**
+   * Подбирает число схлопнутых групп под ширину.
+   *
+   * Ниже collapseBelow все схлопываемые группы уходят в меню сразу: на
+   * телефоне в одну строку они не встанут при любом переборе. Выше порога
+   * фиксированное правило не работает — ширина тулбара зависит от набора
+   * пунктов и языка подписей, — поэтому измеряем: если тулбар переносится,
+   * убираем группы по одной с конца, пока не перестанет; если места стало
+   * больше, пробуем вернуть одну и откатываемся, когда перенос вернулся.
+   */
+  layout(width: number): void {
+    this.lastWidth = width;
+
+    if (width < this.collapseBelow) {
+      if (this.collapsedCount !== this.collapsibleGroups.length) {
+        this.collapsedCount = this.collapsibleGroups.length;
+        this.render();
+      }
+
+      return;
+    }
+
+    if (this.isWrapped()) {
+      while (this.isWrapped() && this.collapsedCount < this.collapsibleGroups.length) {
+        this.collapsedCount += 1;
+        this.render();
+      }
+
+      return;
+    }
+
+    while (this.collapsedCount > 0) {
+      this.collapsedCount -= 1;
+      this.render();
+
+      if (this.isWrapped()) {
+        this.collapsedCount += 1;
+        this.render();
+
+        return;
+      }
+    }
+  }
+
+  /** Переводит фокус на текущую кнопку тулбара или первую доступную. */
+  focus(): void {
+    this.applyRoving();
+
+    this.getFocusableButtons()
+      .find((button) => button.dataset.itemId === this.rovingId)
+      ?.focus();
+  }
+
+  /** Снимает наблюдатель размера и слушатели, убирает тулбар из документа. */
+  destroy(): void {
+    this.observer?.disconnect();
+    cancelAnimationFrame(this.frame);
+    this.rendered.forEach((item) => item.dropdown?.destroy());
+    this.disposer.dispose();
+    this.element.remove();
+  }
+
+  /** Схлопывать можно только группы из обычных кнопок: панель в меню не влезет. */
+  private isCollapsible(group: ToolbarGroupConfig): boolean {
+    return (
+      group.collapsible === true
+      && group.items.every((id) => this.options.items[id]?.kind !== 'dropdown')
+    );
+  }
+
+  private getIconName(descriptor: ToolbarItemDescriptor): string {
+    return descriptor.dynamicIcon?.(this.context.editor) ?? descriptor.icon ?? 'more';
+  }
+
+  private buildButton(descriptor: ToolbarItemDescriptor): RenderedItem {
+    const label = this.context.t(descriptor.labelKey);
     const shortcut = descriptor.shortcut ? formatShortcut(descriptor.shortcut) : '';
-    const iconNode = icon(iconNameFor(descriptor), 20);
 
     const button = el('button', {
       class: 'rte-btn',
@@ -110,88 +268,103 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
         // Переключатель сообщает состояние, а не только подсвечивается.
         'aria-pressed': descriptor.isActive ? 'false' : null,
       },
-      children: [iconNode],
+      children: [icon(this.getIconName(descriptor), ICON_SIZE)],
     });
 
     // Кнопка не забирает фокус у документа: иначе каждый клик — потеря
     // выделения, возврат фокуса в следующем кадре и гонка с набором.
-    disposer.add(on(button, 'mousedown', (event) => event.preventDefault()));
-    disposer.add(
+    this.disposer.add(on(button, 'mousedown', (event) => event.preventDefault()));
+
+    this.disposer.add(
       on(button, 'click', (event) => {
         event.preventDefault();
-        descriptor.run?.(context);
+        descriptor.run?.(this.context);
       }),
     );
 
-    return { descriptor, button, iconNode };
+    return { descriptor, button };
   }
 
-  function buildItem(id: string): HTMLElement | null {
-    const descriptor = options.items[id];
+  private buildItem(id: string): HTMLElement | null {
+    const descriptor = this.options.items[id];
+
     // Неизвестный пункт — не повод падать: набор возможностей задаёт хост, и
     // опечатка в конфиге не должна ломать весь тулбар.
     if (!descriptor) return null;
 
     if (descriptor.kind === 'dropdown' && descriptor.renderPanel) {
+      const { renderPanel } = descriptor;
+
       const dropdown = createDropdown({
-        label: context.t(descriptor.labelKey),
-        iconName: iconNameFor(descriptor),
-        text: descriptor.text?.(context),
-        renderPanel: (close) => descriptor.renderPanel!(context, close),
+        label: this.context.t(descriptor.labelKey),
+        iconName: this.getIconName(descriptor),
+        text: descriptor.text?.(this.context),
+        renderPanel: (close) => renderPanel(this.context, close),
       });
+
       dropdown.button.dataset.itemId = descriptor.id;
-      rendered.push({ descriptor, button: dropdown.button, dropdown });
+      this.rendered.push({ descriptor, button: dropdown.button, dropdown });
+
       return dropdown.element;
     }
 
-    const item = buildButton(descriptor);
-    rendered.push(item);
+    const item = this.buildButton(descriptor);
+
+    this.rendered.push(item);
+
     return item.button;
   }
 
-  function buildOverflow(groups: ToolbarGroupConfig[]): HTMLElement {
+  private buildOverflow(groups: ToolbarGroupConfig[]): HTMLElement {
     const dropdown = createDropdown({
-      label: context.t('toolbar_more'),
+      label: this.context.t('toolbar_more'),
       iconName: 'more',
       renderPanel: (close) => {
         const panel = el('div');
-        for (const group of groups) {
-          for (const id of group.items) {
-            const descriptor = options.items[id];
-            if (!descriptor) continue;
+
+        groups.forEach((group) => {
+          group.items.forEach((id) => {
+            const descriptor = this.options.items[id];
+
+            if (!descriptor) return;
+
             panel.appendChild(
               createMenuItem({
-                label: context.t(descriptor.labelKey),
-                iconName: iconNameFor(descriptor),
+                label: this.context.t(descriptor.labelKey),
+                iconName: this.getIconName(descriptor),
                 // Переключатель и в меню остаётся переключателем: пункт
                 // сообщает своё состояние, а не только подсвечивается.
                 role: descriptor.isActive ? 'menuitemcheckbox' : 'menuitem',
-                active: descriptor.isActive?.(context.editor),
-                disabled: isDisabled || (descriptor.isDisabled?.(context.editor) ?? false),
+                active: descriptor.isActive?.(this.context.editor),
+                disabled:
+                  this.isDisabled || (descriptor.isDisabled?.(this.context.editor) ?? false),
                 onSelect: () => {
-                  descriptor.run?.(context);
+                  descriptor.run?.(this.context);
                   close();
                 },
               }),
             );
-          }
-        }
+          });
+        });
+
         return panel;
       },
     });
 
     dropdown.button.dataset.itemId = 'more';
-    rendered.push({
+
+    this.rendered.push({
       descriptor: { id: 'more', labelKey: 'toolbar_more' },
       button: dropdown.button,
       dropdown,
     });
+
     return dropdown.element;
   }
 
   /** Кнопки, на которые можно встать: отключённые стрелки пропускают. */
-  function focusableButtons(): HTMLButtonElement[] {
-    return rendered.map((item) => item.button).filter((button) => !button.disabled);
+  private getFocusableButtons(): HTMLButtonElement[] {
+    return this.rendered.map((item) => item.button).filter((button) => !button.disabled);
   }
 
   /**
@@ -200,212 +373,129 @@ export function createToolbar(context: EditorUiContext, options: ToolbarOptions)
    * недоступным, и тогда остановка Tab'а переходит к первой доступной кнопке —
    * иначе Tab перешагнул бы тулбар целиком.
    */
-  function applyRoving(): void {
-    const buttons = focusableButtons();
-    const current = buttons.find((button) => button.dataset.itemId === rovingId) ?? buttons[0];
-    rovingId = current?.dataset.itemId ?? null;
-    for (const item of rendered) item.button.tabIndex = item.button === current ? 0 : -1;
+  private applyRoving(): void {
+    const buttons = this.getFocusableButtons();
+    const current = buttons.find((button) => button.dataset.itemId === this.rovingId) ?? buttons[0];
+
+    this.rovingId = current?.dataset.itemId ?? null;
+
+    this.rendered.forEach((item) => {
+      const { button } = item;
+
+      button.tabIndex = button === current ? 0 : -1;
+    });
   }
 
-  function moveFocus(button: HTMLButtonElement): void {
-    rovingId = button.dataset.itemId ?? null;
-    applyRoving();
+  private moveFocus(button: HTMLButtonElement): void {
+    this.rovingId = button.dataset.itemId ?? null;
+    this.applyRoving();
     button.focus();
   }
 
-  function render(): void {
+  private render(): void {
     // Дропдауны держат слушатели на документе — снимаем их перед пересборкой.
-    for (const item of rendered) item.dropdown?.destroy();
-    rendered.length = 0;
-    element.replaceChildren();
-    element.setAttribute('aria-label', context.t('toolbar_label'));
+    this.rendered.forEach((item) => item.dropdown?.destroy());
+    this.rendered.length = 0;
+    this.element.replaceChildren();
+    this.element.setAttribute('aria-label', this.context.t('toolbar_label'));
 
-    const collapsed = collapsibleGroups.slice(collapsibleGroups.length - collapsedCount);
-    const visible = options.groups.filter((group) => !collapsed.includes(group));
+    const collapsed = this.collapsibleGroups.slice(
+      this.collapsibleGroups.length - this.collapsedCount,
+    );
 
-    for (const group of visible) {
+    const visible = this.options.groups.filter((group) => !collapsed.includes(group));
+
+    visible.forEach((group) => {
       const groupElement = el('div', { class: 'rte-toolbar__group' });
-      for (const id of group.items) {
-        const node = buildItem(id);
+
+      group.items.forEach((id) => {
+        const node = this.buildItem(id);
+
         if (node) groupElement.appendChild(node);
-      }
+      });
+
       // Пустая группа оставила бы висеть разделитель.
-      if (groupElement.childElementCount > 0) element.appendChild(groupElement);
-    }
+      if (groupElement.childElementCount > 0) this.element.appendChild(groupElement);
+    });
 
     if (collapsed.length > 0) {
-      element.appendChild(
-        el('div', { class: 'rte-toolbar__group', children: [buildOverflow(collapsed)] }),
+      this.element.appendChild(
+        el('div', { class: 'rte-toolbar__group', children: [this.buildOverflow(collapsed)] }),
       );
     }
 
-    syncState();
+    this.syncState();
   }
-
-  function syncState(): void {
-    for (const item of rendered) {
-      const active = item.descriptor.isActive?.(context.editor) ?? false;
-      const disabled = isDisabled || (item.descriptor.isDisabled?.(context.editor) ?? false);
-
-      if (item.dropdown) {
-        item.dropdown.setActive(active);
-        item.dropdown.setDisabled(disabled);
-        if (item.descriptor.text) item.dropdown.setText(item.descriptor.text(context));
-        if (item.descriptor.dynamicIcon) {
-          item.dropdown.setIcon(item.descriptor.dynamicIcon(context.editor));
-        }
-        continue;
-      }
-
-      item.button.classList.toggle('rte-btn--active', active);
-      if (item.descriptor.isActive) item.button.setAttribute('aria-pressed', String(active));
-      item.button.disabled = disabled;
-
-      if (item.descriptor.dynamicIcon && item.iconNode) {
-        const next = item.descriptor.dynamicIcon(context.editor);
-        if (item.iconNode.getAttribute('data-icon') !== next) {
-          const fresh = icon(next, 20);
-          item.iconNode.replaceWith(fresh);
-          item.iconNode = fresh;
-        }
-      }
-    }
-
-    applyRoving();
-  }
-
-  // Стрелки ходят по кнопкам, Home/End — к краям, Escape возвращает каретку
-  // в документ. Открытое меню лежит внутри тулбара, но клавиши в нём свои.
-  disposer.add(
-    on(element, 'keydown', (event) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('.rte-popover')) return;
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        focusEditorView(context.editor);
-        return;
-      }
-
-      const buttons = focusableButtons();
-      if (buttons.length === 0) return;
-
-      const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      const moves: Record<string, number> = {
-        ArrowRight: current + 1,
-        ArrowLeft: current - 1,
-        Home: 0,
-        End: buttons.length - 1,
-      };
-      const next = moves[event.key];
-      if (next === undefined) return;
-
-      event.preventDefault();
-      moveFocus(buttons[(next + buttons.length) % buttons.length]);
-    }),
-  );
-
-  // Пришли Tab'ом или щелчком на другую кнопку — она и становится остановкой:
-  // выйдя и вернувшись, пользователь попадает туда же, где был.
-  disposer.add(
-    on(element, 'focusin', (event) => {
-      const target = event.target as HTMLElement | null;
-      const id = target?.closest<HTMLElement>('.rte-toolbar__group > .rte-btn, .rte-dropdown > .rte-btn')
-        ?.dataset.itemId;
-      if (id && id !== rovingId) {
-        rovingId = id;
-        applyRoving();
-      }
-    }),
-  );
 
   /** Переносится ли тулбар на вторую строку. */
-  function isWrapped(): boolean {
-    const groups = [...element.children] as HTMLElement[];
+  private isWrapped(): boolean {
+    const groups = [...this.element.children] as HTMLElement[];
+
     if (groups.length < 2) return false;
-    const firstTop = groups[0].offsetTop;
+
+    const firstTop = groups[0]?.offsetTop ?? 0;
+
     return groups.some((group) => group.offsetTop > firstTop);
   }
 
-  /**
-   * Подбирает число схлопнутых групп под ширину.
-   *
-   * Ниже collapseBelow все схлопываемые группы уходят в меню сразу: на
-   * телефоне в одну строку они не встанут при любом переборе. Выше порога
-   * фиксированное правило не работает — ширина тулбара зависит от набора
-   * пунктов и языка подписей, — поэтому измеряем: если тулбар переносится,
-   * убираем группы по одной с конца, пока не перестанет; если места стало
-   * больше, пробуем вернуть одну и откатываемся, когда перенос вернулся.
-   */
-  function layout(width: number): void {
-    lastWidth = width;
+  private readonly onKeydown = (event: KeyboardEvent): void => {
+    const target = event.target as HTMLElement | null;
 
-    if (width < collapseBelow) {
-      if (collapsedCount !== collapsibleGroups.length) {
-        collapsedCount = collapsibleGroups.length;
-        render();
-      }
+    if (target?.closest('.rte-popover')) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      focusEditorView(this.context.editor);
+
       return;
     }
 
-    if (isWrapped()) {
-      while (isWrapped() && collapsedCount < collapsibleGroups.length) {
-        collapsedCount += 1;
-        render();
-      }
-      return;
+    const buttons = this.getFocusableButtons();
+
+    if (buttons.length === 0) return;
+
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+
+    const moves: Record<string, number> = {
+      ArrowRight: current + 1,
+      ArrowLeft: current - 1,
+      Home: 0,
+      End: buttons.length - 1,
+    };
+
+    const next = moves[event.key];
+
+    if (next === undefined) return;
+
+    event.preventDefault();
+
+    const nextButton = buttons[(next + buttons.length) % buttons.length];
+
+    if (nextButton) this.moveFocus(nextButton);
+  };
+
+  private readonly onFocusIn = (event: FocusEvent): void => {
+    const target = event.target as HTMLElement | null;
+
+    const id = target?.closest<HTMLElement>(
+      '.rte-toolbar__group > .rte-btn, .rte-dropdown > .rte-btn',
+    )?.dataset.itemId;
+
+    if (id && id !== this.rovingId) {
+      this.rovingId = id;
+      this.applyRoving();
     }
+  };
 
-    while (collapsedCount > 0) {
-      collapsedCount -= 1;
-      render();
-      if (isWrapped()) {
-        collapsedCount += 1;
-        render();
-        return;
-      }
-    }
-  }
+  /** Один подбор на кадр: события ресайза идут на каждый пиксель. */
+  private readonly onResize = ([entry]: ResizeObserverEntry[]): void => {
+    if (!entry) return;
 
-  let observer: ResizeObserver | null = null;
-  let frame = 0;
-  if (typeof ResizeObserver !== 'undefined') {
-    observer = new ResizeObserver(([entry]) => {
-      // Один подбор на кадр: события ресайза идут на каждый пиксель.
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => layout(entry.contentRect.width));
-    });
-    observer.observe(element);
-  }
-
-  render();
-
-  return {
-    element,
-    syncState,
-    layout,
-    focus: () => {
-      applyRoving();
-      focusableButtons()
-        .find((button) => button.dataset.itemId === rovingId)
-        ?.focus();
-    },
-    rebuild: () => {
-      // Подписи сменились — ширины тоже: подбираем заново с полного тулбара.
-      collapsedCount = 0;
-      render();
-      layout(lastWidth);
-    },
-    setDisabled: (disabled: boolean) => {
-      isDisabled = disabled;
-      syncState();
-    },
-    destroy: () => {
-      observer?.disconnect();
-      cancelAnimationFrame(frame);
-      for (const item of rendered) item.dropdown?.destroy();
-      disposer.dispose();
-      element.remove();
-    },
+    cancelAnimationFrame(this.frame);
+    this.frame = requestAnimationFrame(() => this.layout(entry.contentRect.width));
   };
 }
+
+/** Собирает тулбар; тонкая обёртка над `ToolbarController` с прежней сигнатурой. */
+export const createToolbar = (context: EditorUiContext, options: ToolbarOptions): Toolbar =>
+  new ToolbarController(context, options);

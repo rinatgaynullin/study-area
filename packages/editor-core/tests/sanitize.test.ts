@@ -11,29 +11,33 @@ describe('HTML sanitization', () => {
   });
 
   it('strips inline event handlers', () => {
-    for (const hostile of [
+    [
       '<img src="x" onerror="alert(1)">',
       '<div onclick="alert(1)">text</div>',
       '<p onmouseover="alert(1)">text</p>',
       '<body onload="alert(1)"><p>text</p></body>',
-    ]) {
+    ].forEach((hostile) => {
       const output = sanitizeHtml(hostile);
+
       expect(output).not.toMatch(/on\w+\s*=/i);
       expect(output).not.toContain('alert');
-    }
+    });
   });
 
   it('rejects dangerous URL schemes in links', () => {
-    for (const scheme of [
+    [
+      // eslint-disable-next-line no-script-url -- проверяем опасную схему намеренно
       'javascript:alert(1)',
+      // eslint-disable-next-line no-script-url -- проверяем опасную схему намеренно
       'JaVaScRiPt:alert(1)',
       'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
       'vbscript:msgbox(1)',
-    ]) {
+    ].forEach((scheme) => {
       const output = sanitizeHtml(`<a href="${scheme}">link</a>`);
+
       expect(output).not.toContain(scheme);
       expect(output).not.toMatch(/javascript:|vbscript:|data:text\/html/i);
-    }
+    });
   });
 
   it('keeps safe link schemes and forces rel on new-tab links', () => {
@@ -42,13 +46,20 @@ describe('HTML sanitization', () => {
     expect(sanitizeHtml('<a href="/relative">x</a>')).toContain('/relative');
 
     const newTab = sanitizeHtml('<a href="https://example.com" target="_blank">x</a>');
+
     expect(newTab).toContain('rel="noopener noreferrer"');
   });
 
   it('allows blob and image data URLs on media, but not on links', () => {
     expect(sanitizeHtml('<img src="blob:http://localhost/abc">')).toContain('blob:');
-    expect(sanitizeHtml('<img src="data:image/png;base64,iVBORw0KGgo=">')).toContain('data:image/png');
-    expect(sanitizeHtml('<a href="data:image/png;base64,iVBORw0KGgo=">x</a>')).not.toContain('data:');
+
+    expect(sanitizeHtml('<img src="data:image/png;base64,iVBORw0KGgo=">')).toContain(
+      'data:image/png',
+    );
+
+    expect(sanitizeHtml('<a href="data:image/png;base64,iVBORw0KGgo=">x</a>')).not.toContain(
+      'data:',
+    );
   });
 
   it('drops iframes, objects and form controls', () => {
@@ -73,9 +84,9 @@ describe('HTML sanitization', () => {
 
   it('keeps embedded MathJax SVG but strips the dangerous parts of it', () => {
     const output = sanitizeHtml(
-      '<span data-formula="true"><svg viewBox="0 0 10 10"><defs><path id="g" d="M0 0"/></defs>' +
-        '<use xlink:href="#g"/><use xlink:href="https://evil.test/x.svg#g"/>' +
-        '<script>alert(1)</script></svg></span>',
+      '<span data-formula="true"><svg viewBox="0 0 10 10"><defs><path id="g" d="M0 0"/></defs>'
+        + '<use xlink:href="#g"/><use xlink:href="https://evil.test/x.svg#g"/>'
+        + '<script>alert(1)</script></svg></span>',
     );
 
     expect(output).toContain('<svg');
@@ -135,16 +146,19 @@ describe('sanitization through the editor', () => {
     element = undefined;
   });
 
-  function mount(content: string) {
+  const mount = (content: string) => {
     element = document.createElement('div');
     document.body.appendChild(element);
     core = new RichEditorCore({ element, content });
+
     return core;
-  }
+  };
 
   it('never lets malicious content into the document on setHTML', () => {
     const editor = mount('');
+
     editor.setHTML('<p>safe</p><script>alert(1)</script><img src=x onerror="alert(1)">');
+
     const html = editor.getHTML();
 
     expect(html).toContain('safe');

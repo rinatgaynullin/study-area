@@ -1,5 +1,5 @@
-import { Extension } from '@tiptap/core';
-import { RichEditorCore } from '../editor';
+import { Extension, type Editor } from '@tiptap/core';
+import { RichEditorCore } from '../rich-editor-core';
 import { DEFAULT_LOCALE } from '../i18n';
 import { IMAGE_ACCEPT, TEXT_FILE_ACCEPT } from '../media/upload';
 import type {
@@ -8,14 +8,15 @@ import type {
   Messages,
   RichEditorCoreOptions,
   RichEditorError,
+  UploadEvent,
   UploadKind,
 } from '../types';
-import { focusEditorView } from '../utils/focus-editor';
+import { focusEditorView } from '../utils/focus-editor-view';
 import { createDisposer, el, on } from './dom';
 import { createAudioRecorderDialog } from './dialogs/audio-recorder-dialog';
 import { createFormulaDialog } from './dialogs/formula-dialog';
 import { createLinkDialog, type LinkDialogPayload } from './dialogs/link-dialog';
-import { createTableDialog } from './dialogs/table-dialog';
+import { createTableDialog } from './dialogs/create-table-dialog';
 import { createLinkPopover, type LinkPopover } from './link-popover';
 import { MODAL_CLOSE_EVENT } from './modal';
 import type { LinkStyle } from './link-styles';
@@ -76,23 +77,22 @@ const ERROR_VISIBLE_MS = 6000;
  * тулбар, как в других редакторах; Mod+K открывает ссылку — иначе до неё с
  * клавиатуры только через тулбар.
  */
-function createUiShortcuts(handlers: { focusToolbar(): void; editLink(): void }) {
-  return Extension.create({
+const createUiShortcuts = (handlers: { focusToolbar(): void; editLink(): void }) =>
+  Extension.create({
     name: 'richEditorUiShortcuts',
-    addKeyboardShortcuts() {
-      return {
-        'Alt-F10': () => {
-          handlers.focusToolbar();
-          return true;
-        },
-        'Mod-k': () => {
-          handlers.editLink();
-          return true;
-        },
-      };
-    },
+    addKeyboardShortcuts: () => ({
+      'Alt-F10': () => {
+        handlers.focusToolbar();
+
+        return true;
+      },
+      'Mod-k': () => {
+        handlers.editLink();
+
+        return true;
+      },
+    }),
   });
-}
 
 export interface RichEditorUi {
   /** Движок: документ, команды, загрузки. */
@@ -123,16 +123,14 @@ interface Overlays {
   extra: UiComponent[];
 }
 
-function listOverlays(overlays: Overlays): UiComponent[] {
-  return [
-    overlays.link,
-    overlays.table,
-    overlays.recorder,
-    overlays.formula,
-    overlays.linkPopover,
-    ...overlays.extra,
-  ];
-}
+const listOverlays = (overlays: Overlays): UiComponent[] => [
+  overlays.link,
+  overlays.table,
+  overlays.recorder,
+  overlays.formula,
+  overlays.linkPopover,
+  ...overlays.extra,
+];
 
 /** Пункты каждой возможности, запрошенные один раз: дескрипторы не пересоздаются. */
 interface FeatureItems {
@@ -145,110 +143,264 @@ interface FeatureItems {
  * группой в конец. Явно перечисленные остаются там, куда их поставил хост:
  * конфигурация тулбара главнее умолчания возможности.
  */
-function withFeatureGroups(
+const withFeatureGroups = (
   groups: ToolbarGroupConfig[],
   features: FeatureItems[],
-): ToolbarGroupConfig[] {
+): ToolbarGroupConfig[] => {
   const mentioned = new Set(groups.flatMap((group) => group.items));
 
   const extra = features.flatMap(({ feature, items }) => {
     const ids = items.map((item) => item.id).filter((id) => !mentioned.has(id));
+
     return ids.length > 0 ? [{ id: feature.id, items: ids }] : [];
   });
 
   // Пресеты — общие константы, дописывать в них нельзя.
   return extra.length > 0 ? [...groups, ...extra] : groups;
-}
+};
 
 /**
- * Собирает редактор целиком: тулбар, область ввода и диалоги.
- *
- * Это и есть «ванильный редактор»: ему не нужен фреймворк, а обёртки под Vue
- * или React монтируют готовый интерфейс и пробрасывают пропы, вместо того
- * чтобы пересобирать его заново.
+ * Контекст для тулбара, диалогов и поповера. Пределы читаются с движка при
+ * каждом обращении: setLimits меняет их у живого редактора, а снимок оставил
+ * бы диалог записи со старыми.
  */
-export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
-  const disposer = createDisposer();
+const createUiContext = (
+  core: RichEditorCore,
+  editFormula: (payload: FormulaPayload) => void,
+): EditorUiContext => ({
+  editor: core.editor,
+  t: (key, params) => core.t(key, params),
+  get limits() {
+    return core.getLimits();
+  },
+  uploads: core.uploads,
+  editFormula,
+});
 
-  const root = el('div', { class: 'rte-root' });
-  let releaseTheme = applyTheme(root, options.theme ?? 'light');
-  const host = el('div', { class: 'rte-host' });
-  const surface = el('div', { class: 'rte-surface', children: [host] });
-  if (options.minHeight) host.style.minHeight = options.minHeight;
+/**
+ * Ванильная оболочка редактора: тулбар, строка статуса, область ввода,
+ * скрытые поля выбора файлов и оверлеи.
+ *
+ * Части ссылаются друг на друга крест-накрест: ядро зовёт обновление тулбара,
+ * расширения — диалог ссылки и фокус тулбара, тулбар и диалоги — оверлеи,
+ * которые пересоздаются при смене языка. Поэтому состояние живёт в полях, а
+ * операции — в методах, которым не важен порядок объявления.
+ */
+class RichEditorUiController implements RichEditorUi {
+  readonly core: RichEditorCore;
+
+  /** Корень оболочки: тулбар, строка статуса, область ввода и скрытые поля. */
+  readonly element: HTMLElement;
+
+  private readonly options: RichEditorUiOptions;
+
+  private readonly disposer = createDisposer();
+
+  private releaseTheme: () => void;
 
   /**
    * Строка статуса: идущие загрузки и последняя ошибка. Хост получает то же
    * через onUpload и onError, но пользователь должен видеть, что файл
    * грузится и почему не вставился, без обвязки со стороны хоста.
    */
-  // Живая область должна существовать до того, как в ней появится текст:
-  // регион, который показывают и наполняют одновременно, читалки часто
-  // пропускают. Поэтому строка не прячется атрибутом hidden — пустую её
-  // схлопывают стили.
-  const status = el('div', {
-    class: 'rte-status',
-    attrs: { role: 'status', 'aria-live': 'polite' },
-  });
-  const hasStatusLine = options.statusLine !== false;
+  private readonly status: HTMLElement;
+
+  private readonly hasStatusLine: boolean;
 
   /** Загрузки в полёте, по видам: параллельных может быть несколько. */
-  const uploading = new Map<UploadKind, number>();
-  let errorText = '';
-  let errorTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly uploading = new Map<UploadKind, number>();
 
-  function refreshStatus(): void {
-    if (!hasStatusLine) return;
-    const busy = [...uploading.entries()].find(([, count]) => count > 0)?.[0];
-    const text = errorText || (busy ? core.t(`upload_${busy}`) : '');
-    status.textContent = text;
-    status.classList.toggle('rte-status--error', errorText !== '');
-  }
+  private errorText = '';
 
-  function reportError(error: RichEditorError): void {
-    errorText = error.message;
-    if (errorTimer) clearTimeout(errorTimer);
-    errorTimer = setTimeout(() => {
-      errorText = '';
-      errorTimer = null;
-      refreshStatus();
-    }, ERROR_VISIBLE_MS);
-    refreshStatus();
-    options.onError?.(error);
-  }
-
-  // Скрытые поля выбора файлов: системный диалог нельзя открыть иначе.
-  // Фильтр — тот же, что у пайплайна загрузки, иначе пикер прячет файлы,
-  // которые редактор принял бы перетаскиванием.
-  const imageInput = el('input', {
-    class: 'rte-hidden-input',
-    attrs: { type: 'file', accept: IMAGE_ACCEPT },
-  });
-  const fileInput = el('input', {
-    class: 'rte-hidden-input',
-    attrs: { type: 'file', accept: TEXT_FILE_ACCEPT },
-  });
-
-  let fileMode: 'attach' | 'insert' = 'attach';
+  private errorTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
-   * Обновление тулбара по транзакции. Ядро зовёт колбэк из опций, а тулбар
-   * создаётся позже него — поэтому ссылка подменяется, а не передаётся сразу.
+   * Скрытые поля выбора файлов: системный диалог нельзя открыть иначе.
+   * Фильтр — тот же, что у пайплайна загрузки, иначе пикер прячет файлы,
+   * которые редактор принял бы перетаскиванием.
    */
-  let refresh = (): void => {};
+  private readonly imageInput: HTMLInputElement;
 
-  const features = options.features ?? [];
+  private readonly fileInput: HTMLInputElement;
+
+  private fileMode: 'attach' | 'insert' = 'attach';
+
+  private readonly features: EditorFeature[];
+
+  /** Пункты возможностей, запрошенные один раз: дескрипторы не пересоздаются. */
+  private readonly featureItems: FeatureItems[];
 
   /** Текущий язык: нужен MathLive, у которого своя локаль. */
-  let locale = options.locale ?? DEFAULT_LOCALE;
+  private locale: string;
+
+  private readonly context: EditorUiContext;
+
+  private readonly toolbar: Toolbar;
 
   /**
-   * Оверлеи пересоздаются при смене языка, поэтому ссылка на них — одна,
-   * подменяемая, а замыкания тулбара и движка ходят через неё.
+   * Оверлеи пересоздаются при смене языка, поэтому ссылка на них одна,
+   * подменяемая, а тулбар и движок ходят через неё.
    */
-  let overlays: Overlays;
+  private overlays: Overlays;
+
+  /**
+   * Тулбар и оверлеи собраны. Ядро может дёрнуть onTransaction ещё при
+   * создании, когда обновлять нечего.
+   */
+  private isAssembled = false;
+
+  constructor(options: RichEditorUiOptions) {
+    this.options = options;
+    this.element = el('div', { class: 'rte-root' });
+    this.releaseTheme = applyTheme(this.element, options.theme ?? 'light');
+
+    const host = el('div', { class: 'rte-host' });
+    const surface = el('div', { class: 'rte-surface', children: [host] });
+
+    if (options.minHeight) host.style.minHeight = options.minHeight;
+
+    // Живая область должна существовать до того, как в ней появится текст:
+    // регион, который показывают и наполняют одновременно, читалки часто
+    // пропускают. Поэтому строка не прячется атрибутом hidden — пустую её
+    // схлопывают стили.
+    this.status = el('div', {
+      class: 'rte-status',
+      attrs: { role: 'status', 'aria-live': 'polite' },
+    });
+
+    this.hasStatusLine = options.statusLine !== false;
+
+    this.imageInput = el('input', {
+      class: 'rte-hidden-input',
+      attrs: { type: 'file', accept: IMAGE_ACCEPT },
+    });
+
+    this.fileInput = el('input', {
+      class: 'rte-hidden-input',
+      attrs: { type: 'file', accept: TEXT_FILE_ACCEPT },
+    });
+
+    this.features = options.features ?? [];
+    this.locale = options.locale ?? DEFAULT_LOCALE;
+
+    this.core = new RichEditorCore({
+      ...options,
+      element: host,
+      extensions: this.buildExtensions,
+      onError: this.reportError,
+      onUpload: this.onUpload,
+      onTransaction: this.onTransaction,
+      onFormulaEdit: this.onFormulaEdit,
+    });
+
+    this.context = createUiContext(this.core, this.editFormula);
+
+    this.featureItems = this.features.map((feature) => ({
+      feature,
+      items: feature.toolbarItems?.() ?? [],
+    }));
+
+    const items: Record<string, ToolbarItemDescriptor> = {
+      ...SIMPLE_TOOLBAR_ITEMS,
+      ...createPanelToolbarItems({
+        textSwatches: options.textSwatches,
+        highlightSwatches: options.highlightSwatches,
+        insertTable: () => this.overlays.table.open(),
+        editLink: this.editLink,
+        pickImage: () => this.imageInput.click(),
+        pickFile: (mode) => {
+          this.fileMode = mode;
+          this.fileInput.click();
+        },
+        recordAudio: () => this.overlays.recorder.open(),
+        insertFormula: (type) => this.overlays.formula.open({ mathml: '', type, pos: null }),
+      }),
+      ...Object.fromEntries(
+        this.featureItems.flatMap(({ items: featureToolbarItems }) =>
+          featureToolbarItems.map((item) => [item.id, item]),
+        ),
+      ),
+      // Пункты, переданные напрямую, главнее: ими хост точечно правит и
+      // встроенные пункты, и пункты возможностей.
+      ...options.toolbarItems,
+    };
+
+    this.toolbar = createToolbar(this.context, {
+      groups: withFeatureGroups(resolveToolbar(options.toolbar), this.featureItems),
+      items,
+      collapseBelow: options.collapseBelow,
+    });
+
+    this.element.append(
+      this.toolbar.element,
+      ...(this.hasStatusLine ? [this.status] : []),
+      surface,
+      this.imageInput,
+      this.fileInput,
+    );
+
+    options.element.appendChild(this.element);
+    this.overlays = this.buildOverlays();
+    this.isAssembled = true;
+
+    this.refresh();
+
+    this.disposer.add(on(this.element, MODAL_CLOSE_EVENT, this.onModalClose));
+    this.disposer.add(on(this.imageInput, 'change', this.onImageInputChange));
+    this.disposer.add(on(this.fileInput, 'change', this.onFileInputChange));
+
+    this.applyEditable(this.core.editor.isEditable);
+  }
+
+  setEditable(editable: boolean): void {
+    this.core.setEditable(editable);
+    this.applyEditable(editable);
+  }
+
+  setLocale(locale: string): void {
+    this.locale = locale;
+    this.core.setLocale(locale);
+    this.refreshLabels();
+  }
+
+  setMessages(messages: Record<string, Messages> | undefined): void {
+    this.core.setMessages(messages);
+    this.refreshLabels();
+  }
+
+  /** Пересобирает всё, что запекает подписи при создании: тулбар и оверлеи. */
+  refreshLabels(): void {
+    this.destroyOverlays();
+    this.overlays = this.buildOverlays();
+    this.toolbar.rebuild();
+    this.refreshStatus();
+  }
+
+  setLimits(limits: Partial<EditorLimits>): void {
+    this.core.setLimits(limits);
+  }
+
+  setTheme(theme: EditorTheme): void {
+    this.releaseTheme();
+    this.releaseTheme = applyTheme(this.element, theme);
+  }
+
+  destroy(): void {
+    this.releaseTheme();
+
+    if (this.errorTimer) clearTimeout(this.errorTimer);
+
+    this.disposer.dispose();
+    this.toolbar.destroy();
+    this.destroyOverlays();
+    this.core.destroy();
+    this.element.remove();
+  }
 
   /** Расширения хоста и возможностей; переводчик приходит из движка. */
-  function buildExtensions({ t }: { t: FeatureBuildOptions['t'] }): unknown[] {
+  private readonly buildExtensions = ({ t }: { t: FeatureBuildOptions['t'] }): unknown[] => {
+    const { options, features } = this;
+
     const own =
       typeof options.extensions === 'function'
         ? options.extensions({ t })
@@ -259,7 +411,7 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
       legacy: options.legacy ?? false,
       placeholder: options.placeholder,
       formulaScale: options.formulaScale ?? 1,
-      onFormulaEdit: (payload) => overlays.formula.open(payload),
+      onFormulaEdit: this.editFormula,
     };
 
     return [
@@ -267,43 +419,8 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
       ...features.flatMap((feature) => feature.extensions?.(build) ?? []),
       // Тулбар создаётся после движка, но обработчики зовутся ещё позже —
       // когда всё уже собрано.
-      createUiShortcuts({ focusToolbar: () => toolbar.focus(), editLink }),
+      createUiShortcuts({ focusToolbar: () => this.toolbar.focus(), editLink: this.editLink }),
     ];
-  }
-
-  const core = new RichEditorCore({
-    ...options,
-    element: host,
-    extensions: buildExtensions,
-    onError: reportError,
-    onUpload: (event) => {
-      const count = uploading.get(event.kind) ?? 0;
-      uploading.set(event.kind, event.phase === 'start' ? count + 1 : Math.max(0, count - 1));
-      refreshStatus();
-      options.onUpload?.(event);
-    },
-    onTransaction: (editor) => {
-      refresh();
-      options.onTransaction?.(editor);
-    },
-    // Клик по формуле в документе открывает её редактор. Колбэк хоста при
-    // этом не теряется: он может вести собственный учёт правок.
-    onFormulaEdit: (payload) => {
-      overlays.formula.open(payload);
-      options.onFormulaEdit?.(payload);
-    },
-  });
-
-  const context: EditorUiContext = {
-    editor: core.editor,
-    t: (key, params) => core.t(key, params),
-    // Пределы читаются с движка при каждом обращении: setLimits меняет их у
-    // живого редактора, а снимок оставил бы диалог записи со старыми.
-    get limits() {
-      return core.getLimits();
-    },
-    uploads: core.uploads,
-    editFormula: (payload) => overlays.formula.open(payload),
   };
 
   /**
@@ -312,7 +429,9 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
    * без состояния, а держать реактивные подписи ради редкой операции —
    * лишний слой.
    */
-  function buildOverlays(): Overlays {
+  private buildOverlays(): Overlays {
+    const { context, core, options } = this;
+
     const link = createLinkDialog(context, {
       onApply: ({ href, targetBlank }) => {
         core.editor
@@ -322,181 +441,183 @@ export function createRichEditor(options: RichEditorUiOptions): RichEditorUi {
           .setLink({ href, target: targetBlank ? '_blank' : null })
           .run();
       },
-      onRemove: () => void core.editor.chain().focus().extendMarkRange('link').unsetLink().run(),
+      onRemove: () => {
+        core.editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      },
     });
 
     const table = createTableDialog(context, {
-      onInsert: (payload) => void core.editor.chain().focus().insertTable(payload).run(),
+      onInsert: (payload) => {
+        core.editor.chain().focus().insertTable(payload).run();
+      },
     });
 
     const recorder = createAudioRecorderDialog(context, {
-      onInsert: (payload) =>
-        void core.insertRecording(payload.blob, {
-          duration: payload.duration,
-          peaks: payload.peaks,
-        }),
+      onInsert: (payload) => {
+        core.insertRecording(payload.blob, { duration: payload.duration, peaks: payload.peaks });
+      },
       // Рекордер живёт в диалоге, а не в движке, так что его ошибки — нет
       // разрешения на микрофон, превышен предел — движок не видит. Идут тем
       // же путём, что ошибки загрузки: в строку статуса и хосту.
-      onError: reportError,
+      onError: this.reportError,
     });
 
     const formula = createFormulaDialog(context, {
       fontsDirectory: options.mathliveFontsDirectory,
-      locale,
+      locale: this.locale,
       onSave: (payload: FormulaPayload) => {
         if (payload.pos === null) core.insertFormula(payload.mathml, payload.type);
         else core.updateFormulaAt(payload.pos, payload.mathml, payload.type);
       },
-      onRemove: (pos) => void core.deleteFormulaAt(pos),
+      onRemove: (pos) => {
+        core.deleteFormulaAt(pos);
+      },
     });
 
     const linkPopover = createLinkPopover(context, { styles: options.linkStyles });
 
     // Диалоги возможностей живут и умирают вместе с оболочкой, как встроенные.
-    const extra = features.flatMap((feature) => feature.dialogs?.(context) ?? []);
+    const extra = this.features.flatMap((feature) => feature.dialogs?.(context) ?? []);
 
     const built: Overlays = { link, table, recorder, formula, linkPopover, extra };
-    for (const overlay of listOverlays(built)) root.appendChild(overlay.element);
+
+    listOverlays(built).forEach((overlay) => {
+      this.element.appendChild(overlay.element);
+    });
+
     return built;
   }
 
-  function destroyOverlays(): void {
-    for (const overlay of listOverlays(overlays)) overlay.destroy();
-  }
-
-  const featureItems: FeatureItems[] = features.map((feature) => ({
-    feature,
-    items: feature.toolbarItems?.() ?? [],
-  }));
-
-  /** Диалог ссылки: с кнопки тулбара и по Mod+K из документа. */
-  function editLink(): void {
-    overlays.link.open({
-      href: (core.editor.getAttributes('link').href as string) ?? '',
-      targetBlank: core.editor.getAttributes('link').target === '_blank',
-      canRemove: core.editor.isActive('link'),
+  private destroyOverlays(): void {
+    listOverlays(this.overlays).forEach((overlay) => {
+      overlay.destroy();
     });
   }
 
-  const items: Record<string, ToolbarItemDescriptor> = {
-    ...SIMPLE_TOOLBAR_ITEMS,
-    ...createPanelToolbarItems({
-      textSwatches: options.textSwatches,
-      highlightSwatches: options.highlightSwatches,
-      insertTable: () => overlays.table.open(),
-      editLink,
-      pickImage: () => imageInput.click(),
-      pickFile: (mode) => {
-        fileMode = mode;
-        fileInput.click();
-      },
-      recordAudio: () => overlays.recorder.open(),
-      insertFormula: (type) => overlays.formula.open({ mathml: '', type, pos: null }),
-    }),
-    ...Object.fromEntries(featureItems.flatMap(({ items }) => items.map((item) => [item.id, item]))),
-    // Пункты, переданные напрямую, главнее: ими хост точечно правит и
-    // встроенные пункты, и пункты возможностей.
-    ...options.toolbarItems,
-  };
+  /**
+   * Тулбар и поповер ссылки зависят от выделения, поэтому обновляются на
+   * каждой транзакции, а не только на изменении документа.
+   */
+  private refresh(): void {
+    if (!this.isAssembled) return;
 
-  const toolbar: Toolbar = createToolbar(context, {
-    groups: withFeatureGroups(resolveToolbar(options.toolbar), featureItems),
-    items,
-    collapseBelow: options.collapseBelow,
-  });
-
-  root.append(toolbar.element, ...(hasStatusLine ? [status] : []), surface, imageInput, fileInput);
-  options.element.appendChild(root);
-  overlays = buildOverlays();
-
-  // Тулбар и поповер ссылки зависят от выделения, поэтому обновляются на
-  // каждой транзакции, а не только на изменении документа.
-  refresh = () => {
-    toolbar.syncState();
-    overlays.linkPopover.sync();
-  };
-  refresh();
-
-  /** Всё, что запекает подписи при создании: тулбар и оверлеи. */
-  function rebuildChrome(): void {
-    destroyOverlays();
-    overlays = buildOverlays();
-    toolbar.rebuild();
-    refreshStatus();
+    this.toolbar.syncState();
+    this.overlays.linkPopover.sync();
   }
 
-  disposer.add(
-    on(root, MODAL_CLOSE_EVENT, (event) => {
-      // Диалог открывают кнопкой тулбара или кликом по узлу, и сама по себе
-      // модалка вернула бы фокус туда же. Дом фокуса в редакторе — документ:
-      // иначе после «Отмены» Backspace не удалит выделенную формулу, а уйдёт
-      // в кнопку. Выделение при этом сохраняется: `focus()` без позиции его
-      // не трогает.
-      event.preventDefault();
-      // Без прокрутки: выделение было на виду, когда диалог открывали, и
-      // возвращать к нему экран не надо.
-      focusEditorView(core.editor);
-    }),
-  );
+  private refreshStatus(): void {
+    if (!this.hasStatusLine) return;
 
-  disposer.add(
-    on(imageInput, 'change', () => {
-      const file = imageInput.files?.[0];
-      if (file) void core.insertImageFile(file);
-      // Сбрасываем значение: иначе выбор того же файла второй раз не сработает.
-      imageInput.value = '';
-    }),
-  );
+    const busy = [...this.uploading.entries()].find(([, count]) => count > 0)?.[0];
+    const text = this.errorText || (busy ? this.core.t(`upload_${busy}`) : '');
 
-  disposer.add(
-    on(fileInput, 'change', () => {
-      const file = fileInput.files?.[0];
-      if (file) {
-        void (fileMode === 'insert' ? core.insertTextFileContent(file) : core.attachTextFile(file));
-      }
-      fileInput.value = '';
-    }),
-  );
+    this.status.textContent = text;
+    this.status.classList.toggle('rte-status--error', this.errorText !== '');
+  }
 
   /** В режиме чтения тулбар не просто отключён, а скрыт — как и во Vue-версии. */
-  function applyEditable(editable: boolean): void {
-    root.classList.toggle('rte-root--readonly', !editable);
-    toolbar.element.hidden = !editable;
+  private applyEditable(editable: boolean): void {
+    this.element.classList.toggle('rte-root--readonly', !editable);
+    this.toolbar.element.hidden = !editable;
   }
 
-  applyEditable(core.editor.isEditable);
+  /** Ошибка — в строку статуса на время и хосту. */
+  private readonly reportError = (error: RichEditorError): void => {
+    this.errorText = error.message;
 
-  return {
-    core,
-    element: root,
-    setEditable: (editable: boolean) => {
-      core.setEditable(editable);
-      applyEditable(editable);
-    },
-    setLocale: (next: string) => {
-      locale = next;
-      core.setLocale(next);
-      rebuildChrome();
-    },
-    setMessages: (messages) => {
-      core.setMessages(messages);
-      rebuildChrome();
-    },
-    refreshLabels: rebuildChrome,
-    setLimits: (limits) => core.setLimits(limits),
-    setTheme: (theme) => {
-      releaseTheme();
-      releaseTheme = applyTheme(root, theme);
-    },
-    destroy: () => {
-      releaseTheme();
-      if (errorTimer) clearTimeout(errorTimer);
-      disposer.dispose();
-      toolbar.destroy();
-      destroyOverlays();
-      core.destroy();
-      root.remove();
-    },
+    if (this.errorTimer) clearTimeout(this.errorTimer);
+
+    this.errorTimer = setTimeout(() => {
+      this.errorText = '';
+      this.errorTimer = null;
+      this.refreshStatus();
+    }, ERROR_VISIBLE_MS);
+
+    this.refreshStatus();
+    this.options.onError?.(error);
+  };
+
+  /** Открывает визуальный редактор формул: из документа, тулбара и расширений. */
+  private readonly editFormula = (payload: FormulaPayload): void => {
+    this.overlays.formula.open(payload);
+  };
+
+  /** Диалог ссылки: с кнопки тулбара и по Mod+K из документа. */
+  private readonly editLink = (): void => {
+    const { editor } = this.core;
+
+    this.overlays.link.open({
+      href: (editor.getAttributes('link').href as string) ?? '',
+      targetBlank: editor.getAttributes('link').target === '_blank',
+      canRemove: editor.isActive('link'),
+    });
+  };
+
+  private readonly onUpload = (event: UploadEvent): void => {
+    const count = this.uploading.get(event.kind) ?? 0;
+
+    this.uploading.set(event.kind, event.phase === 'start' ? count + 1 : Math.max(0, count - 1));
+    this.refreshStatus();
+    this.options.onUpload?.(event);
+  };
+
+  private readonly onTransaction = (editor: Editor): void => {
+    this.refresh();
+    this.options.onTransaction?.(editor);
+  };
+
+  /**
+   * Клик по формуле в документе открывает её редактор. Колбэк хоста при
+   * этом не теряется: он может вести собственный учёт правок.
+   */
+  private readonly onFormulaEdit = (payload: FormulaPayload): void => {
+    this.editFormula(payload);
+    this.options.onFormulaEdit?.(payload);
+  };
+
+  /**
+   * Диалог открывают кнопкой тулбара или кликом по узлу, и сама по себе
+   * модалка вернула бы фокус туда же. Дом фокуса в редакторе — документ:
+   * иначе после «Отмены» Backspace не удалит выделенную формулу, а уйдёт
+   * в кнопку. Выделение при этом сохраняется: `focus()` без позиции его
+   * не трогает.
+   */
+  private readonly onModalClose = (event: Event): void => {
+    event.preventDefault();
+    // Без прокрутки: выделение было на виду, когда диалог открывали, и
+    // возвращать к нему экран не надо.
+    focusEditorView(this.core.editor);
+  };
+
+  private readonly onImageInputChange = (): void => {
+    const file = this.imageInput.files?.[0];
+
+    // Ошибки загрузки движок сам отдаёт в onError — сюда они возвращаются
+    // строкой статуса, поэтому промис не ждём.
+    if (file) this.core.insertImageFile(file);
+
+    // Сбрасываем значение: иначе выбор того же файла второй раз не сработает.
+    this.imageInput.value = '';
+  };
+
+  private readonly onFileInputChange = (): void => {
+    const file = this.fileInput.files?.[0];
+
+    if (file) {
+      if (this.fileMode === 'insert') this.core.insertTextFileContent(file);
+      else this.core.attachTextFile(file);
+    }
+
+    this.fileInput.value = '';
   };
 }
+
+/**
+ * Собирает редактор целиком: тулбар, область ввода и диалоги.
+ *
+ * Это и есть «ванильный редактор»: ему не нужен фреймворк, а обёртки под Vue
+ * или React монтируют готовый интерфейс и пробрасывают пропы, вместо того
+ * чтобы пересобирать его заново.
+ */
+export const createRichEditor = (options: RichEditorUiOptions): RichEditorUi =>
+  new RichEditorUiController(options);

@@ -10,6 +10,7 @@ import {
 /** Minimal MediaRecorder stand-in: jsdom ships neither it nor getUserMedia. */
 class MockMediaRecorder extends EventTarget {
   static supported = ['audio/webm;codecs=opus', 'audio/webm'];
+
   static instances: MockMediaRecorder[] = [];
 
   static isTypeSupported(type: string): boolean {
@@ -17,6 +18,7 @@ class MockMediaRecorder extends EventTarget {
   }
 
   state: 'inactive' | 'recording' | 'paused' = 'inactive';
+
   mimeType: string;
 
   constructor(_stream: unknown, options?: { mimeType?: string }) {
@@ -51,6 +53,7 @@ class MockMediaRecorder extends EventTarget {
     if (this.state === 'inactive') {
       throw new DOMException('stop() in state inactive', 'InvalidStateError');
     }
+
     this.state = 'inactive';
     this.dispatchEvent(new Event('stop'));
   }
@@ -64,24 +67,27 @@ class MockMediaRecorder extends EventTarget {
   /** Simulates the recorder handing over an encoded chunk. */
   emitChunk(size: number): void {
     const event = new Event('dataavailable') as Event & { data: Blob };
+
     Object.defineProperty(event, 'data', {
       value: new Blob([new Uint8Array(size)], { type: this.mimeType }),
     });
+
     this.dispatchEvent(event);
   }
 }
 
-const t = createI18n().t;
+const { t } = createI18n();
 const tracks = [{ stop: vi.fn() }];
 
-function installMocks(): void {
+const installMocks = (): void => {
   MockMediaRecorder.instances = [];
   vi.stubGlobal('MediaRecorder', MockMediaRecorder);
+
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: { getUserMedia: vi.fn(async () => ({ getTracks: () => tracks })) },
   });
-}
+};
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -93,14 +99,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function createRecorder(overrides: Partial<ConstructorParameters<typeof VoiceRecorder>[0]> = {}) {
-  return new VoiceRecorder({
+const createRecorder = (overrides: Partial<ConstructorParameters<typeof VoiceRecorder>[0]> = {}) =>
+  new VoiceRecorder({
     t,
     maxDurationSec: 5,
     maxSizeBytes: 1024,
     ...overrides,
   });
-}
 
 describe('feature detection', () => {
   it('reports support when MediaRecorder and getUserMedia are present', () => {
@@ -126,17 +131,21 @@ describe('feature detection', () => {
 
   it('fails with a localized error when recording is unsupported', async () => {
     vi.stubGlobal('MediaRecorder', undefined);
+
     const onError = vi.fn();
 
     await expect(createRecorder({ onError }).start()).rejects.toMatchObject({
       code: 'recorder-unsupported',
     });
+
     expect((onError.mock.calls[0][0] as RichEditorError).message).toContain('Запись звука');
   });
 
   it('distinguishes a denied microphone from other failures', async () => {
     const denied = new Error('denied');
+
     denied.name = 'NotAllowedError';
+
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: { getUserMedia: vi.fn(async () => Promise.reject(denied)) },
@@ -151,6 +160,7 @@ describe('feature detection', () => {
 describe('recording lifecycle', () => {
   it('produces a blob, duration and peaks on stop', async () => {
     const recorder = createRecorder();
+
     await recorder.start();
     expect(recorder.getState()).toBe('recording');
 
@@ -167,6 +177,7 @@ describe('recording lifecycle', () => {
 
   it('excludes paused time from the reported duration', async () => {
     const recorder = createRecorder();
+
     await recorder.start();
 
     await vi.advanceTimersByTimeAsync(1000);
@@ -178,6 +189,7 @@ describe('recording lifecycle', () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     MockMediaRecorder.instances[0].emitChunk(16);
+
     const result = await recorder.stop();
 
     expect(result.duration).toBeGreaterThanOrEqual(2);
@@ -201,6 +213,7 @@ describe('recording lifecycle', () => {
 
     // А stop() отдаёт то, что успело записаться, и освобождает микрофон.
     const result = await recorder.stop();
+
     expect(result.blob.size).toBe(40);
     expect(recorder.getState()).toBe('stopped');
     expect(tracks[0].stop).toHaveBeenCalled();
@@ -209,6 +222,7 @@ describe('recording lifecycle', () => {
 
   it('releases the microphone when cancelled', async () => {
     const recorder = createRecorder();
+
     await recorder.start();
     recorder.cancel();
 
@@ -241,6 +255,7 @@ describe('configured limits', () => {
     // Пауза по пределу и пауза руками для рекордера одно и то же состояние —
     // различить их вызывающий может только по этому колбэку.
     const another = createRecorder({ maxSizeBytes: 100, onLimit });
+
     await another.start();
     MockMediaRecorder.instances[1].emitChunk(150);
     expect(onLimit).toHaveBeenLastCalledWith('size');
@@ -250,7 +265,12 @@ describe('configured limits', () => {
     // Диалог финализирует дубль прямо из колбэка предела. К этому моменту
     // MediaRecorder уже должен стоять на паузе, иначе stop() наложится на
     // pause() и один из них бросит InvalidStateError.
-    const recorder = createRecorder({ maxDurationSec: 1, onLimit: () => void recorder.stop() });
+    const recorder = createRecorder({
+      maxDurationSec: 1,
+      onLimit: () => {
+        recorder.stop();
+      },
+    });
 
     await recorder.start();
     await vi.advanceTimersByTimeAsync(1200);
@@ -276,7 +296,9 @@ describe('configured limits', () => {
     MockMediaRecorder.instances[0].emitChunk(150);
 
     expect(onError).toHaveBeenCalledTimes(1);
+
     const error = onError.mock.calls[0][0] as RichEditorError;
+
     expect(error.code).toBe('file-too-large');
     // Про размер, а не про длительность: текст должен называть настоящий предел.
     expect(error.message).toContain('100 B');

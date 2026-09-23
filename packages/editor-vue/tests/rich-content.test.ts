@@ -10,21 +10,27 @@ afterEach(() => {
   wrapper = undefined;
 });
 
-async function mountContent(html: string, props: Record<string, unknown> = {}) {
+const mountContent = async (html: string, props: Record<string, unknown> = {}) => {
   wrapper = mount(RichContent, { props: { html, ...props }, attachTo: document.body });
   await nextTick();
-  await (wrapper.vm as unknown as { renderPendingFormulas(): Promise<void> }).renderPendingFormulas();
-  await nextTick();
-  return wrapper;
-}
 
-function formulaHtml(mathml: string, type = 'math', rendered = ''): string {
+  await (
+    wrapper.vm as unknown as { renderPendingFormulas(): Promise<void> }
+  ).renderPendingFormulas();
+
+  await nextTick();
+
+  return wrapper;
+};
+
+const formulaHtml = (mathml: string, type = 'math', rendered = ''): string => {
   const escaped = mathml.replace(/"/g, '&quot;');
+
   return (
-    `<span data-formula="true" data-formula-type="${type}" data-mathml="${escaped}" contenteditable="false">` +
-    `<span class="rte-formula__render" data-render-host="true">${rendered}</span></span>`
+    `<span data-formula="true" data-formula-type="${type}" data-mathml="${escaped}" contenteditable="false">`
+    + `<span class="rte-formula__render" data-render-host="true">${rendered}</span></span>`
   );
-}
+};
 
 describe('read-only rendering', () => {
   it('renders document content without any editing affordances', async () => {
@@ -44,7 +50,9 @@ describe('read-only rendering', () => {
   });
 
   it('sanitizes the HTML it is given', async () => {
-    const w = await mountContent('<p>safe</p><script>alert(1)</script><img src=x onerror="alert(1)">');
+    const w = await mountContent(
+      '<p>safe</p><script>alert(1)</script><img src=x onerror="alert(1)">',
+    );
 
     expect(w.html()).toContain('safe');
     expect(w.html()).not.toContain('alert');
@@ -56,6 +64,7 @@ describe('read-only rendering', () => {
     const w = await mountContent(`<p>${formulaHtml(mathml)}</p>`);
 
     const svg = w.find('.rte-formula__render svg');
+
     expect(svg.exists()).toBe(true);
     expect(w.emitted('rendered')).toBeTruthy();
   });
@@ -84,6 +93,7 @@ describe('read-only rendering', () => {
 
   it('re-renders when the html prop changes', async () => {
     const w = await mountContent('<p>первый</p>');
+
     expect(w.text()).toContain('первый');
 
     await w.setProps({ html: `<p>второй ${formulaHtml(await latexToMathML('y', 'math'))}</p>` });
@@ -100,6 +110,7 @@ describe('read-only rendering', () => {
 
     // Размер запечён в самом SVG: пиксели на font-size хоста не реагируют.
     const host = w.find('.rte-formula__render');
+
     expect(host.attributes('style') ?? '').not.toContain('font-size');
     expect(host.html()).toMatch(/width="[\d.]+px"/);
   });

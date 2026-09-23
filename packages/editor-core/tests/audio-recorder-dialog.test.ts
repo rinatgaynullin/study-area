@@ -14,6 +14,7 @@ class MockMediaRecorder extends EventTarget {
   }
 
   state: 'inactive' | 'recording' | 'paused' = 'inactive';
+
   mimeType = 'audio/webm';
 
   constructor() {
@@ -40,9 +41,11 @@ class MockMediaRecorder extends EventTarget {
 
   emitChunk(size: number): void {
     const event = new Event('dataavailable') as Event & { data: Blob };
+
     Object.defineProperty(event, 'data', {
       value: new Blob([new Uint8Array(size)], { type: this.mimeType }),
     });
+
     this.dispatchEvent(event);
   }
 }
@@ -54,6 +57,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   MockMediaRecorder.instances = [];
   vi.stubGlobal('MediaRecorder', MockMediaRecorder);
+
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })) },
@@ -69,32 +73,36 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function openDialog(): HTMLElement {
+const openDialog = (): HTMLElement => {
   [...document.querySelectorAll<HTMLButtonElement>('.rte-toolbar button')]
     .find((button) => button.getAttribute('aria-label') === ru.toolbar_audio)!
     .click();
 
   return document.querySelector<HTMLElement>('.rte-modal:not([hidden])')!;
-}
+};
 
-function openRecorder(options: Record<string, unknown> = {}): HTMLElement {
+const openRecorder = (options: Record<string, unknown> = {}): HTMLElement => {
   host = document.createElement('div');
   document.body.appendChild(host);
   ui = createRichEditor({ element: host, ...options });
-  return openDialog();
-}
 
-function control(dialog: HTMLElement, label: string): HTMLButtonElement {
+  return openDialog();
+};
+
+const control = (dialog: HTMLElement, label: string): HTMLButtonElement => {
   const found = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.textContent?.trim() === label,
   );
+
   if (!found) throw new Error(`Нет кнопки «${label}»`);
+
   return found;
-}
+};
 
 describe('диалог записи и пределы редактора', () => {
   it('видит пределы, изменённые после создания редактора', async () => {
     const dialog = openRecorder({ limits: { maxAudioDurationSec: 30 } });
+
     expect(dialog.querySelector('.rte-recorder__limit')?.textContent).toContain('30');
     dialog.querySelector<HTMLButtonElement>('.rte-modal__close')!.click();
 
@@ -103,6 +111,7 @@ describe('диалог записи и пределы редактора', () =>
     ui!.setLimits({ maxAudioDurationSec: 7 });
 
     const reopened = openDialog();
+
     expect(reopened.querySelector('.rte-recorder__limit')?.textContent).toContain('7');
 
     control(reopened, ru.audio_record).click();
@@ -144,6 +153,7 @@ describe('диалог записи на пределах', () => {
     expect(insert.disabled).toBe(false);
     expect(control(dialog, ru.audio_stop).hidden).toBe(true);
     expect(dialog.querySelector('.rte-recorder__indicator--live')).toBeNull();
+
     // Причина остановки остаётся на экране рядом с готовым дублем.
     expect(dialog.querySelector<HTMLElement>('.rte-field__error:not([hidden])')?.textContent).toBe(
       (onError.mock.calls[0][0] as Error).message,
@@ -154,10 +164,12 @@ describe('диалог записи на пределах', () => {
 describe('диалог записи с клавиатуры', () => {
   it('фокус переходит на кнопку новой фазы, когда нажатая прячется', async () => {
     const dialog = openRecorder();
+
     // Модалка отдаёт фокус помеченной кнопке в следующем кадре.
     await vi.advanceTimersByTimeAsync(50);
 
     const record = control(dialog, ru.audio_record);
+
     expect(document.activeElement).toBe(record);
 
     // «Записать» спряталась — фокус ушёл бы в никуда, а кольцо модалки
@@ -177,10 +189,17 @@ describe('диалог записи с клавиатуры', () => {
 
   it('ошибка объявляется сразу, индикатор для читалки не существует', () => {
     const dialog = openRecorder();
+
     expect(dialog.querySelector('.rte-field__error:not([hidden])')).toBeNull();
+
     expect(
-      [...dialog.querySelectorAll('.rte-field__error')].some((p) => p.getAttribute('role') === 'alert'),
+      [...dialog.querySelectorAll('.rte-field__error')].some(
+        (p) => p.getAttribute('role') === 'alert',
+      ),
     ).toBe(true);
-    expect(dialog.querySelector('.rte-recorder__indicator')?.getAttribute('aria-hidden')).toBe('true');
+
+    expect(dialog.querySelector('.rte-recorder__indicator')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
   });
 });

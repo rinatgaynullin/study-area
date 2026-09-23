@@ -1,11 +1,13 @@
 import { RichEditorError, type Translate } from '../types';
 import { formatBytes } from '../utils/format';
 
+/** Стадия записи: от ожидания старта до готового дубля. */
 export type RecorderState = 'idle' | 'recording' | 'paused' | 'stopped';
 
 /** Какой из пределов остановил запись. */
 export type RecorderLimit = 'duration' | 'size';
 
+/** Готовая запись: закодированная дорожка и метаданные для плеера. */
 export interface RecordingResult {
   blob: Blob;
   mime: string;
@@ -15,6 +17,7 @@ export interface RecordingResult {
   peaks: string;
 }
 
+/** Настройки и колбэки рекордера: пределы записи и уведомления о ходе. */
 export interface VoiceRecorderOptions {
   t: Translate;
   maxDurationSec: number;
@@ -48,40 +51,56 @@ const MIME_CANDIDATES = [
 
 const PEAK_COUNT = 48;
 
-function getMediaRecorder(): typeof MediaRecorder | undefined {
-  return (globalThis as { MediaRecorder?: typeof MediaRecorder }).MediaRecorder;
-}
+const getMediaRecorder = (): typeof MediaRecorder | undefined =>
+  (globalThis as { MediaRecorder?: typeof MediaRecorder }).MediaRecorder;
 
-export function isRecordingSupported(): boolean {
+/** Есть ли в окружении MediaRecorder и доступ к микрофону. */
+export const isRecordingSupported = (): boolean => {
   const Recorder = getMediaRecorder();
+
   return (
-    typeof Recorder === 'function' &&
-    typeof navigator !== 'undefined' &&
-    !!navigator.mediaDevices?.getUserMedia
+    typeof Recorder === 'function'
+    && typeof navigator !== 'undefined'
+    && !!navigator.mediaDevices?.getUserMedia
   );
-}
+};
 
 /** Picks the best supported container, or `undefined` to use the browser default. */
-export function pickAudioMimeType(): string | undefined {
+export const pickAudioMimeType = (): string | undefined => {
   const Recorder = getMediaRecorder();
-  if (!Recorder || typeof Recorder.isTypeSupported !== 'function') return undefined;
-  return MIME_CANDIDATES.find((candidate) => Recorder.isTypeSupported(candidate));
-}
 
+  if (!Recorder || typeof Recorder.isTypeSupported !== 'function') return undefined;
+
+  return MIME_CANDIDATES.find((candidate) => Recorder.isTypeSupported(candidate));
+};
+
+/**
+ * Запись голосового сообщения через MediaRecorder: пауза и продолжение,
+ * пределы длительности и размера, замер уровня для осциллограммы.
+ */
 export class VoiceRecorder {
   private recorder: MediaRecorder | null = null;
+
   private stream: MediaStream | null = null;
+
   private chunks: Blob[] = [];
+
   private levels: number[] = [];
+
   private state: RecorderState = 'idle';
 
   private startedAt = 0;
+
   private accumulatedMs = 0;
+
   private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   private audioContext: AudioContext | null = null;
+
   private analyser: AnalyserNode | null = null;
+
   private levelTimer: ReturnType<typeof setInterval> | null = null;
+
   private bytes = 0;
 
   constructor(private options: VoiceRecorderOptions) {}
@@ -93,6 +112,7 @@ export class VoiceRecorder {
   /** Elapsed recorded seconds, excluding paused time. */
   getElapsed(): number {
     const running = this.state === 'recording' ? Date.now() - this.startedAt : 0;
+
     return (this.accumulatedMs + running) / 1000;
   }
 
@@ -104,17 +124,18 @@ export class VoiceRecorder {
     }
 
     let stream: MediaStream;
+
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (cause) {
       const denied =
-        cause instanceof Error && (cause.name === 'NotAllowedError' || cause.name === 'SecurityError');
+        cause instanceof Error
+        && (cause.name === 'NotAllowedError' || cause.name === 'SecurityError');
+
       throw this.fail(
         new RichEditorError(
           denied ? 'recorder-permission-denied' : 'recorder-failed',
-          this.options.t(
-            denied ? 'error_recorder_permission_denied' : 'error_recorder_failed',
-          ),
+          this.options.t(denied ? 'error_recorder_permission_denied' : 'error_recorder_failed'),
           cause,
         ),
       );
@@ -150,25 +171,30 @@ export class VoiceRecorder {
 
   pause(): void {
     if (this.state !== 'recording' || !this.recorder) return;
+
     // Своё состояние и состояние MediaRecorder могут разойтись: браузер
     // останавливает запись сам, когда обрывается трек (микрофон отключили,
     // разрешение отозвали). У неактивного рекордера pause() бросает
     // InvalidStateError, поэтому сверяемся с ним, а не только с собой.
     if (this.recorder.state === 'recording') this.recorder.pause();
+
     this.accumulatedMs += Date.now() - this.startedAt;
     this.setState('paused');
   }
 
   resume(): void {
     if (this.state !== 'paused' || !this.recorder) return;
+
     if (this.recorder.state === 'paused') this.recorder.resume();
+
     this.startedAt = Date.now();
     this.setState('recording');
   }
 
   /** Stops recording and resolves with the encoded blob, duration and peaks. */
   async stop(): Promise<RecordingResult> {
-    const recorder = this.recorder;
+    const { recorder } = this;
+
     if (!recorder || this.state === 'idle' || this.state === 'stopped') {
       throw this.fail(
         new RichEditorError('recorder-failed', this.options.t('error_recorder_failed')),
@@ -176,6 +202,7 @@ export class VoiceRecorder {
     }
 
     if (this.state === 'recording') this.accumulatedMs += Date.now() - this.startedAt;
+
     const duration = this.accumulatedMs / 1000;
 
     const blob = await new Promise<Blob>((resolve) => {
@@ -188,6 +215,7 @@ export class VoiceRecorder {
       // моменту отданы, так что собираем дорожку из того, что есть.
       if (recorder.state === 'inactive') {
         finish();
+
         return;
       }
 
@@ -215,6 +243,7 @@ export class VoiceRecorder {
         // Already stopped; nothing to clean up beyond teardown below.
       }
     }
+
     this.chunks = [];
     this.teardown();
     this.setState('idle');
@@ -222,6 +251,7 @@ export class VoiceRecorder {
 
   private onData = (event: Event) => {
     const blobEvent = event as BlobEvent;
+
     if (!blobEvent.data || blobEvent.data.size === 0) return;
 
     this.chunks.push(blobEvent.data);
@@ -234,6 +264,7 @@ export class VoiceRecorder {
           this.options.t('error_audio_too_large', { max: formatBytes(this.options.maxSizeBytes) }),
         ),
       );
+
       this.stopAtLimit('size');
     }
   };
@@ -246,9 +277,12 @@ export class VoiceRecorder {
 
   private startTicking(): void {
     this.stopTicking();
+
     this.tickTimer = setInterval(() => {
       const elapsed = this.getElapsed();
+
       this.options.onTick?.(elapsed);
+
       if (elapsed >= this.options.maxDurationSec) this.stopAtLimit('duration');
     }, 200);
   }
@@ -267,34 +301,42 @@ export class VoiceRecorder {
    */
   private stopAtLimit(reason: RecorderLimit): void {
     if (this.state === 'recording') this.pause();
+
     this.stopTicking();
     this.options.onLimit?.(reason);
   }
 
   private startLevelMetering(stream: MediaStream): void {
     const Ctor =
-      (globalThis as { AudioContext?: typeof AudioContext }).AudioContext ??
-      (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      (globalThis as { AudioContext?: typeof AudioContext }).AudioContext
+      ?? (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
     if (!Ctor) return; // Waveform is a nicety; recording works without it.
 
     try {
       this.audioContext = new Ctor();
+
       const source = this.audioContext.createMediaStreamSource(stream);
+
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 512;
       source.connect(this.analyser);
 
       const buffer = new Uint8Array(this.analyser.frequencyBinCount);
+
       this.levelTimer = setInterval(() => {
         if (!this.analyser || this.state !== 'recording') return;
+
         this.analyser.getByteTimeDomainData(buffer);
 
-        let sum = 0;
-        for (const sample of buffer) {
+        const sum = buffer.reduce((total, sample) => {
           const centered = (sample - 128) / 128;
-          sum += centered * centered;
-        }
+
+          return total + centered * centered;
+        }, 0);
+
         const rms = Math.sqrt(sum / buffer.length);
+
         this.levels.push(rms);
         this.options.onLevel?.(Math.min(1, rms * 2));
       }, 100);
@@ -317,6 +359,7 @@ export class VoiceRecorder {
       const end = Math.max(start + 1, Math.floor((index + 1) * bucketSize));
       const slice = this.levels.slice(start, end);
       const peak = slice.length > 0 ? Math.max(...slice) : 0;
+
       peaks.push(Math.round(Math.min(99, (peak / loudest) * 99)));
     }
 
@@ -330,6 +373,7 @@ export class VoiceRecorder {
 
   private fail(error: RichEditorError): RichEditorError {
     this.options.onError?.(error);
+
     return error;
   }
 
@@ -340,15 +384,19 @@ export class VoiceRecorder {
 
   private teardown(): void {
     this.stopTicking();
+
     if (this.levelTimer !== null) {
       clearInterval(this.levelTimer);
       this.levelTimer = null;
     }
+
     if (this.recorder) {
       this.recorder.removeEventListener('dataavailable', this.onData);
       this.recorder.removeEventListener('error', this.onRecorderError);
     }
-    void this.audioContext?.close().catch(() => undefined);
+
+    // Уже закрытый контекст отклоняет close(); терять тут нечего.
+    this.audioContext?.close().catch(() => undefined);
     this.audioContext = null;
     this.analyser = null;
     this.releaseStream();

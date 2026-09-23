@@ -26,31 +26,37 @@ const WIRIS_SAFE_XML: ReadonlyArray<readonly [RegExp, string]> = [
 /** Сколько раз подряд пытаемся снять HTML-экранирование. */
 const MAX_UNESCAPE_PASSES = 3;
 
-function unescapeHtmlOnce(value: string): string {
+const unescapeHtmlOnce = (value: string): string => {
   const element = document.createElement('textarea');
+
   element.innerHTML = value;
+
   return element.value;
-}
+};
 
 /**
  * Снимает экранирование, пока строка меняется, но не больше нескольких проходов.
  * Ограничение защищает от данных, где `&amp;amp;amp;…` раскручивается бесконечно.
  */
-export function decodeWirisMathml(raw: string): string {
+export const decodeWirisMathml = (raw: string): string => {
   if (!raw) return '';
+
   if (typeof document === 'undefined') return raw;
 
-  let value = raw;
-  for (const [pattern, character] of WIRIS_SAFE_XML) {
-    value = value.replace(pattern, character);
-  }
+  let value = WIRIS_SAFE_XML.reduce(
+    (result, [pattern, character]) => result.replace(pattern, character),
+    raw,
+  );
 
   for (let pass = 0; pass < MAX_UNESCAPE_PASSES; pass += 1) {
     if (value.includes('<math')) break;
+
     const next = unescapeHtmlOnce(value);
+
     if (next === value) break;
+
     value = next;
   }
 
   return value.includes('<math') ? value : '';
-}
+};
