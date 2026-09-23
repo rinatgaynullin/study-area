@@ -1,7 +1,17 @@
-export { RichEditorCore } from './editor';
+export { RichEditorCore } from './rich-editor-core';
 export { prepareIncomingHtml, type PrepareIncomingHtmlOptions } from './prepare-html';
-export { decodeWirisMathml, upgradeLegacyHtml } from './legacy';
+export { decodeWirisMathml } from './legacy/decode-wiris-mathml';
+export { upgradeLegacyHtml } from './legacy/upgrade-legacy-html';
 export { DEFAULT_FORMULA_FONT_SIZE_PX } from './formula/mathjax';
+// Контракт документа: те же списки повторяет серверный санитайзер.
+export {
+  ALLOWED_URI_SCHEMES,
+  HTML_ATTRS,
+  HTML_TAGS,
+  MATHML_ATTRS,
+  MATHML_TAGS,
+  SVG_EXTRA_ATTRS,
+} from './security/sanitize';
 export { ICONS, type IconName } from './ui/icons';
 
 // Ванильный интерфейс: редактор целиком и вьюер, без фреймворка.
@@ -16,12 +26,31 @@ export {
   type ToolbarConfig,
   type ToolbarPreset,
 } from './ui/presets';
-export { createToolbar, type Toolbar, type ToolbarGroupConfig } from './ui/toolbar';
+export {
+  createToolbar,
+  type Toolbar,
+  type ToolbarGroupConfig,
+  type ToolbarOptions,
+} from './ui/toolbar';
 export { SIMPLE_TOOLBAR_ITEMS } from './ui/toolbar-items';
 export { DEFAULT_LINK_STYLES, type LinkStyle } from './ui/link-styles';
-export { createModal, MODAL_CLOSE_EVENT, type Modal } from './ui/modal';
-export { createPopover, type Popover } from './ui/popover';
-export { createDropdown, type Dropdown } from './ui/dropdown';
+export { createModal, MODAL_CLOSE_EVENT, type Modal, type ModalOptions } from './ui/modal';
+export {
+  createPopover,
+  type Popover,
+  type PopoverCloseReason,
+  type PopoverOptions,
+} from './ui/popover';
+export {
+  createDropdown,
+  createMenuItem,
+  createMenuSeparator,
+  type Dropdown,
+  type DropdownOptions,
+  type MenuItemOptions,
+  type MenuItemRole,
+} from './ui/dropdown';
+export { DEFAULT_HIGHLIGHT_SWATCHES, DEFAULT_TEXT_SWATCHES } from './ui/toolbar-panels';
 export {
   clearPreviewCache,
   getCachedLatexPreview,
@@ -81,7 +110,7 @@ export {
   type RenderOptions,
 } from './formula/mathjax';
 
-export { inlineMathMLToFormulaNodes } from './formula/import';
+export { inlineMathMLToFormulaNodes } from './formula/inline-mathml-to-formula-nodes';
 
 export {
   findTemplate,

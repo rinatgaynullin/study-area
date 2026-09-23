@@ -20,7 +20,11 @@ export const TOOLBAR_PRESETS: Record<ToolbarPreset, ToolbarGroupConfig[]> = {
     { id: 'color', items: ['textColor', 'highlight'], collapsible: true },
     { id: 'align', items: ['align'], collapsible: true },
     { id: 'list', items: ['bulletList', 'orderedList'] },
-    { id: 'block', items: ['blockquote', 'code', 'codeBlock', 'horizontalRule'], collapsible: true },
+    {
+      id: 'block',
+      items: ['blockquote', 'code', 'codeBlock', 'horizontalRule'],
+      collapsible: true,
+    },
     { id: 'insert', items: ['link', 'table', 'image', 'audio', 'file'] },
     { id: 'formula', items: ['formulaMath', 'formulaChem'] },
     { id: 'clear', items: ['clearFormat'], collapsible: true },
@@ -40,8 +44,10 @@ export const TOOLBAR_PRESETS: Record<ToolbarPreset, ToolbarGroupConfig[]> = {
   ],
 };
 
-export function resolveToolbar(config: ToolbarConfig | undefined): ToolbarGroupConfig[] {
+export const resolveToolbar = (config: ToolbarConfig | undefined): ToolbarGroupConfig[] => {
   if (!config) return TOOLBAR_PRESETS.full;
+
   if (typeof config === 'string') return TOOLBAR_PRESETS[config] ?? TOOLBAR_PRESETS.full;
+
   return config;
-}
+};

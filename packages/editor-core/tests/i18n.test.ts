@@ -59,6 +59,7 @@ describe('i18n layer', () => {
     const i18n = createI18n();
 
     expect(i18n.t('toolbar_heading_level', { level: 3 })).toBe('Заголовок 3');
+
     expect(i18n.t('error_file_too_large', { name: 'a.png', size: '5 MB', max: '1 MB' })).toBe(
       'Файл «a.png» слишком большой: 5 MB. Максимум — 1 MB.',
     );
@@ -76,6 +77,7 @@ describe('i18n layer', () => {
 
   it('changes locale and messages at runtime', () => {
     const i18n = createI18n({ messages: { en: en as never } });
+
     expect(i18n.t('toolbar_bold')).toBe('Полужирный');
 
     i18n.setLocale('en');
@@ -88,9 +90,7 @@ describe('i18n layer', () => {
   it('ships matching key sets for the built-in bundles', () => {
     const keys = (tree: object, prefix = ''): string[] =>
       Object.entries(tree).flatMap(([key, value]) =>
-        typeof value === 'string'
-          ? [`${prefix}${key}`]
-          : keys(value as object, `${prefix}${key}.`),
+        typeof value === 'string' ? [`${prefix}${key}`] : keys(value as object, `${prefix}${key}.`),
       );
 
     expect(keys(en).sort()).toEqual(keys(ru).sort());
@@ -108,12 +108,13 @@ describe('i18n through the editor', () => {
     element = undefined;
   });
 
-  function mount(options: Partial<ConstructorParameters<typeof RichEditorCore>[0]> = {}) {
+  const mount = (options: Partial<ConstructorParameters<typeof RichEditorCore>[0]> = {}) => {
     element = document.createElement('div');
     document.body.appendChild(element);
     core = new RichEditorCore({ element, ...options });
+
     return core;
-  }
+  };
 
   it('exposes the translator and honours the configured locale', () => {
     const editor = mount({ locale: 'en', messages: { en: en as never } });
@@ -124,6 +125,7 @@ describe('i18n through the editor', () => {
 
   it('switches locale after construction', () => {
     const editor = mount({ messages: { en: en as never } });
+
     expect(editor.t('common_cancel')).toBe('Отмена');
 
     editor.setLocale('en');
@@ -131,7 +133,8 @@ describe('i18n through the editor', () => {
   });
 
   it('uses the localized placeholder by default', () => {
-    const editor = mount();
+    mount();
+
     expect(element!.querySelector('.rte-content')?.innerHTML).toContain('Начните писать');
   });
 });

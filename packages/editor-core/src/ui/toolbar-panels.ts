@@ -1,23 +1,20 @@
 import type { Editor } from '@tiptap/core';
-import { createColorPanel } from './color-panel';
+import { createColorPanel } from './create-color-panel';
 import { createMenuItem, createMenuSeparator } from './dropdown';
 import { el } from './dom';
 import { ALIGNMENTS, HEADING_LEVELS, TABLE_ACTIONS, tableActionLabelKey } from './toolbar-items';
 import type { EditorUiContext, ToolbarItemDescriptor } from './types';
 
 /** Уровень заголовка под кареткой; 0 — обычный абзац. */
-function activeHeadingLevel(editor: Editor): number {
-  return HEADING_LEVELS.find((level) => editor.isActive('heading', { level })) ?? 0;
-}
+const activeHeadingLevel = (editor: Editor): number =>
+  HEADING_LEVELS.find((level) => editor.isActive('heading', { level })) ?? 0;
 
 /** Выравнивание под кареткой; по умолчанию — по левому краю. */
-function activeAlignment(editor: Editor): (typeof ALIGNMENTS)[number] {
-  return ALIGNMENTS.find((alignment) => editor.isActive({ textAlign: alignment })) ?? 'left';
-}
+const activeAlignment = (editor: Editor): (typeof ALIGNMENTS)[number] =>
+  ALIGNMENTS.find((alignment) => editor.isActive({ textAlign: alignment })) ?? 'left';
 
-function alignIcon(alignment: string): string {
-  return `align${alignment.charAt(0).toUpperCase()}${alignment.slice(1)}`;
-}
+const alignIcon = (alignment: string): string =>
+  `align${alignment.charAt(0).toUpperCase()}${alignment.slice(1)}`;
 
 /**
  * Пункты тулбара с выпадающей панелью.
@@ -29,17 +26,37 @@ function alignIcon(alignment: string): string {
 
 /** Цвета текста по умолчанию. */
 export const DEFAULT_TEXT_SWATCHES = [
-  '#000000', '#424242', '#757575', '#1976d2', '#0288d1', '#00897b',
-  '#388e3c', '#f9a825', '#ef6c00', '#d32f2f', '#c2185b', '#7b1fa2',
+  '#000000',
+  '#424242',
+  '#757575',
+  '#1976d2',
+  '#0288d1',
+  '#00897b',
+  '#388e3c',
+  '#f9a825',
+  '#ef6c00',
+  '#d32f2f',
+  '#c2185b',
+  '#7b1fa2',
 ];
 
 /** Цвета выделения по умолчанию. */
 export const DEFAULT_HIGHLIGHT_SWATCHES = [
-  '#fff59d', '#ffe082', '#ffcc80', '#ffab91', '#f48fb1', '#ce93d8',
-  '#b39ddb', '#90caf9', '#80deea', '#a5d6a7', '#e6ee9c', '#eeeeee',
+  '#fff59d',
+  '#ffe082',
+  '#ffcc80',
+  '#ffab91',
+  '#f48fb1',
+  '#ce93d8',
+  '#b39ddb',
+  '#90caf9',
+  '#80deea',
+  '#a5d6a7',
+  '#e6ee9c',
+  '#eeeeee',
 ];
 
-export interface PanelItemOptions {
+interface PanelItemOptions {
   textSwatches?: string[];
   highlightSwatches?: string[];
   /** Открывает диалог вставки таблицы. */
@@ -56,7 +73,7 @@ export interface PanelItemOptions {
   insertFormula(type: 'math' | 'chem'): void;
 }
 
-function headingPanel(context: EditorUiContext, close: () => void): HTMLElement {
+const headingPanel = (context: EditorUiContext, close: () => void): HTMLElement => {
   const panel = el('div');
 
   panel.appendChild(
@@ -71,7 +88,7 @@ function headingPanel(context: EditorUiContext, close: () => void): HTMLElement 
     }),
   );
 
-  for (const level of HEADING_LEVELS) {
+  HEADING_LEVELS.forEach((level) => {
     panel.appendChild(
       createMenuItem({
         label: context.t('toolbar_heading_level', { level }),
@@ -85,16 +102,17 @@ function headingPanel(context: EditorUiContext, close: () => void): HTMLElement 
         },
       }),
     );
-  }
+  });
 
   return panel;
-}
+};
 
-function alignPanel(context: EditorUiContext, close: () => void): HTMLElement {
+const alignPanel = (context: EditorUiContext, close: () => void): HTMLElement => {
   const panel = el('div');
 
-  for (const alignment of ALIGNMENTS) {
+  ALIGNMENTS.forEach((alignment) => {
     const suffix = alignment.charAt(0).toUpperCase() + alignment.slice(1);
+
     panel.appendChild(
       createMenuItem({
         label: context.t(`toolbar_align_${alignment}`),
@@ -107,16 +125,16 @@ function alignPanel(context: EditorUiContext, close: () => void): HTMLElement {
         },
       }),
     );
-  }
+  });
 
   return panel;
-}
+};
 
-function tablePanel(
+const tablePanel = (
   context: EditorUiContext,
   close: () => void,
   options: PanelItemOptions,
-): HTMLElement {
+): HTMLElement => {
   const panel = el('div');
 
   panel.appendChild(
@@ -140,7 +158,7 @@ function tablePanel(
     (() => { run: () => boolean }) | undefined
   >;
 
-  for (const action of TABLE_ACTIONS) {
+  TABLE_ACTIONS.forEach((action) => {
     panel.appendChild(
       createMenuItem({
         label: context.t(tableActionLabelKey(action)),
@@ -150,19 +168,19 @@ function tablePanel(
         },
       }),
     );
-  }
+  });
 
   return panel;
-}
+};
 
-function filePanel(
+const filePanel = (
   context: EditorUiContext,
   close: () => void,
   options: PanelItemOptions,
-): HTMLElement {
+): HTMLElement => {
   const panel = el('div');
 
-  for (const mode of ['attach', 'insert'] as const) {
+  (['attach', 'insert'] as const).forEach((mode) => {
     panel.appendChild(
       createMenuItem({
         label: context.t(mode === 'attach' ? 'file_attach' : 'file_insert_content'),
@@ -173,12 +191,12 @@ function filePanel(
         },
       }),
     );
-  }
+  });
 
   return panel;
-}
+};
 
-function colorItem(
+const colorItem = (
   id: string,
   labelKey: string,
   iconName: string,
@@ -186,34 +204,32 @@ function colorItem(
   attributeName: string,
   swatches: string[],
   apply: (context: EditorUiContext, color: string | null) => void,
-): ToolbarItemDescriptor {
-  return {
-    id,
-    icon: iconName,
-    labelKey,
-    kind: 'dropdown',
-    isActive: (editor) => editor.isActive(markName),
-    renderPanel: (context, close) =>
-      createColorPanel({
-        t: context.t,
-        palette: swatches,
-        activeColor: (context.editor.getAttributes(markName)[attributeName] as string) ?? '',
-        onSelect: (color) => {
-          apply(context, color);
-          close();
-        },
-        onReset: () => {
-          apply(context, null);
-          close();
-        },
-      }),
-  };
-}
+): ToolbarItemDescriptor => ({
+  id,
+  icon: iconName,
+  labelKey,
+  kind: 'dropdown',
+  isActive: (editor) => editor.isActive(markName),
+  renderPanel: (context, close) =>
+    createColorPanel({
+      t: context.t,
+      palette: swatches,
+      activeColor: (context.editor.getAttributes(markName)[attributeName] as string) ?? '',
+      onSelect: (color) => {
+        apply(context, color);
+        close();
+      },
+      onReset: () => {
+        apply(context, null);
+        close();
+      },
+    }),
+});
 
 /** Дескрипторы пунктов с панелью и пунктов, открывающих диалоги. */
-export function createPanelToolbarItems(
+export const createPanelToolbarItems = (
   options: PanelItemOptions,
-): Record<string, ToolbarItemDescriptor> {
+): Record<string, ToolbarItemDescriptor> => {
   const textSwatches = options.textSwatches ?? DEFAULT_TEXT_SWATCHES;
   const highlightSwatches = options.highlightSwatches ?? DEFAULT_HIGHLIGHT_SWATCHES;
 
@@ -228,6 +244,7 @@ export function createPanelToolbarItems(
       // уровень заголовка приходится угадывать по кеглю.
       text: (context) => {
         const level = activeHeadingLevel(context.editor);
+
         return level > 0 ? `H${level}` : context.t('toolbar_paragraph');
       },
       renderPanel: headingPanel,
@@ -249,6 +266,7 @@ export function createPanelToolbarItems(
       textSwatches,
       (context, color) => {
         const chain = context.editor.chain().focus();
+
         if (color === null) chain.unsetColor().run();
         else chain.setColor(color).run();
       },
@@ -262,6 +280,7 @@ export function createPanelToolbarItems(
       highlightSwatches,
       (context, color) => {
         const chain = context.editor.chain().focus();
+
         if (color === null) chain.unsetHighlight().run();
         else chain.setHighlight({ color }).run();
       },
@@ -320,4 +339,4 @@ export function createPanelToolbarItems(
       run: () => options.insertFormula('chem'),
     },
   };
-}
+};

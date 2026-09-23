@@ -3,13 +3,14 @@ import { MATHLIVE_STRINGS } from '../../i18n/mathlive';
 import { latexToMathML, mathmlToLatex } from '../../formula/mathml';
 import { getTemplateCategories } from '../../formula/templates';
 import type { FormulaTemplate, TemplateCategory } from '../../formula/templates';
-import type { FormulaPayload, FormulaType } from '../../types';
+import type { FormulaPayload, FormulaType, Translate } from '../../types';
 import { createDisposer, el, icon, on } from '../dom';
 import { createModal } from '../modal';
+import type { Modal } from '../modal';
 import type { DialogComponent, EditorUiContext } from '../types';
 import { getCachedLatexPreview, renderLatexPreview } from './formula-preview';
 
-export interface FormulaDialogOptions {
+interface FormulaDialogOptions {
   /** Откуда MathLive берёт шрифты; `null` — считать, что CSS уже подключён. */
   fontsDirectory?: string | null;
   /** Язык меню и подсказок самого MathLive. */
@@ -32,8 +33,13 @@ let formulaDialogCount = 0;
  * кругу, Home/End — к краям, и выбирают вкладку сразу. Список — одна
  * остановка Tab'а: у активной вкладки tabindex 0, у остальных −1.
  */
-function onTablistKeydown(event: KeyboardEvent, tabs: HTMLElement[], select: (tab: HTMLElement) => void): void {
+const onTablistKeydown = (
+  event: KeyboardEvent,
+  tabs: HTMLElement[],
+  select: (tab: HTMLElement) => void,
+): void => {
   const current = tabs.indexOf(document.activeElement as HTMLElement);
+
   if (current === -1 || tabs.length === 0) return;
 
   const moves: Record<string, number> = {
@@ -42,16 +48,35 @@ function onTablistKeydown(event: KeyboardEvent, tabs: HTMLElement[], select: (ta
     Home: 0,
     End: tabs.length - 1,
   };
+
   const next = moves[event.key];
+
   if (next === undefined) return;
 
   event.preventDefault();
+
   const tab = tabs[(next + tabs.length) % tabs.length];
+
+  if (!tab) return;
+
   select(tab);
   // Выбор мог пересобрать вкладки (категории рисуются заново) — фокусируем
   // ту, что теперь в разметке под тем же id.
   (document.getElementById(tab.id) ?? tab).focus();
-}
+};
+
+/**
+ * Неудача рендера не должна ронять галерею и превью: вместо SVG приходит
+ * пустая строка, и вызывающий показывает запасной текст. Промис никогда не
+ * отклоняется — поэтому его результата можно не ждать.
+ */
+const renderPreviewSafely = async (source: string, previewType: FormulaType): Promise<string> => {
+  try {
+    return await renderLatexPreview(source, previewType);
+  } catch {
+    return '';
+  }
+};
 
 /**
  * Визуальный редактор формул: вкладки математика/химия, галерея шаблонов по
@@ -60,195 +85,332 @@ function onTablistKeydown(event: KeyboardEvent, tabs: HTMLElement[], select: (ta
  * Формула хранится в документе как MathML, а правится как LaTeX: MathLive
  * умеет отдавать MathML, но не умеет его читать, поэтому LaTeX едет внутри
  * самого MathML аннотацией, а диалог достаёт его через `mathmlToLatex`.
+ *
+ * Класс, а не набор замыканий: тип формулы, текущий LaTeX, категория, поле
+ * MathLive и счётчики отрисовок — общее изменяемое состояние, к которому
+ * обращаются и обработчики, и асинхронные шаги загрузки.
  */
-export function createFormulaDialog(
-  context: EditorUiContext,
-  options: FormulaDialogOptions,
-): DialogComponent<FormulaPayload | null> {
-  const { t } = context;
-  const disposer = createDisposer();
+class FormulaDialogController implements DialogComponent<FormulaPayload | null> {
+  readonly element: HTMLElement;
 
-  let payload: FormulaPayload | null = null;
-  let type: FormulaType = 'math';
-  let latex = '';
-  let activeCategoryId = '';
-  let field: MathfieldElement | null = null;
+  private readonly t: Translate;
+
+  private readonly disposer = createDisposer();
+
+  private payload: FormulaPayload | null = null;
+
+  private type: FormulaType = 'math';
+
+  private latex = '';
+
+  private activeCategoryId = '';
+
+  private field: MathfieldElement | null = null;
 
   /**
    * Номер последнего запуска отрисовки. Рендер асинхронный, а вкладку можно
    * переключить раньше, чем он закончится: ответы прошлых запусков отбрасываем
    * по номеру, иначе в галерею попадут чужие формулы.
    */
-  let galleryToken = 0;
-  let previewToken = 0;
-  let openToken = 0;
+  private galleryToken = 0;
 
-  // --------------------------------------------------------------- разметка
+  private previewToken = 0;
 
-  formulaDialogCount += 1;
-  const idPrefix = `rte-formula-${formulaDialogCount}`;
-  const panelId = `${idPrefix}-panel`;
-  const galleryId = `${idPrefix}-gallery`;
-  const hintId = `${idPrefix}-hint`;
+  private openToken = 0;
 
-  function createTab(iconName: string, labelKey: string, type: FormulaType): HTMLButtonElement {
+  private readonly idPrefix: string;
+
+  private readonly panelId: string;
+
+  private readonly galleryId: string;
+
+  private readonly hintId: string;
+
+  private readonly mathTab: HTMLButtonElement;
+
+  private readonly chemTab: HTMLButtonElement;
+
+  /** Загрузка и ошибка объявляются сами: ждать их взглядом читалка не может. */
+  private readonly status: HTMLElement;
+
+  private readonly host: HTMLElement;
+
+  private readonly categoryList: HTMLElement;
+
+  private readonly gallery: HTMLElement;
+
+  private readonly previewContent: HTMLElement;
+
+  /** Всё под вкладками — их панель: поле, шаблоны и превью зависят от типа. */
+  private readonly panel: HTMLElement;
+
+  private readonly modal: Modal;
+
+  private readonly removeButton: HTMLButtonElement;
+
+  private readonly cancelButton: HTMLButtonElement;
+
+  private readonly saveButton: HTMLButtonElement;
+
+  constructor(
+    context: EditorUiContext,
+    private readonly options: FormulaDialogOptions,
+  ) {
+    const { t } = context;
+
+    this.t = t;
+
+    // --------------------------------------------------------------- разметка
+
+    formulaDialogCount += 1;
+
+    this.idPrefix = `rte-formula-${formulaDialogCount}`;
+    this.panelId = `${this.idPrefix}-panel`;
+    this.galleryId = `${this.idPrefix}-gallery`;
+    this.hintId = `${this.idPrefix}-hint`;
+
+    this.mathTab = this.createTab('formulaMath', 'formula_tab_math', 'math');
+    this.chemTab = this.createTab('formulaChem', 'formula_tab_chem', 'chem');
+
+    const tabs = el('div', {
+      class: 'rte-formula-editor__tabs',
+      attrs: { role: 'tablist' },
+      children: [this.mathTab, this.chemTab],
+    });
+
+    this.status = el('p', { class: 'rte-formula-editor__status', attrs: { role: 'status' } });
+    this.status.hidden = true;
+
+    this.host = el('div', { class: 'rte-formula-editor__host' });
+
+    const input = el('div', {
+      class: 'rte-formula-editor__input',
+      children: [
+        this.host,
+        el('p', {
+          class: 'rte-formula-editor__hint',
+          text: t('formula_input_hint'),
+          attrs: { id: this.hintId },
+        }),
+      ],
+    });
+
+    this.categoryList = el('div', {
+      class: 'rte-formula-editor__categories',
+      attrs: { role: 'tablist', 'aria-label': t('formula_templates') },
+    });
+
+    this.gallery = el('div', {
+      class: 'rte-formula-editor__gallery',
+      attrs: { role: 'tabpanel', id: this.galleryId },
+    });
+
+    const templates = el('section', {
+      class: 'rte-formula-editor__templates',
+      children: [
+        el('h3', { class: 'rte-formula-editor__section-title', text: t('formula_templates') }),
+        this.categoryList,
+        this.gallery,
+      ],
+    });
+
+    this.previewContent = el('span');
+
+    const preview = el('section', {
+      class: 'rte-formula-editor__preview',
+      children: [
+        el('h3', { class: 'rte-formula-editor__section-title', text: t('formula_preview') }),
+        // Сообщения «формула пуста» и «не удалось разобрать» читалка слышит;
+        // сама картинка формулы ей ни о чём не говорит.
+        el('div', {
+          class: 'rte-formula-editor__preview-box',
+          attrs: { 'aria-live': 'polite' },
+          children: [this.previewContent],
+        }),
+      ],
+    });
+
+    this.modal = createModal({
+      title: t('formula_title_math'),
+      closeLabel: t('common_close'),
+      wide: true,
+    });
+
+    this.panel = el('div', {
+      class: 'rte-formula-editor__panel',
+      attrs: { role: 'tabpanel', id: this.panelId },
+      children: [this.status, input, templates, preview],
+    });
+
+    this.modal.body.appendChild(
+      el('div', {
+        class: 'rte-formula-editor',
+        children: [tabs, this.panel],
+      }),
+    );
+
+    this.removeButton = el('button', {
+      class: 'rte-button rte-button--danger',
+      attrs: { type: 'button' },
+      text: t('formula_remove'),
+    });
+
+    this.cancelButton = el('button', {
+      class: 'rte-button',
+      attrs: { type: 'button' },
+      text: t('formula_cancel'),
+    });
+
+    this.saveButton = el('button', {
+      class: 'rte-button rte-button--primary',
+      attrs: { type: 'button' },
+      text: t('formula_insert'),
+    });
+
+    this.modal.footer.append(
+      this.removeButton,
+      el('span', { class: 'rte-modal__spacer' }),
+      this.cancelButton,
+      this.saveButton,
+    );
+
+    this.element = this.modal.element;
+
+    // --------------------------------------------------------------- события
+
+    this.disposer.add(on(this.mathTab, 'click', this.onMathTabClick));
+    this.disposer.add(on(this.chemTab, 'click', this.onChemTabClick));
+    this.disposer.add(on(tabs, 'keydown', this.onTabsKeydown));
+    this.disposer.add(on(this.categoryList, 'keydown', this.onCategoryListKeydown));
+    this.disposer.add(on(this.cancelButton, 'click', this.onCancelButtonClick));
+    this.disposer.add(on(this.removeButton, 'click', this.onRemoveButtonClick));
+    this.disposer.add(on(this.saveButton, 'click', this.onSaveButtonClick));
+
+    // Кнопки категорий и шаблонов пересобираются на каждой смене вкладки,
+    // поэтому слушатель один — на контейнере, а не на каждой кнопке.
+    this.disposer.add(on(this.categoryList, 'click', this.onCategoryListClick));
+    this.disposer.add(on(this.gallery, 'click', this.onGalleryClick));
+  }
+
+  get isVisible(): boolean {
+    return this.modal.isVisible;
+  }
+
+  /** Открывает диалог: с формулой из документа — на правку, с `null` — на вставку. */
+  open(next: FormulaPayload | null): void {
+    this.payload = next;
+    this.type = next?.type ?? 'math';
+    this.activeCategoryId = this.getCategories()[0]?.id ?? '';
+
+    this.modal.setTitle(
+      this.type === 'chem' ? this.t('formula_title_chem') : this.t('formula_title_math'),
+    );
+
+    this.syncTabs();
+    this.setLatex('');
+    this.syncFooter();
+    this.renderCategories();
+    this.renderGallery();
+    // Сообщение о прошлом сбое конвертации не должно пережить повторное
+    // открытие; загрузку MathLive prepareField объявит заново сам.
+    this.setStatus('idle');
+
+    this.modal.open();
+    this.openToken += 1;
+    this.prepareField(this.openToken).catch(this.onConversionError);
+  }
+
+  close(): void {
+    this.modal.close();
+  }
+
+  /** Освобождает слушатели, поле MathLive и разметку. Идемпотентен. */
+  destroy(): void {
+    this.disposer.dispose();
+    this.field?.remove();
+    this.field = null;
+    this.modal.destroy();
+  }
+
+  private createTab(iconName: string, labelKey: string, tabType: FormulaType): HTMLButtonElement {
     return el('button', {
       class: 'rte-formula-editor__tab',
-      attrs: { type: 'button', role: 'tab', id: `${idPrefix}-tab-${type}`, 'aria-controls': panelId },
-      children: [icon(iconName, 16), document.createTextNode(t(labelKey))],
+      attrs: {
+        type: 'button',
+        role: 'tab',
+        id: `${this.idPrefix}-tab-${tabType}`,
+        'aria-controls': this.panelId,
+      },
+      children: [icon(iconName, 16), document.createTextNode(this.t(labelKey))],
     });
   }
 
-  const mathTab = createTab('formulaMath', 'formula_tab_math', 'math');
-  const chemTab = createTab('formulaChem', 'formula_tab_chem', 'chem');
-  const tabs = el('div', {
-    class: 'rte-formula-editor__tabs',
-    attrs: { role: 'tablist' },
-    children: [mathTab, chemTab],
-  });
-
-  // Загрузка и ошибка объявляются сами: ждать их взглядом читалка не может.
-  const status = el('p', { class: 'rte-formula-editor__status', attrs: { role: 'status' } });
-  status.hidden = true;
-
-  const host = el('div', { class: 'rte-formula-editor__host' });
-  const input = el('div', {
-    class: 'rte-formula-editor__input',
-    children: [
-      host,
-      el('p', { class: 'rte-formula-editor__hint', text: t('formula_input_hint'), attrs: { id: hintId } }),
-    ],
-  });
-
-  const categoryList = el('div', {
-    class: 'rte-formula-editor__categories',
-    attrs: { role: 'tablist', 'aria-label': t('formula_templates') },
-  });
-  const gallery = el('div', {
-    class: 'rte-formula-editor__gallery',
-    attrs: { role: 'tabpanel', id: galleryId },
-  });
-  const templates = el('section', {
-    class: 'rte-formula-editor__templates',
-    children: [
-      el('h3', { class: 'rte-formula-editor__section-title', text: t('formula_templates') }),
-      categoryList,
-      gallery,
-    ],
-  });
-
-  const previewContent = el('span');
-  const preview = el('section', {
-    class: 'rte-formula-editor__preview',
-    children: [
-      el('h3', { class: 'rte-formula-editor__section-title', text: t('formula_preview') }),
-      // Сообщения «формула пуста» и «не удалось разобрать» читалка слышит;
-      // сама картинка формулы ей ни о чём не говорит.
-      el('div', {
-        class: 'rte-formula-editor__preview-box',
-        attrs: { 'aria-live': 'polite' },
-        children: [previewContent],
-      }),
-    ],
-  });
-
-  const modal = createModal({
-    title: t('formula_title_math'),
-    closeLabel: t('common_close'),
-    wide: true,
-  });
-
-  // Всё под вкладками — их панель: поле, шаблоны и превью зависят от типа.
-  const panel = el('div', {
-    class: 'rte-formula-editor__panel',
-    attrs: { role: 'tabpanel', id: panelId },
-    children: [status, input, templates, preview],
-  });
-
-  modal.body.appendChild(
-    el('div', {
-      class: 'rte-formula-editor',
-      children: [tabs, panel],
-    }),
-  );
-
-  const removeButton = el('button', {
-    class: 'rte-button rte-button--danger',
-    attrs: { type: 'button' },
-    text: t('formula_remove'),
-  });
-  const cancelButton = el('button', {
-    class: 'rte-button',
-    attrs: { type: 'button' },
-    text: t('formula_cancel'),
-  });
-  const saveButton = el('button', {
-    class: 'rte-button rte-button--primary',
-    attrs: { type: 'button' },
-    text: t('formula_insert'),
-  });
-
-  modal.footer.append(
-    removeButton,
-    el('span', { class: 'rte-modal__spacer' }),
-    cancelButton,
-    saveButton,
-  );
-
   // ---------------------------------------------------------------- чтение
 
-  function isEditing(): boolean {
-    return typeof payload?.pos === 'number';
+  private isEditing(): boolean {
+    return typeof this.payload?.pos === 'number';
   }
 
-  function categories(): TemplateCategory[] {
-    return getTemplateCategories(type);
+  private getCategories(): TemplateCategory[] {
+    return getTemplateCategories(this.type);
   }
 
-  function findActiveCategory(): TemplateCategory | undefined {
-    return categories().find((category) => category.id === activeCategoryId);
+  private findActiveCategory(): TemplateCategory | undefined {
+    return this.getCategories().find((category) => category.id === this.activeCategoryId);
   }
 
   // -------------------------------------------------------------- отрисовка
 
-  function setStatus(next: FieldStatus): void {
-    status.hidden = next === 'idle';
+  private setStatus(next: FieldStatus): void {
+    this.status.hidden = next === 'idle';
+
     if (next === 'idle') return;
 
     const isFailed = next === 'failed';
-    status.className = isFailed
+
+    this.status.className = isFailed
       ? 'rte-formula-editor__status rte-field__error'
       : 'rte-formula-editor__status';
-    status.textContent = isFailed ? t('formula_invalid') : t('formula_loading');
+
+    this.status.textContent = isFailed ? this.t('formula_invalid') : this.t('formula_loading');
   }
 
-  function syncTab(tab: HTMLButtonElement, tabType: FormulaType): void {
-    const isActive = type === tabType;
-    tab.className = isActive
+  private syncTab(element: HTMLButtonElement, tabType: FormulaType): void {
+    const isActive = this.type === tabType;
+
+    element.className = isActive
       ? 'rte-formula-editor__tab rte-formula-editor__tab--active'
       : 'rte-formula-editor__tab';
-    tab.setAttribute('aria-selected', String(isActive));
-    tab.tabIndex = isActive ? 0 : -1;
-    if (isActive) panel.setAttribute('aria-labelledby', tab.id);
+
+    element.setAttribute('aria-selected', String(isActive));
+    element.tabIndex = isActive ? 0 : -1;
+
+    if (isActive) this.panel.setAttribute('aria-labelledby', element.id);
   }
 
-  function syncTabs(): void {
-    syncTab(mathTab, 'math');
-    syncTab(chemTab, 'chem');
+  private syncTabs(): void {
+    this.syncTab(this.mathTab, 'math');
+    this.syncTab(this.chemTab, 'chem');
   }
 
-  function syncFooter(): void {
-    removeButton.hidden = !isEditing();
-    saveButton.textContent = isEditing() ? t('formula_save') : t('formula_insert');
-    saveButton.disabled = latex.trim() === '';
+  private syncFooter(): void {
+    this.removeButton.hidden = !this.isEditing();
+
+    this.saveButton.textContent = this.isEditing()
+      ? this.t('formula_save')
+      : this.t('formula_insert');
+
+    this.saveButton.disabled = this.latex.trim() === '';
   }
 
-  function renderCategories(): void {
-    categoryList.replaceChildren(
-      ...categories().map((category) => {
-        const isActive = category.id === activeCategoryId;
-        const id = `${idPrefix}-category-${category.id}`;
-        if (isActive) gallery.setAttribute('aria-labelledby', id);
+  private renderCategories(): void {
+    this.categoryList.replaceChildren(
+      ...this.getCategories().map((category) => {
+        const isActive = category.id === this.activeCategoryId;
+        const id = `${this.idPrefix}-category-${category.id}`;
+
+        if (isActive) this.gallery.setAttribute('aria-labelledby', id);
+
         return el('button', {
           class: isActive
             ? 'rte-formula-editor__category rte-formula-editor__category--active'
@@ -258,45 +420,38 @@ export function createFormulaDialog(
             role: 'tab',
             id,
             'aria-selected': String(isActive),
-            'aria-controls': galleryId,
+            'aria-controls': this.galleryId,
             tabindex: isActive ? 0 : -1,
             'data-category-id': category.id,
           },
-          text: t(category.labelKey),
+          text: this.t(category.labelKey),
         });
       }),
     );
   }
 
-  /** Неудача рендера не должна ронять галерею: она показывает запасной текст. */
-  async function renderPreviewSafely(source: string, previewType: FormulaType): Promise<string> {
-    try {
-      return await renderLatexPreview(source, previewType);
-    } catch {
-      return '';
-    }
-  }
-
-  async function fillTemplatePreview(
-    target: HTMLElement,
+  private async fillTemplatePreview(
+    element: HTMLElement,
     template: FormulaTemplate,
     previewType: FormulaType,
     token: number,
   ): Promise<void> {
     const svg = await renderPreviewSafely(template.preview, previewType);
+
     // Галерея успела смениться — результат уже не для этой кнопки.
-    if (token !== galleryToken) return;
+    if (token !== this.galleryToken) return;
 
     if (svg) {
       // Разметка от MathJax, уже прошедшая санитайзер, — не пользовательская.
-      target.innerHTML = svg;
+      element.innerHTML = svg;
+
       return;
     }
 
     // Не отрисовалось — показываем исходный LaTeX. Заглушка «…» означает
     // «рисуем сейчас», а не «не получилось»: иначе кнопка врала бы о своём
     // состоянии до конца жизни диалога.
-    target.textContent = template.preview;
+    element.textContent = template.preview;
   }
 
   /**
@@ -307,16 +462,19 @@ export function createFormulaDialog(
    * факту изменения категории: при повторном открытии категория остаётся той
    * же, и проверка «значение изменилось» оставила бы кнопки с заглушками.
    */
-  function renderGallery(): void {
-    const token = (galleryToken += 1);
-    const category = findActiveCategory();
+  private renderGallery(): void {
+    this.galleryToken += 1;
+
+    const token = this.galleryToken;
+    const category = this.findActiveCategory();
 
     if (!category) {
-      gallery.replaceChildren();
+      this.gallery.replaceChildren();
+
       return;
     }
 
-    gallery.replaceChildren(
+    this.gallery.replaceChildren(
       ...category.templates.map((template) => {
         // Картинка превью читалке не нужна — имя кнопки даёт сам LaTeX.
         const target = el('span', {
@@ -327,11 +485,14 @@ export function createFormulaDialog(
         // Кэш читаем синхронно: иначе уже отрисованная галерея на каждом
         // открытии моргала бы заглушкой в ожидании микрозадачи.
         const cached = getCachedLatexPreview(template.preview, category.type);
+
         if (cached) {
           target.innerHTML = cached;
         } else {
           target.textContent = PREVIEW_PLACEHOLDER;
-          void fillTemplatePreview(target, template, category.type, token);
+          // Результата не ждём: превью дорисуется в фоне, а отказ рендера
+          // гасит renderPreviewSafely — отклониться промису нечем.
+          this.fillTemplatePreview(target, template, category.type, token);
         }
 
         return el('button', {
@@ -348,84 +509,102 @@ export function createFormulaDialog(
     );
   }
 
-  function showPreviewMessage(message: string): void {
-    previewContent.className = 'rte-formula-editor__empty';
-    previewContent.textContent = message;
+  private showPreviewMessage(message: string): void {
+    this.previewContent.className = 'rte-formula-editor__empty';
+    this.previewContent.textContent = message;
   }
 
-  function renderPreview(): void {
-    const token = (previewToken += 1);
-    const value = latex.trim();
+  private renderPreview(): void {
+    this.previewToken += 1;
+
+    const token = this.previewToken;
+    const value = this.latex.trim();
 
     if (!value) {
-      showPreviewMessage(t('formula_empty'));
+      this.showPreviewMessage(this.t('formula_empty'));
+
       return;
     }
 
-    void (async () => {
-      const svg = await renderPreviewSafely(value, type);
-      if (token !== previewToken) return;
+    // Результата не ждём: превью обновится в фоне, а отказ рендера гасит
+    // renderPreviewSafely — отклониться промису нечем.
+    this.fillPreview(value, token);
+  }
 
-      if (!svg) {
-        showPreviewMessage(t('formula_invalid'));
-        return;
-      }
+  /** Асинхронная часть живого превью: ответ устаревшего запуска отбрасывается по номеру. */
+  private async fillPreview(value: string, token: number): Promise<void> {
+    const svg = await renderPreviewSafely(value, this.type);
 
-      previewContent.className = '';
-      previewContent.innerHTML = svg;
-    })();
+    if (token !== this.previewToken) return;
+
+    if (!svg) {
+      this.showPreviewMessage(this.t('formula_invalid'));
+
+      return;
+    }
+
+    this.previewContent.className = '';
+    this.previewContent.innerHTML = svg;
   }
 
   // --------------------------------------------------------------- действия
 
-  function setLatex(value: string): void {
-    latex = value;
-    saveButton.disabled = latex.trim() === '';
-    renderPreview();
+  private setLatex(value: string): void {
+    this.latex = value;
+    this.saveButton.disabled = this.latex.trim() === '';
+    this.renderPreview();
   }
 
-  function setType(next: FormulaType): void {
-    if (type === next) return;
+  private setType(next: FormulaType): void {
+    if (this.type === next) return;
 
-    type = next;
-    activeCategoryId = categories()[0]?.id ?? '';
-    modal.setTitle(type === 'chem' ? t('formula_title_chem') : t('formula_title_math'));
-    syncTabs();
-    renderCategories();
-    renderGallery();
+    this.type = next;
+    this.activeCategoryId = this.getCategories()[0]?.id ?? '';
+
+    this.modal.setTitle(
+      this.type === 'chem' ? this.t('formula_title_chem') : this.t('formula_title_math'),
+    );
+
+    this.syncTabs();
+    this.renderCategories();
+    this.renderGallery();
     // Одна и та же запись в математике и в химии выглядит по-разному.
-    renderPreview();
+    this.renderPreview();
   }
 
-  function setCategory(id: string): void {
-    activeCategoryId = id;
-    renderCategories();
-    renderGallery();
+  private setCategory(id: string): void {
+    this.activeCategoryId = id;
+    this.renderCategories();
+    this.renderGallery();
   }
 
-  function applyTemplate(template: FormulaTemplate): void {
-    if (!field) return;
-    field.insert(template.latex, { selectionMode: 'placeholder', focus: true });
-    setLatex(field.value);
+  private applyTemplate(template: FormulaTemplate): void {
+    if (!this.field) return;
+
+    this.field.insert(template.latex, { selectionMode: 'placeholder', focus: true });
+    this.setLatex(this.field.value);
   }
 
   /** MathLive тяжёлый и работает только в браузере — грузим при первом показе. */
-  async function ensureMathfield(): Promise<void> {
-    if (field || typeof window === 'undefined') return;
+  private async ensureMathfield(): Promise<void> {
+    if (this.field || typeof window === 'undefined') return;
 
-    setStatus('loading');
+    this.setStatus('loading');
+
     try {
       const { MathfieldElement: MathfieldConstructor } = await import('mathlive');
+
       MathfieldConstructor.soundsDirectory = null;
-      if (options.fontsDirectory !== undefined) {
-        MathfieldConstructor.fontsDirectory = options.fontsDirectory;
+
+      if (this.options.fontsDirectory !== undefined) {
+        MathfieldConstructor.fontsDirectory = this.options.fontsDirectory;
       }
 
       // Русского перевода MathLive не поставляет, и без этой таблицы его меню
       // осталось бы английским. Локаль и строки живут на самом классе, а не на
       // экземпляре, поэтому задаются один раз — при загрузке.
       MathfieldConstructor.strings = MATHLIVE_STRINGS;
-      MathfieldConstructor.locale = options.locale;
+      MathfieldConstructor.locale = this.options.locale;
 
       const created = new MathfieldConstructor({
         defaultMode: 'math',
@@ -434,132 +613,150 @@ export function createFormulaDialog(
         // не даёт ей открываться по фокусу, кнопка вызова скрыта в CSS.
         mathVirtualKeyboardPolicy: 'manual',
       });
+
       created.className = 'rte-formula-editor__field';
       // Модалка отдаёт фокус помеченному элементу — каретка должна оказаться
       // в поле формулы, а не на первой кнопке.
       created.setAttribute('data-autofocus', '');
       // Поле без имени читалка объявляет как «поле математики»; подсказка
       // под ним — его описание.
-      created.setAttribute('aria-label', t('formula_input_hint'));
-      created.setAttribute('aria-describedby', hintId);
-      disposer.add(on(created, 'input', () => setLatex(created.value)));
+      created.setAttribute('aria-label', this.t('formula_input_hint'));
+      created.setAttribute('aria-describedby', this.hintId);
 
-      field = created;
-      setStatus('idle');
+      this.disposer.add(
+        on(created, 'input', () => {
+          this.setLatex(created.value);
+        }),
+      );
+
+      this.field = created;
+      this.setStatus('idle');
     } catch {
-      setStatus('failed');
+      this.setStatus('failed');
     }
   }
 
-  async function prepareField(token: number): Promise<void> {
-    await ensureMathfield();
-    // Диалог успели открыть заново, пока грузился MathLive.
-    if (token !== openToken || !field) return;
+  private async prepareField(token: number): Promise<void> {
+    await this.ensureMathfield();
 
-    host.replaceChildren(field);
+    // Диалог успели открыть заново, пока грузился MathLive.
+    if (token !== this.openToken || !this.field) return;
+
+    this.host.replaceChildren(this.field);
 
     // Существующая формула открывается из сохранённого MathML.
-    const nextLatex = payload?.mathml ? await mathmlToLatex(payload.mathml) : '';
-    if (token !== openToken || !field) return;
+    const nextLatex = this.payload?.mathml ? await mathmlToLatex(this.payload.mathml) : '';
 
-    field.value = nextLatex;
-    setLatex(nextLatex);
-    field.focus();
+    if (token !== this.openToken || !this.field) return;
+
+    this.field.value = nextLatex;
+    this.setLatex(nextLatex);
+    this.field.focus();
   }
 
-  async function save(): Promise<void> {
-    const value = latex.trim();
+  private async save(): Promise<void> {
+    const value = this.latex.trim();
+
     if (!value) return;
 
-    const mathml = await latexToMathML(value, type);
+    const mathml = await latexToMathML(value, this.type);
+
     if (!mathml) return;
 
-    options.onSave({ mathml, type, pos: payload?.pos ?? null });
-    modal.close();
+    this.options.onSave({ mathml, type: this.type, pos: this.payload?.pos ?? null });
+    this.modal.close();
   }
 
-  function remove(): void {
-    const pos = payload?.pos;
-    if (typeof pos === 'number') options.onRemove(pos);
-    modal.close();
+  private remove(): void {
+    const pos = this.payload?.pos;
+
+    if (typeof pos === 'number') this.options.onRemove(pos);
+
+    this.modal.close();
   }
 
-  function open(next: FormulaPayload | null): void {
-    payload = next;
-    type = next?.type ?? 'math';
-    activeCategoryId = categories()[0]?.id ?? '';
+  // ------------------------------------------------------------ обработчики
 
-    modal.setTitle(type === 'chem' ? t('formula_title_chem') : t('formula_title_math'));
-    syncTabs();
-    setLatex('');
-    syncFooter();
-    renderCategories();
-    renderGallery();
+  private readonly onMathTabClick = (): void => {
+    this.setType('math');
+  };
 
-    modal.open();
-    void prepareField((openToken += 1));
-  }
+  private readonly onChemTabClick = (): void => {
+    this.setType('chem');
+  };
 
-  // --------------------------------------------------------------- события
+  private readonly onTabsKeydown = (event: KeyboardEvent): void => {
+    onTablistKeydown(event, [this.mathTab, this.chemTab], (tab) => {
+      this.setType(tab === this.chemTab ? 'chem' : 'math');
+    });
+  };
 
-  disposer.add(on(mathTab, 'click', () => setType('math')));
-  disposer.add(on(chemTab, 'click', () => setType('chem')));
-  disposer.add(
-    on(tabs, 'keydown', (event) =>
-      onTablistKeydown(event, [mathTab, chemTab], (tab) =>
-        setType(tab === chemTab ? 'chem' : 'math'),
-      ),
-    ),
-  );
-  disposer.add(
-    on(categoryList, 'keydown', (event) =>
-      onTablistKeydown(event, [...categoryList.querySelectorAll<HTMLElement>('[role="tab"]')], (tab) => {
+  private readonly onCategoryListKeydown = (event: KeyboardEvent): void => {
+    onTablistKeydown(
+      event,
+      [...this.categoryList.querySelectorAll<HTMLElement>('[role="tab"]')],
+      (tab) => {
         const id = tab.dataset.categoryId;
-        if (id) setCategory(id);
-      }),
-    ),
-  );
-  disposer.add(on(cancelButton, 'click', () => modal.close()));
-  disposer.add(on(removeButton, 'click', remove));
-  disposer.add(on(saveButton, 'click', () => void save()));
 
-  // Кнопки категорий и шаблонов пересобираются на каждой смене вкладки,
-  // поэтому слушатель один — на контейнере, а не на каждой кнопке.
-  disposer.add(
-    on(categoryList, 'click', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
+        if (id) this.setCategory(id);
+      },
+    );
+  };
 
-      const id = target.closest<HTMLElement>('[data-category-id]')?.dataset.categoryId;
-      if (id) setCategory(id);
-    }),
-  );
+  private readonly onCancelButtonClick = (): void => {
+    this.modal.close();
+  };
 
-  disposer.add(
-    on(gallery, 'click', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
+  private readonly onRemoveButtonClick = (): void => {
+    this.remove();
+  };
 
-      const id = target.closest<HTMLElement>('[data-template-id]')?.dataset.templateId;
-      if (!id) return;
+  private readonly onSaveButtonClick = (): void => {
+    this.save().catch(this.onConversionError);
+  };
 
-      const template = findActiveCategory()?.templates.find((item) => item.id === id);
-      if (template) applyTemplate(template);
-    }),
-  );
+  private readonly onCategoryListClick = (event: MouseEvent): void => {
+    const { target } = event;
 
-  return {
-    element: modal.element,
-    open,
-    close: () => modal.close(),
-    get isVisible() {
-      return modal.isVisible;
-    },
-    destroy: () => {
-      disposer.dispose();
-      field?.remove();
-      field = null;
-      modal.destroy();
-    },
+    if (!(target instanceof Element)) return;
+
+    const id = target.closest<HTMLElement>('[data-category-id]')?.dataset.categoryId;
+
+    if (id) this.setCategory(id);
+  };
+
+  private readonly onGalleryClick = (event: MouseEvent): void => {
+    const { target } = event;
+
+    if (!(target instanceof Element)) return;
+
+    const id = target.closest<HTMLElement>('[data-template-id]')?.dataset.templateId;
+
+    if (!id) return;
+
+    const template = this.findActiveCategory()?.templates.find((item) => item.id === id);
+
+    if (template) this.applyTemplate(template);
+  };
+
+  /**
+   * Конвертация формулы не удалась: MathLive и конвертер MathML подгружаются
+   * лениво и могут не доехать, а разбор LaTeX может не пройти. Сообщаем той
+   * же строкой статуса, что и о невозможности загрузить редактор, вместо
+   * необработанного отклонения промиса.
+   */
+  private readonly onConversionError = (): void => {
+    this.setStatus('failed');
   };
 }
+
+/**
+ * Собирает визуальный редактор формул.
+ *
+ * Тонкая обёртка над {@link FormulaDialogController}: оболочке редактора нужен
+ * только контракт `DialogComponent`.
+ */
+export const createFormulaDialog = (
+  context: EditorUiContext,
+  options: FormulaDialogOptions,
+): DialogComponent<FormulaPayload | null> => new FormulaDialogController(context, options);

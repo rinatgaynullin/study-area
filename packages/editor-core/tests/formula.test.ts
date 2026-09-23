@@ -28,6 +28,7 @@ describe('MathML utilities', () => {
 
   it('marks chemistry formulas so re-editing opens the right mode', async () => {
     const mathml = await latexToMathML('\\mathrm{H}_2\\mathrm{O}', 'chem');
+
     expect(extractFormulaType(mathml)).toBe('chem');
   });
 
@@ -40,11 +41,13 @@ describe('MathML utilities', () => {
 
   it('prefers the embedded TeX annotation when converting back to LaTeX', async () => {
     const mathml = await latexToMathML('\\sqrt[3]{x}', 'math');
+
     expect(await mathmlToLatex(mathml)).toBe('\\sqrt[3]{x}');
   });
 
   it('falls back to structural conversion for foreign MathML', async () => {
     const latex = await mathmlToLatex(FRACTION_MATHML);
+
     expect(latex.replace(/\s+/g, '')).toBe('\\frac{a+1}{\\sqrt{b}}');
   });
 
@@ -61,6 +64,7 @@ describe('MathML utilities', () => {
 
   it('adds the MathML namespace when it is missing', () => {
     const normalized = normalizeMathML('<math><mi>x</mi></math>');
+
     expect(normalized).toContain('xmlns="http://www.w3.org/1998/Math/MathML"');
   });
 });
@@ -77,6 +81,7 @@ describe('MathML sanitization', () => {
   it('drops annotation-xml, the classic MathML mXSS vector', () => {
     const hostile =
       '<math><semantics><mi>x</mi><annotation-xml encoding="text/html"><img src=x onerror=alert(1)></annotation-xml></semantics></math>';
+
     const safe = sanitizeMathML(hostile);
 
     expect(safe).not.toContain('annotation-xml');
@@ -84,11 +89,12 @@ describe('MathML sanitization', () => {
   });
 
   it('removes event handlers and links from MathML elements', () => {
-    const hostile =
-      '<math><mi onclick="alert(1)" href="javascript:alert(1)">x</mi></math>';
+    const hostile = '<math><mi onclick="alert(1)" href="javascript:alert(1)">x</mi></math>';
+
     const safe = sanitizeMathML(hostile);
 
     expect(safe).not.toContain('onclick');
+    // eslint-disable-next-line no-script-url -- проверяем опасную схему намеренно
     expect(safe).not.toContain('javascript:');
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeHref } from '../src/ui/links';
+import { normalizeHref } from '../src/ui/normalize-href';
 
 describe('normalizeHref', () => {
   it('достраивает адрес без схемы до https', () => {
@@ -11,6 +11,7 @@ describe('normalizeHref', () => {
     expect(normalizeHref('http://a')).toBe('http://a');
     expect(normalizeHref('MAILTO:x@y')).toBe('MAILTO:x@y');
     expect(normalizeHref('tel:+7')).toBe('tel:+7');
+    // eslint-disable-next-line no-script-url -- проверяем опасную схему намеренно
     expect(normalizeHref('javascript:alert(1)')).toBeNull();
     expect(normalizeHref('data:text/html,hi')).toBeNull();
   });

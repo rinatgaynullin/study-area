@@ -27,7 +27,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     shortcut: 'Mod-Z',
     icon: 'undo',
     labelKey: 'toolbar_undo',
-    run: (editor) => void editor.chain().focus().undo().run(),
+    run: (editor) => {
+      editor.chain().focus().undo().run();
+    },
     isDisabled: (editor) => !editor.can().undo(),
   },
   {
@@ -35,7 +37,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     shortcut: 'Mod-Shift-Z',
     icon: 'redo',
     labelKey: 'toolbar_redo',
-    run: (editor) => void editor.chain().focus().redo().run(),
+    run: (editor) => {
+      editor.chain().focus().redo().run();
+    },
     isDisabled: (editor) => !editor.can().redo(),
   },
   {
@@ -44,7 +48,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'bold',
     labelKey: 'toolbar_bold',
     activeName: 'bold',
-    run: (editor) => void editor.chain().focus().toggleBold().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleBold().run();
+    },
   },
   {
     id: 'italic',
@@ -52,7 +58,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'italic',
     labelKey: 'toolbar_italic',
     activeName: 'italic',
-    run: (editor) => void editor.chain().focus().toggleItalic().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleItalic().run();
+    },
   },
   {
     id: 'underline',
@@ -60,7 +68,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'underline',
     labelKey: 'toolbar_underline',
     activeName: 'underline',
-    run: (editor) => void editor.chain().focus().toggleUnderline().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleUnderline().run();
+    },
   },
   {
     id: 'strike',
@@ -68,7 +78,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'strike',
     labelKey: 'toolbar_strike',
     activeName: 'strike',
-    run: (editor) => void editor.chain().focus().toggleStrike().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleStrike().run();
+    },
   },
   {
     id: 'subscript',
@@ -76,7 +88,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'subscript',
     labelKey: 'toolbar_subscript',
     activeName: 'subscript',
-    run: (editor) => void editor.chain().focus().toggleSubscript().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleSubscript().run();
+    },
   },
   {
     id: 'superscript',
@@ -84,7 +98,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'superscript',
     labelKey: 'toolbar_superscript',
     activeName: 'superscript',
-    run: (editor) => void editor.chain().focus().toggleSuperscript().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleSuperscript().run();
+    },
   },
   {
     id: 'bulletList',
@@ -92,7 +108,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'bulletList',
     labelKey: 'toolbar_bullet_list',
     activeName: 'bulletList',
-    run: (editor) => void editor.chain().focus().toggleBulletList().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleBulletList().run();
+    },
   },
   {
     id: 'orderedList',
@@ -100,7 +118,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'orderedList',
     labelKey: 'toolbar_ordered_list',
     activeName: 'orderedList',
-    run: (editor) => void editor.chain().focus().toggleOrderedList().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleOrderedList().run();
+    },
   },
   {
     id: 'blockquote',
@@ -108,7 +128,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'blockquote',
     labelKey: 'toolbar_blockquote',
     activeName: 'blockquote',
-    run: (editor) => void editor.chain().focus().toggleBlockquote().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleBlockquote().run();
+    },
   },
   {
     id: 'code',
@@ -116,7 +138,9 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'code',
     labelKey: 'toolbar_code',
     activeName: 'code',
-    run: (editor) => void editor.chain().focus().toggleCode().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleCode().run();
+    },
   },
   {
     id: 'codeBlock',
@@ -124,19 +148,25 @@ const SIMPLE_ITEMS: SimpleItemSpec[] = [
     icon: 'codeBlock',
     labelKey: 'toolbar_code_block',
     activeName: 'codeBlock',
-    run: (editor) => void editor.chain().focus().toggleCodeBlock().run(),
+    run: (editor) => {
+      editor.chain().focus().toggleCodeBlock().run();
+    },
   },
   {
     id: 'horizontalRule',
     icon: 'horizontalRule',
     labelKey: 'toolbar_horizontal_rule',
-    run: (editor) => void editor.chain().focus().setHorizontalRule().run(),
+    run: (editor) => {
+      editor.chain().focus().setHorizontalRule().run();
+    },
   },
   {
     id: 'clearFormat',
     icon: 'clearFormat',
     labelKey: 'toolbar_clear_format',
-    run: (editor) => void editor.chain().focus().unsetAllMarks().clearNodes().run(),
+    run: (editor) => {
+      editor.chain().focus().unsetAllMarks().clearNodes().run();
+    },
   },
 ];
 
@@ -161,14 +191,15 @@ export const TABLE_ACTIONS = [
   'deleteTable',
 ] as const;
 
-export type TableAction = (typeof TABLE_ACTIONS)[number];
+type TableAction = (typeof TABLE_ACTIONS)[number];
 
 /** Ключ перевода для действия над таблицей. */
-export function tableActionLabelKey(action: TableAction): string {
+export const tableActionLabelKey = (action: TableAction): string => {
   // addRowBefore -> table_add_row_before
   const snake = action.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+
   return `table_${snake}`;
-}
+};
 
 /** Дескрипторы пунктов с одной командой, по идентификатору. */
 export const SIMPLE_TOOLBAR_ITEMS: Record<string, ToolbarItemDescriptor> = Object.fromEntries(

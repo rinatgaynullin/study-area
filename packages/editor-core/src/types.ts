@@ -21,7 +21,7 @@ export interface UploadContext {
   t: Translate;
 }
 
-export type UploadAdapter = (file: File, ctx: UploadContext) => Promise<UploadResult>;
+export type UploadAdapter = (file: File, context: UploadContext) => Promise<UploadResult>;
 
 /** Этап загрузки через адаптер хоста; локальный blob-путь событий не даёт. */
 export interface UploadEvent {

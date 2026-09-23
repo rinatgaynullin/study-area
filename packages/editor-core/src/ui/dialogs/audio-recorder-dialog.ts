@@ -1,19 +1,21 @@
 import { VoiceRecorder, isRecordingSupported } from '../../media/recorder';
-import type { RichEditorError } from '../../types';
+import { RichEditorError } from '../../types';
+import type { EditorLimits, Translate } from '../../types';
 import { formatDuration } from '../../utils/format';
 import { createDisposer, el, icon, on } from '../dom';
 import { createModal } from '../modal';
+import type { Modal } from '../modal';
 import type { DialogComponent, EditorUiContext } from '../types';
 
 /** Готовая запись, которую диалог отдаёт наружу. */
-export interface AudioRecorderResult {
+interface AudioRecorderResult {
   blob: Blob;
   duration: number;
   /** Пики осциллограммы для плеера: целые 0..99 через запятую. */
   peaks: string;
 }
 
-export interface AudioRecorderDialogOptions {
+interface AudioRecorderDialogOptions {
   onInsert(payload: AudioRecorderResult): void;
   /** Ошибки рекордера: нет разрешения, не поддерживается, превышен предел. */
   onError(error: RichEditorError): void;
@@ -37,133 +39,265 @@ interface ControlOptions {
  * отдаёт готовую дорожку наружу. Ограничение длительности тоже не его забота —
  * рекордер на пределе встаёт на паузу, сохраняя всё записанное, а диалог лишь
  * финализирует дубль, чтобы им можно было пользоваться.
+ *
+ * Класс, а не набор замыканий: фаза, рекордер и превью — общее изменяемое
+ * состояние, а операции над ним (start/stop/reset) ссылаются друг на друга.
  */
-export function createAudioRecorderDialog(
-  context: EditorUiContext,
-  options: AudioRecorderDialogOptions,
-): DialogComponent<void> {
-  const { t } = context;
-  const disposer = createDisposer();
+class AudioRecorderDialogController implements DialogComponent<void> {
+  readonly element: HTMLElement;
+
+  private readonly t: Translate;
+
+  private readonly disposer = createDisposer();
+
+  /** Возможности браузера в рантайме не меняются — хватает одной проверки. */
+  private readonly isSupported = isRecordingSupported();
+
+  private phase: RecorderPhase = 'idle';
+
+  private elapsed = 0;
+
+  private message = '';
+
+  private previewUrl = '';
+
+  private recorder: VoiceRecorder | null = null;
+
+  private result: AudioRecorderResult | null = null;
+
+  /** Имя иконки в кружке: пересобираем её только при смене, а не каждый тик. */
+  private indicatorIcon = '';
+
+  /** Кружок с иконкой — украшение: состояние читалке сообщают кнопки. */
+  private readonly indicator: HTMLElement;
+
+  private readonly timeText: HTMLElement;
+
+  private readonly limitText: HTMLElement;
+
+  private readonly recorderRow: HTMLElement;
+
+  private readonly hintText: HTMLElement;
+
+  /**
+   * Ошибка появляется в ответ на действие — объявляется сразу, не дожидаясь,
+   * пока до неё дойдут Tab'ом.
+   */
+  private readonly errorText: HTMLElement;
+
+  private readonly unsupportedText: HTMLElement;
+
+  private readonly preview: HTMLAudioElement;
+
+  private readonly recordButton: HTMLButtonElement;
+
+  private readonly pauseButton: HTMLButtonElement;
+
+  private readonly resumeButton: HTMLButtonElement;
+
+  private readonly stopButton: HTMLButtonElement;
+
+  private readonly rerecordButton: HTMLButtonElement;
+
+  private readonly controls: HTMLElement;
+
+  private readonly cancelButton: HTMLButtonElement;
+
+  private readonly insertButton: HTMLButtonElement;
+
+  private readonly modal: Modal;
+
+  constructor(
+    private readonly context: EditorUiContext,
+    private readonly options: AudioRecorderDialogOptions,
+  ) {
+    const { t } = context;
+
+    this.t = t;
+
+    this.indicator = el('div', {
+      class: 'rte-recorder__indicator',
+      attrs: { 'aria-hidden': 'true' },
+    });
+
+    this.timeText = el('span', { class: 'rte-recorder__time' });
+    this.limitText = el('span', { class: 'rte-recorder__limit' });
+
+    this.recorderRow = el('div', {
+      class: 'rte-recorder',
+      children: [
+        this.indicator,
+        el('div', { class: 'rte-recorder__meta', children: [this.timeText, this.limitText] }),
+      ],
+    });
+
+    this.hintText = el('p', { class: 'rte-recorder__hint', text: t('audio_permission_hint') });
+    this.errorText = el('p', { class: 'rte-field__error', attrs: { role: 'alert' } });
+    this.unsupportedText = el('p', { class: 'rte-field__error', text: t('audio_unsupported') });
+
+    this.preview = el('audio', { class: 'rte-recorder__preview', attrs: { controls: true } });
+
+    this.recordButton = this.createControl({
+      labelKey: 'audio_record',
+      iconName: 'record',
+      primary: true,
+      autofocus: this.isSupported,
+    });
+
+    this.pauseButton = this.createControl({ labelKey: 'audio_pause', iconName: 'pause' });
+    this.resumeButton = this.createControl({ labelKey: 'audio_resume', iconName: 'play' });
+
+    this.stopButton = this.createControl({
+      labelKey: 'audio_stop',
+      iconName: 'stop',
+      primary: true,
+    });
+
+    this.rerecordButton = this.createControl({ labelKey: 'audio_rerecord' });
+
+    this.controls = el('div', {
+      class: 'rte-recorder__controls',
+      children: [
+        this.recordButton,
+        this.pauseButton,
+        this.resumeButton,
+        this.stopButton,
+        this.rerecordButton,
+      ],
+    });
+
+    this.cancelButton = this.createControl({ labelKey: 'audio_cancel' });
+    this.insertButton = this.createControl({ labelKey: 'audio_insert', primary: true });
+
+    this.modal = createModal({
+      title: t('audio_title'),
+      closeLabel: t('common_close'),
+      onClose: this.onModalClose,
+    });
+
+    this.modal.body.append(
+      this.unsupportedText,
+      this.recorderRow,
+      this.hintText,
+      this.errorText,
+      this.preview,
+      this.controls,
+    );
+
+    this.modal.footer.append(
+      el('span', { class: 'rte-modal__spacer' }),
+      this.cancelButton,
+      this.insertButton,
+    );
+
+    this.element = this.modal.element;
+
+    this.disposer.add(on(this.recordButton, 'click', this.onRecordButtonClick));
+    this.disposer.add(on(this.rerecordButton, 'click', this.onRerecordButtonClick));
+    this.disposer.add(on(this.pauseButton, 'click', this.onPauseButtonClick));
+    this.disposer.add(on(this.resumeButton, 'click', this.onResumeButtonClick));
+    this.disposer.add(on(this.stopButton, 'click', this.onStopButtonClick));
+    this.disposer.add(on(this.cancelButton, 'click', this.onCancelButtonClick));
+    this.disposer.add(on(this.insertButton, 'click', this.onInsertButtonClick));
+
+    // Браузер не умеет записывать — показываем только объяснение.
+    this.unsupportedText.hidden = this.isSupported;
+    this.recorderRow.hidden = !this.isSupported;
+    this.hintText.hidden = !this.isSupported;
+    this.errorText.hidden = true;
+    this.preview.hidden = true;
+    this.controls.hidden = !this.isSupported;
+    this.insertButton.disabled = true;
+
+    this.setLevel(0);
+    this.render();
+  }
 
   /**
    * Пределы читаем у контекста при каждом обращении, а не один раз: хост
    * меняет их у живого редактора, и снимок оставил бы рекордер со старыми.
    */
-  const limits = () => context.limits;
+  private get limits(): EditorLimits {
+    return this.context.limits;
+  }
 
-  /** Возможности браузера в рантайме не меняются — хватает одной проверки. */
-  const supported = isRecordingSupported();
+  get isVisible(): boolean {
+    return this.modal.isVisible;
+  }
 
-  let phase: RecorderPhase = 'idle';
-  let elapsed = 0;
-  let message = '';
-  let previewUrl = '';
-  let recorder: VoiceRecorder | null = null;
-  let result: AudioRecorderResult | null = null;
-  /** Имя иконки в кружке: пересобираем её только при смене, а не каждый тик. */
-  let indicatorIcon = '';
+  /** Показывает диалог. */
+  open(): void {
+    // Пределы могли смениться с прошлого открытия — подпись должна быть свежей.
+    this.render();
+    this.modal.open();
+  }
 
-  function createControl(control: ControlOptions): HTMLButtonElement {
+  /** Закрывает диалог; микрофон и дубль освобождает `onClose` модалки. */
+  close(): void {
+    this.modal.close();
+  }
+
+  /** Освобождает микрофон, слушатели и разметку. Идемпотентен. */
+  destroy(): void {
+    this.reset();
+    this.disposer.dispose();
+    this.modal.destroy();
+  }
+
+  private createControl(control: ControlOptions): HTMLButtonElement {
     return el('button', {
       class: control.primary ? 'rte-button rte-button--primary' : 'rte-button',
       attrs: { type: 'button', 'data-autofocus': control.autofocus ?? false },
       // Текст отдельным узлом: `text` затёр бы иконку.
       children: [
         control.iconName ? icon(control.iconName, 16) : null,
-        document.createTextNode(t(control.labelKey)),
+        document.createTextNode(this.t(control.labelKey)),
       ],
     });
   }
 
-  // Кружок с иконкой — украшение: состояние читалке сообщают кнопки.
-  const indicator = el('div', { class: 'rte-recorder__indicator', attrs: { 'aria-hidden': 'true' } });
-  const timeText = el('span', { class: 'rte-recorder__time' });
-  const limitText = el('span', { class: 'rte-recorder__limit' });
-
-  const recorderRow = el('div', {
-    class: 'rte-recorder',
-    children: [
-      indicator,
-      el('div', { class: 'rte-recorder__meta', children: [timeText, limitText] }),
-    ],
-  });
-
-  const hintText = el('p', { class: 'rte-recorder__hint', text: t('audio_permission_hint') });
-  // Ошибка появляется в ответ на действие — объявляется сразу, не дожидаясь,
-  // пока до неё дойдут Tab'ом.
-  const errorText = el('p', { class: 'rte-field__error', attrs: { role: 'alert' } });
-  const unsupportedText = el('p', { class: 'rte-field__error', text: t('audio_unsupported') });
-
-  const preview = el('audio', { class: 'rte-recorder__preview', attrs: { controls: true } });
-
-  const recordButton = createControl({
-    labelKey: 'audio_record',
-    iconName: 'record',
-    primary: true,
-    autofocus: supported,
-  });
-  const pauseButton = createControl({ labelKey: 'audio_pause', iconName: 'pause' });
-  const resumeButton = createControl({ labelKey: 'audio_resume', iconName: 'play' });
-  const stopButton = createControl({ labelKey: 'audio_stop', iconName: 'stop', primary: true });
-  const rerecordButton = createControl({ labelKey: 'audio_rerecord' });
-
-  const controls = el('div', {
-    class: 'rte-recorder__controls',
-    children: [recordButton, pauseButton, resumeButton, stopButton, rerecordButton],
-  });
-
-  const cancelButton = createControl({ labelKey: 'audio_cancel' });
-  const insertButton = createControl({ labelKey: 'audio_insert', primary: true });
-
-  const modal = createModal({
-    title: t('audio_title'),
-    closeLabel: t('common_close'),
-    // Закрыли диалог любым способом — гасим микрофон и забываем дубль.
-    onClose: reset,
-  });
-
-  modal.body.append(unsupportedText, recorderRow, hintText, errorText, preview, controls);
-  modal.footer.append(el('span', { class: 'rte-modal__spacer' }), cancelButton, insertButton);
-
   /** Живая осциллограмма: кружок дышит в такт входному сигналу. */
-  function setLevel(level: number): void {
-    indicator.style.setProperty('--rte-level', String(0.6 + level * 0.6));
+  private setLevel(level: number): void {
+    this.indicator.style.setProperty('--rte-level', String(0.6 + level * 0.6));
   }
 
-  function setIndicatorIcon(name: string): void {
-    if (indicatorIcon === name) return;
-    indicatorIcon = name;
-    indicator.replaceChildren(icon(name, 28));
+  private setIndicatorIcon(name: string): void {
+    if (this.indicatorIcon === name) return;
+
+    this.indicatorIcon = name;
+    this.indicator.replaceChildren(icon(name, 28));
   }
 
-  function render(): void {
-    if (!supported) return;
+  private render(): void {
+    if (!this.isSupported) return;
 
+    const { phase, message } = this;
     const isActive = phase === 'recording' || phase === 'paused';
 
-    indicator.classList.toggle('rte-recorder__indicator--live', phase === 'recording');
-    setIndicatorIcon(phase === 'recording' ? 'record' : 'audio');
+    this.indicator.classList.toggle('rte-recorder__indicator--live', phase === 'recording');
+    this.setIndicatorIcon(phase === 'recording' ? 'record' : 'audio');
 
-    timeText.textContent = formatDuration(elapsed);
-    limitText.textContent = isActive
-      ? t('audio_remaining', {
-          time: formatDuration(Math.max(0, limits().maxAudioDurationSec - elapsed)),
+    this.timeText.textContent = formatDuration(this.elapsed);
+
+    this.limitText.textContent = isActive
+      ? this.t('audio_remaining', {
+          time: formatDuration(Math.max(0, this.limits.maxAudioDurationSec - this.elapsed)),
         })
-      : t('audio_duration_limit', { seconds: limits().maxAudioDurationSec });
+      : this.t('audio_duration_limit', { seconds: this.limits.maxAudioDurationSec });
 
-    hintText.hidden = phase !== 'idle' || Boolean(message);
-    errorText.textContent = message;
-    errorText.hidden = !message;
-    preview.hidden = !previewUrl;
+    this.hintText.hidden = phase !== 'idle' || Boolean(message);
+    this.errorText.textContent = message;
+    this.errorText.hidden = !message;
+    this.preview.hidden = !this.previewUrl;
 
-    recordButton.hidden = phase !== 'idle';
-    pauseButton.hidden = phase !== 'recording';
-    resumeButton.hidden = phase !== 'paused';
-    stopButton.hidden = !isActive;
-    rerecordButton.hidden = phase !== 'ready';
-    insertButton.disabled = phase !== 'ready';
+    this.recordButton.hidden = phase !== 'idle';
+    this.pauseButton.hidden = phase !== 'recording';
+    this.resumeButton.hidden = phase !== 'paused';
+    this.stopButton.hidden = !isActive;
+    this.rerecordButton.hidden = phase !== 'ready';
+    this.insertButton.disabled = phase !== 'ready';
 
-    keepFocusVisible();
+    this.keepFocusVisible();
   }
 
   /**
@@ -172,161 +306,206 @@ export function createAudioRecorderDialog(
    * Переводим его на первую кнопку новой фазы: «Остановить» после
    * «Записать», «Записать заново» после «Остановить».
    */
-  function keepFocusVisible(): void {
+  private keepFocusVisible(): void {
     const active = document.activeElement;
-    if (!(active instanceof HTMLElement) || !active.hidden || !modal.element.contains(active)) {
+
+    if (
+      !(active instanceof HTMLElement)
+      || !active.hidden
+      || !this.modal.element.contains(active)
+    ) {
       return;
     }
-    [stopButton, pauseButton, resumeButton, rerecordButton, recordButton, insertButton]
+
+    [
+      this.stopButton,
+      this.pauseButton,
+      this.resumeButton,
+      this.rerecordButton,
+      this.recordButton,
+      this.insertButton,
+    ]
       .find((button) => !button.hidden && !button.disabled)
       ?.focus();
   }
 
-  function createRecorder(): VoiceRecorder {
+  private createRecorder(): VoiceRecorder {
     return new VoiceRecorder({
-      t,
-      maxDurationSec: limits().maxAudioDurationSec,
-      maxSizeBytes: limits().maxAudioSizeBytes,
-      onTick: (value) => {
-        elapsed = value;
-        render();
-      },
-      onLimit: () => {
-        // Предел длительности или размера: рекордер уже на паузе, записанное
-        // цело. Финализируем дубль сами — продолжать пользователю нечего, а
-        // «стоп» руками был бы лишним шагом. Ошибку размера рекордер уже
-        // сообщил через onError, и она останется на экране рядом с дублем.
-        phase = 'paused';
-        void stop();
-      },
-      onLevel: setLevel,
-      onError: (error) => {
-        message = error.message;
-        options.onError(error);
-        render();
-      },
+      t: this.t,
+      maxDurationSec: this.limits.maxAudioDurationSec,
+      maxSizeBytes: this.limits.maxAudioSizeBytes,
+      onTick: this.onRecorderTick,
+      onLimit: this.onRecorderLimit,
+      onLevel: this.onRecorderLevel,
+      onError: this.onRecorderError,
     });
   }
 
-  async function start(): Promise<void> {
-    message = '';
-    releasePreview();
+  private async start(): Promise<void> {
+    this.message = '';
+    this.releasePreview();
 
-    const instance = createRecorder();
-    recorder = instance;
+    const instance = this.createRecorder();
+
+    this.recorder = instance;
 
     try {
       await instance.start();
-      phase = 'recording';
-      elapsed = 0;
+      this.phase = 'recording';
+      this.elapsed = 0;
     } catch {
       // Локализованную ошибку рекордер уже отдал через onError.
-      phase = 'idle';
-      recorder = null;
+      this.phase = 'idle';
+      this.recorder = null;
     }
 
-    render();
+    this.render();
   }
 
-  function pause(): void {
-    recorder?.pause();
-    phase = 'paused';
-    render();
+  private pause(): void {
+    this.recorder?.pause();
+    this.phase = 'paused';
+    this.render();
   }
 
-  function resume(): void {
-    recorder?.resume();
-    phase = 'recording';
-    render();
+  private resume(): void {
+    this.recorder?.resume();
+    this.phase = 'recording';
+    this.render();
   }
 
-  async function stop(): Promise<void> {
-    const instance = recorder;
+  private async stop(): Promise<void> {
+    const instance = this.recorder;
+
     if (!instance) return;
 
     try {
       const recording = await instance.stop();
-      result = recording;
-      previewUrl = URL.createObjectURL(recording.blob);
-      preview.src = previewUrl;
-      elapsed = recording.duration;
-      phase = 'ready';
+
+      this.result = recording;
+      this.previewUrl = URL.createObjectURL(recording.blob);
+      this.preview.src = this.previewUrl;
+      this.elapsed = recording.duration;
+      this.phase = 'ready';
     } catch {
       // Рекордер уже сообщил об ошибке через onError.
-      phase = 'idle';
+      this.phase = 'idle';
     } finally {
-      recorder = null;
-      render();
+      this.recorder = null;
+      this.render();
     }
   }
 
-  function insert(): void {
-    if (!result) return;
-    options.onInsert(result);
-    modal.close();
+  private insert(): void {
+    if (!this.result) return;
+
+    this.options.onInsert(this.result);
+    this.modal.close();
   }
 
-  function releasePreview(): void {
-    if (previewUrl) {
+  private releasePreview(): void {
+    if (this.previewUrl) {
       // Плеер должен отпустить ссылку до отзыва, иначе останется с битым src.
-      preview.pause();
-      preview.removeAttribute('src');
-      preview.load();
-      URL.revokeObjectURL(previewUrl);
-      previewUrl = '';
+      this.preview.pause();
+      this.preview.removeAttribute('src');
+      this.preview.load();
+      URL.revokeObjectURL(this.previewUrl);
+      this.previewUrl = '';
     }
 
-    result = null;
+    this.result = null;
   }
 
-  function reset(): void {
+  private reset(): void {
     // cancel() останавливает поток микрофона и таймеры: без него индикатор
     // записи в браузере продолжит гореть после закрытия диалога.
-    recorder?.cancel();
-    recorder = null;
-    releasePreview();
-    phase = 'idle';
-    elapsed = 0;
-    message = '';
-    setLevel(0);
-    render();
+    this.recorder?.cancel();
+    this.recorder = null;
+    this.releasePreview();
+    this.phase = 'idle';
+    this.elapsed = 0;
+    this.message = '';
+    this.setLevel(0);
+    this.render();
   }
 
-  disposer.add(on(recordButton, 'click', () => void start()));
-  disposer.add(on(rerecordButton, 'click', () => void start()));
-  disposer.add(on(pauseButton, 'click', pause));
-  disposer.add(on(resumeButton, 'click', resume));
-  disposer.add(on(stopButton, 'click', () => void stop()));
-  disposer.add(on(cancelButton, 'click', () => modal.close()));
-  disposer.add(on(insertButton, 'click', insert));
+  /** Закрыли диалог любым способом — гасим микрофон и забываем дубль. */
+  private readonly onModalClose = (): void => {
+    this.reset();
+  };
 
-  // Браузер не умеет записывать — показываем только объяснение.
-  unsupportedText.hidden = supported;
-  recorderRow.hidden = !supported;
-  hintText.hidden = !supported;
-  errorText.hidden = true;
-  preview.hidden = true;
-  controls.hidden = !supported;
-  insertButton.disabled = true;
+  private readonly onRecordButtonClick = (): void => {
+    this.start().catch(this.onUnexpectedError);
+  };
 
-  setLevel(0);
-  render();
+  private readonly onRerecordButtonClick = (): void => {
+    this.start().catch(this.onUnexpectedError);
+  };
 
-  return {
-    element: modal.element,
-    open: () => {
-      // Пределы могли смениться с прошлого открытия — подпись должна быть свежей.
-      render();
-      modal.open();
-    },
-    close: () => modal.close(),
-    get isVisible() {
-      return modal.isVisible;
-    },
-    destroy: () => {
-      reset();
-      disposer.dispose();
-      modal.destroy();
-    },
+  private readonly onPauseButtonClick = (): void => {
+    this.pause();
+  };
+
+  private readonly onResumeButtonClick = (): void => {
+    this.resume();
+  };
+
+  private readonly onStopButtonClick = (): void => {
+    this.stop().catch(this.onUnexpectedError);
+  };
+
+  private readonly onCancelButtonClick = (): void => {
+    this.modal.close();
+  };
+
+  private readonly onInsertButtonClick = (): void => {
+    this.insert();
+  };
+
+  private readonly onRecorderTick = (value: number): void => {
+    this.elapsed = value;
+    this.render();
+  };
+
+  private readonly onRecorderLimit = (): void => {
+    // Предел длительности или размера: рекордер уже на паузе, записанное
+    // цело. Финализируем дубль сами — продолжать пользователю нечего, а
+    // «стоп» руками был бы лишним шагом. Ошибку размера рекордер уже
+    // сообщил через onError, и она останется на экране рядом с дублем.
+    this.phase = 'paused';
+    this.stop().catch(this.onUnexpectedError);
+  };
+
+  private readonly onRecorderLevel = (level: number): void => {
+    this.setLevel(level);
+  };
+
+  private readonly onRecorderError = (error: RichEditorError): void => {
+    this.message = error.message;
+    this.options.onError(error);
+    this.render();
+  };
+
+  /**
+   * Сбой, которого start/stop не ждали. Свои ошибки рекордер уже отдал через
+   * onError и они перехвачены внутри шага; сюда доходит только неожиданное,
+   * и оно идёт тем же путём — в строку ошибки и хосту, а не в необработанное
+   * отклонение промиса.
+   */
+  private readonly onUnexpectedError = (cause: unknown): void => {
+    this.onRecorderError(
+      new RichEditorError('recorder-failed', this.t('error_recorder_failed'), cause),
+    );
   };
 }
+
+/**
+ * Собирает диалог записи голосового сообщения.
+ *
+ * Тонкая обёртка над {@link AudioRecorderDialogController}: оболочке редактора
+ * нужен только контракт `DialogComponent`.
+ */
+export const createAudioRecorderDialog = (
+  context: EditorUiContext,
+  options: AudioRecorderDialogOptions,
+): DialogComponent<void> => new AudioRecorderDialogController(context, options);

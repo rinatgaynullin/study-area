@@ -3,13 +3,13 @@ import { createModal } from '../modal';
 import type { DialogComponent, EditorUiContext } from '../types';
 
 /** Размер таблицы, который пользователь подтвердил. */
-export interface TableDialogResult {
+interface TableDialogResult {
   rows: number;
   cols: number;
   withHeaderRow: boolean;
 }
 
-export interface TableDialogOptions {
+interface TableDialogOptions {
   onInsert(result: TableDialogResult): void;
 }
 
@@ -27,17 +27,19 @@ const MAX_COLS = 10;
  * Поле можно очистить или ввести в него дробь, поэтому доверять его значению
  * нельзя: в документ должен уйти только осмысленный размер.
  */
-function clampToRange(value: string, min: number, max: number): number {
+const clampToRange = (value: string, min: number, max: number): number => {
   const parsed = Math.round(Number(value));
+
   if (!Number.isFinite(parsed)) return min;
+
   return Math.min(max, Math.max(min, parsed));
-}
+};
 
 /** Диалог вставки таблицы. */
-export function createTableDialog(
+export const createTableDialog = (
   context: EditorUiContext,
   options: TableDialogOptions,
-): DialogComponent {
+): DialogComponent => {
   const { t } = context;
   const disposer = createDisposer();
 
@@ -66,6 +68,7 @@ export function createTableDialog(
   });
 
   const headerRowInput = el('input', { attrs: { type: 'checkbox' } });
+
   const headerRowField = el('label', {
     class: 'rte-checkbox',
     children: [headerRowInput, el('span', { text: t('table_with_header') })],
@@ -84,25 +87,27 @@ export function createTableDialog(
   });
 
   const modal = createModal({ title: t('table_insert'), closeLabel: t('common_close') });
+
   modal.body.append(sizeRow, headerRowField);
   modal.footer.append(el('span', { class: 'rte-modal__spacer' }), cancelButton, insertButton);
 
-  function insert(): void {
+  const insert = (): void => {
     options.onInsert({
       rows: clampToRange(rowsInput.value, MIN_SIZE, MAX_ROWS),
       cols: clampToRange(colsInput.value, MIN_SIZE, MAX_COLS),
       withHeaderRow: headerRowInput.checked,
     });
+
     modal.close();
-  }
+  };
 
   /** Диалог всегда открывается с размером по умолчанию, а не с прошлым. */
-  function open(): void {
+  const open = (): void => {
     rowsInput.value = String(DEFAULT_ROWS);
     colsInput.value = String(DEFAULT_COLS);
     headerRowInput.checked = true;
     modal.open();
-  }
+  };
 
   disposer.add(on(insertButton, 'click', insert));
   disposer.add(on(cancelButton, 'click', () => modal.close()));
@@ -119,4 +124,4 @@ export function createTableDialog(
       modal.destroy();
     },
   };
-}
+};

@@ -51,7 +51,7 @@ onBeforeUnmount(() => {
 watch(
   () => [props.html, props.formulaScale, props.legacy, props.theme] as const,
   ([html, formulaScale, legacy, theme]) => {
-    void viewer.value?.update({ html, formulaScale, legacy, theme });
+    viewer.value?.update({ html, formulaScale, legacy, theme });
   },
 );
 

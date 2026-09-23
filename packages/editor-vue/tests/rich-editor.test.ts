@@ -11,32 +11,35 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function mountEditor(props: Record<string, unknown> = {}) {
+const mountEditor = async (props: Record<string, unknown> = {}) => {
   wrapper = mount(RichEditor, {
     props: { modelValue: '<p>привет</p>', ...props },
     attachTo: document.body,
   });
+
   // The core editor is created in onMounted; the toolbar stays disabled until
   // that render flushes.
   await nextTick();
+
   return wrapper;
-}
+};
 
 /** Toolbar buttons are addressed by their localized tooltip, as a user would. */
-function button(w: VueWrapper, label: string) {
-  const found = w.findAll('.rte-toolbar button').find((el) => el.attributes('aria-label') === label);
-  if (!found) throw new Error(`No toolbar button labelled "${label}"`);
-  return found;
-}
+const button = (w: VueWrapper, label: string) => {
+  const found = w
+    .findAll('.rte-toolbar button')
+    .find((el) => el.attributes('aria-label') === label);
 
-function html(w: VueWrapper): string {
-  return (w.vm as unknown as { getHTML(): string }).getHTML();
-}
+  if (!found) throw new Error(`No toolbar button labelled "${label}"`);
+
+  return found;
+};
+
+const html = (w: VueWrapper): string => (w.vm as unknown as { getHTML(): string }).getHTML();
 
 /** Текст элемента внутри открытого диалога: скрытые тоже остаются в DOM. */
-function openDialogText(selector: string): string {
-  return document.querySelector(`.rte-modal:not([hidden]) ${selector}`)?.textContent ?? '';
-}
+const openDialogText = (selector: string): string =>
+  document.querySelector(`.rte-modal:not([hidden]) ${selector}`)?.textContent ?? '';
 
 describe('mounting', () => {
   it('renders the toolbar and the editable surface', async () => {
@@ -49,6 +52,7 @@ describe('mounting', () => {
 
   it('passes ariaLabel through to the editing surface', async () => {
     const w = await mountEditor({ ariaLabel: 'Ответ' });
+
     expect(w.find('.rte-content').attributes('aria-label')).toBe('Ответ');
   });
 
@@ -64,9 +68,11 @@ describe('mounting', () => {
   it('renders only the configured toolbar preset', async () => {
     const full = await mountEditor({ toolbar: 'full' });
     const fullCount = full.findAll('.rte-toolbar button').length;
+
     full.unmount();
 
     const w = await mountEditor({ toolbar: 'minimal' });
+
     expect(w.findAll('.rte-toolbar button').length).toBeLessThan(fullCount);
     expect(() => button(w, 'Полужирный')).not.toThrow();
   });
@@ -89,8 +95,12 @@ describe('toolbar commands', () => {
     ['Моноширинный текст', '<code>'],
   ])('%s wraps the selection in %s', async (label, tag) => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
+
     (w.vm as unknown as { focus(): void }).focus();
-    (w.vm as unknown as { editor: { commands: { selectAll(): void } } }).editor.commands.selectAll();
+
+    (
+      w.vm as unknown as { editor: { commands: { selectAll(): void } } }
+    ).editor.commands.selectAll();
 
     await button(w, label).trigger('click');
 
@@ -105,6 +115,7 @@ describe('toolbar commands', () => {
     ['Горизонтальная линия', '<hr>'],
   ])('%s produces %s', async (label, tag) => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
+
     (w.vm as unknown as { focus(): void }).focus();
 
     await button(w, label).trigger('click');
@@ -115,6 +126,7 @@ describe('toolbar commands', () => {
   it('applies and clears formatting', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+
     vm.focus();
     vm.editor.commands.selectAll();
 
@@ -129,6 +141,7 @@ describe('toolbar commands', () => {
   it('undoes and redoes', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+
     vm.focus();
     vm.editor.commands.selectAll();
 
@@ -145,6 +158,7 @@ describe('toolbar commands', () => {
   it('reflects the active state of the current selection', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+
     vm.focus();
     vm.editor.commands.selectAll();
 
@@ -158,10 +172,13 @@ describe('toolbar commands', () => {
 
   it('opens the heading menu and applies a level', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
+
     (w.vm as unknown as { focus(): void }).focus();
 
     await button(w, 'Заголовок').trigger('click');
+
     const items = w.findAll('.rte-dropdown__panel .rte-menu__item');
+
     expect(items.length).toBe(7);
 
     await items[2].trigger('click');
@@ -170,6 +187,7 @@ describe('toolbar commands', () => {
 
   it('applies text alignment from the menu', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
+
     (w.vm as unknown as { focus(): void }).focus();
 
     await button(w, 'Выравнивание').trigger('click');
@@ -181,6 +199,7 @@ describe('toolbar commands', () => {
   it('applies a colour swatch', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+
     vm.focus();
     vm.editor.commands.selectAll();
 
@@ -192,12 +211,14 @@ describe('toolbar commands', () => {
 
   it('inserts a table through the dialog', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
+
     (w.vm as unknown as { focus(): void }).focus();
 
     await button(w, 'Таблица').trigger('click');
     await w.find('.rte-dropdown__panel:not([hidden]) .rte-menu__item').trigger('click');
 
     const dialog = document.querySelector('.rte-modal:not([hidden]) .rte-modal__panel');
+
     expect(dialog).not.toBeNull();
 
     dialog!.querySelector<HTMLButtonElement>('.rte-button--primary')!.click();
@@ -211,12 +232,14 @@ describe('v-model', () => {
   it('emits updated HTML as the document changes', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+
     vm.focus();
     vm.editor.commands.selectAll();
 
     await button(w, 'Полужирный').trigger('click');
 
     const emitted = w.emitted('update:modelValue');
+
     expect(emitted).toBeTruthy();
     expect(String(emitted!.at(-1)![0])).toContain('<strong>');
     expect(w.emitted('change')).toBeTruthy();
@@ -244,6 +267,7 @@ describe('v-model', () => {
 describe('theme', () => {
   it('the theme prop toggles the built-in dark theme', async () => {
     const w = await mountEditor({ theme: 'dark' });
+
     expect(w.find('.rte-root').classes()).toContain('rte-theme-dark');
 
     await w.setProps({ theme: 'light' });
@@ -270,6 +294,7 @@ describe('v-model echo', () => {
 describe('i18n', () => {
   it('labels the toolbar in Russian by default', async () => {
     const w = await mountEditor();
+
     expect(button(w, 'Полужирный').exists()).toBe(true);
   });
 
@@ -294,6 +319,7 @@ describe('i18n', () => {
 describe('exposed API', () => {
   it('exposes document accessors and the formula entry point', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
+
     const vm = w.vm as unknown as {
       getHTML(): string;
       setHTML(html: string): void;
@@ -310,6 +336,7 @@ describe('exposed API', () => {
     expect(vm.getHTML()).toContain('заменено');
 
     const mathml = await latexToMathML('\\frac{a}{b}', 'math');
+
     expect(vm.insertFormula(mathml, 'math')).toBe(true);
     await vm.whenFormulasReady();
 
@@ -318,6 +345,7 @@ describe('exposed API', () => {
 
   it('emits ready once the core editor exists', async () => {
     const w = await mountEditor();
+
     expect(w.emitted('ready')).toHaveLength(1);
   });
 });
@@ -330,7 +358,10 @@ describe('formula dialog', () => {
     await nextTick();
     expect(openDialogText('.rte-modal__title')).toContain('Математическая');
 
-    document.querySelector<HTMLButtonElement>('.rte-modal:not([hidden]) .rte-modal__close')!.click();
+    document
+      .querySelector<HTMLButtonElement>('.rte-modal:not([hidden]) .rte-modal__close')!
+      .click();
+
     await nextTick();
 
     await button(w, 'Химическая формула').trigger('click');
@@ -340,6 +371,7 @@ describe('formula dialog', () => {
 
   it('opens with the clicked formula and saves the updated MathML', async () => {
     const w = await mountEditor({ modelValue: '<p>x</p>' });
+
     const vm = w.vm as unknown as {
       insertFormula(mathml: string): boolean;
       whenFormulasReady(): Promise<void>;
@@ -351,6 +383,7 @@ describe('formula dialog', () => {
     await nextTick();
 
     const node = document.querySelector<HTMLElement>('.rte-content .rte-formula')!;
+
     node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     await nextTick();
 
@@ -368,7 +401,8 @@ describe('errors', () => {
       }),
     });
 
-    const core = (w.vm as unknown as { core: { insertImageFile(file: File): Promise<boolean> } }).core;
+    const { core } = w.vm as unknown as { core: { insertImageFile(file: File): Promise<boolean> } };
+
     await core.insertImageFile(new File([new Uint8Array([1])], 'a.png', { type: 'image/png' }));
 
     expect(w.emitted('error')).toBeTruthy();

@@ -17,13 +17,23 @@ describe('template catalog', () => {
   it('covers the required math and chemistry categories', () => {
     const ids = TEMPLATE_CATEGORIES.map((category) => category.id);
 
-    for (const required of [
-      'fractions', 'roots', 'sums', 'integrals', 'limits',
-      'matrices', 'greek', 'relations', 'functions',
-      'chemReactions', 'chemStates', 'chemIsotopes', 'chemPatterns',
-    ]) {
+    [
+      'fractions',
+      'roots',
+      'sums',
+      'integrals',
+      'limits',
+      'matrices',
+      'greek',
+      'relations',
+      'functions',
+      'chemReactions',
+      'chemStates',
+      'chemIsotopes',
+      'chemPatterns',
+    ].forEach((required) => {
       expect(ids).toContain(required);
-    }
+    });
 
     expect(getTemplateCategories('math').length).toBeGreaterThan(0);
     expect(getTemplateCategories('chem').length).toBe(4);
@@ -31,6 +41,7 @@ describe('template catalog', () => {
 
   it('has unique template ids and resolves them by id', () => {
     const ids = ALL_TEMPLATES.map((template) => template.id);
+
     expect(new Set(ids).size).toBe(ids.length);
     expect(findTemplate(ids[0])?.id).toBe(ids[0]);
     expect(findTemplate('does.not.exist')).toBeUndefined();
@@ -42,12 +53,15 @@ describe('template catalog', () => {
     'renders preview for %s',
     async (_id, template) => {
       const mathml = await latexToMathML(template.preview, template.type);
+
       expect(mathml, 'template produced no MathML').not.toBe('');
 
       const normalized = normalizeMathML(mathml);
+
       expect(normalized, 'template MathML was rejected').not.toBe('');
 
       const svg = await renderMathML(normalized);
+
       expect(svg.startsWith('<svg'), 'template did not render to SVG').toBe(true);
     },
   );
@@ -70,6 +84,7 @@ describe('MathML repair', () => {
 
   it('leaves valid MathML untouched apart from serialization', () => {
     const valid = '<math><mfrac><mi>a</mi><mi>b</mi></mfrac></math>';
+
     expect(repairMathML(valid)).toContain('<mfrac><mi>a</mi><mi>b</mi></mfrac>');
   });
 

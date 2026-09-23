@@ -18,8 +18,7 @@ export const LegacyHighlight = Highlight.extend({
         tag: 'span[style*="background-color"]',
         // Спан без подсветки (например, носитель цвета текста) правилу не
         // подходит — иначе он превратился бы в марку с пустым цветом.
-        getAttrs: (element) =>
-          (element as HTMLElement).style.backgroundColor ? null : false,
+        getAttrs: (element) => ((element as HTMLElement).style.backgroundColor ? null : false),
       },
     ];
   },

@@ -9,7 +9,8 @@ import type { Editor } from '@tiptap/core';
  * в консоли ошибка на каждое закрытие диалога. `view.focus()` делает то же
  * самое без собственной транзакции.
  */
-export function focusEditorView(editor: Editor): void {
+export const focusEditorView = (editor: Editor): void => {
   if (editor.isDestroyed || editor.view.hasFocus()) return;
+
   editor.view.focus();
-}
+};

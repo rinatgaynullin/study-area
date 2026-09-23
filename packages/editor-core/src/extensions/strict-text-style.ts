@@ -17,16 +17,15 @@ import { TextStyle } from '@tiptap/extension-text-style';
 const OWNED_STYLES = ['color', 'fontSize'] as const;
 
 export const StrictTextStyle = TextStyle.extend({
-  parseHTML() {
-    return [
-      {
-        tag: 'span',
-        consuming: false,
-        getAttrs: (element) => {
-          const style = (element as HTMLElement).style;
-          return OWNED_STYLES.some((property) => style[property]) ? {} : false;
-        },
+  parseHTML: () => [
+    {
+      tag: 'span',
+      consuming: false,
+      getAttrs: (element) => {
+        const { style } = element as HTMLElement;
+
+        return OWNED_STYLES.some((property) => style[property]) ? {} : false;
       },
-    ];
-  },
+    },
+  ],
 });

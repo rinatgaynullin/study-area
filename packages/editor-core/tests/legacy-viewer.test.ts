@@ -33,12 +33,13 @@ afterEach(() => {
   element = undefined;
 });
 
-function mount(content: string) {
+const mount = (content: string) => {
   element = document.createElement('div');
   document.body.appendChild(element);
   core = new RichEditorCore({ element, content, legacy: true });
+
   return core;
-}
+};
 
 describe('вьюер сохраняет классы оформления', () => {
   it('не теряет ни одного класса из перечня', () => {
@@ -105,9 +106,9 @@ describe('вьюер сохраняет классы оформления', () =
   it('сохраняет текстовые классы', () => {
     const html = asViewer(TEXT_CLASSES);
 
-    for (const name of ['fr-text-gray', 'fr-text-spaced', 'fr-text-uppercase', 'fr-text-bordered']) {
+    ['fr-text-gray', 'fr-text-spaced', 'fr-text-uppercase', 'fr-text-bordered'].forEach((name) => {
       expect(html).toContain(name);
-    }
+    });
   });
 });
 
@@ -140,15 +141,18 @@ describe('вьюер разбирает формулы', () => {
 describe('документ переживает обратный импорт', () => {
   it('сохраняет формулы и структуру после экспорта и повторного разбора', async () => {
     const editor = mount(FULL_DOCUMENT);
+
     await editor.whenFormulasReady();
 
     const exported = editor.getHTML();
+
     expect(exported).toContain('data-formula="true"');
 
     editor.setHTML(exported);
     await editor.whenFormulasReady();
 
     const reimported = editor.getHTML();
+
     expect(reimported).toContain('data-formula="true"');
     expect(reimported).toContain('<mfrac>');
     expect(reimported).toContain('data-legacy-embed="true"');
@@ -157,11 +161,14 @@ describe('документ переживает обратный импорт', 
 
   it('не накапливает изменений при повторных проходах', async () => {
     const editor = mount(FULL_DOCUMENT);
+
     await editor.whenFormulasReady();
+
     const first = editor.getHTML();
 
     editor.setHTML(first);
     await editor.whenFormulasReady();
+
     const second = editor.getHTML();
 
     // Второй проход обязан быть неподвижной точкой: иначе каждое открытие

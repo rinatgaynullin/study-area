@@ -5,23 +5,27 @@ beforeEach(() => {
   resetMathJax();
 });
 
-function countRoots(svg: string): number {
-  return (svg.match(/<svg\b/g) ?? []).length;
-}
+const countRoots = (svg: string): number => (svg.match(/<svg\b/g) ?? []).length;
 
 describe('MathJax SVG output', () => {
   // MathJax 4 breaks lines on its own guessed width, which would split one
   // formula into several sibling <svg> roots inside an inline atom.
   it('emits exactly one SVG root per formula', async () => {
-    for (const latex of [
+    const formulas = [
       'a^2+b^2=c^2',
       '\\int_{0}^{\\infty}e^{-x^2}\\,dx=\\frac{\\sqrt{\\pi}}{2}',
       '2\\mathrm{H}_2+\\mathrm{O}_2\\rightarrow 2\\mathrm{H}_2\\mathrm{O}',
       '\\sum_{i=1}^{n}\\sum_{j=1}^{m}a_{ij}+\\prod_{k=1}^{p}b_k-\\frac{1}{2}\\int f(x)\\,dx',
-    ]) {
-      const svg = await renderMathML(await latexToMathML(latex, 'math'));
-      expect(countRoots(svg), `"${latex}" should render as a single SVG`).toBe(1);
-    }
+    ];
+
+    // Формулы не зависят друг от друга, поэтому рендерим их параллельно.
+    await Promise.all(
+      formulas.map(async (latex) => {
+        const svg = await renderMathML(await latexToMathML(latex, 'math'));
+
+        expect(countRoots(svg), `"${latex}" should render as a single SVG`).toBe(1);
+      }),
+    );
   });
 
   it('inlines glyph outlines so exported HTML needs no MathJax runtime', async () => {
@@ -34,6 +38,7 @@ describe('MathJax SVG output', () => {
 
   it('carries the baseline offset that keeps formulas aligned with the text', async () => {
     const svg = await renderMathML(await latexToMathML('x_1', 'math'));
+
     expect(svg).toContain('vertical-align');
   });
 

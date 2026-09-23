@@ -16,12 +16,13 @@ afterEach(() => {
   element = undefined;
 });
 
-function mount(options: Partial<ConstructorParameters<typeof RichEditorCore>[0]> = {}) {
+const mount = (options: Partial<ConstructorParameters<typeof RichEditorCore>[0]> = {}) => {
   element = document.createElement('div');
   document.body.appendChild(element);
   core = new RichEditorCore({ element, ...options });
+
   return core;
-}
+};
 
 const imageFile = () => new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' });
 const textFile = () => new File(['line one\nline two'], 'notes.txt', { type: 'text/plain' });
@@ -32,6 +33,7 @@ describe('upload adapters', () => {
     const uploadImage = vi.fn<UploadAdapter>(async () => ({
       url: 'https://cdn.example.com/images/photo.png',
     }));
+
     const editor = mount({ uploadImage });
 
     await editor.insertImageFile(imageFile());
@@ -43,8 +45,10 @@ describe('upload adapters', () => {
 
   it('passes the upload kind and a translator to the adapter', async () => {
     let received: UploadContext | undefined;
+
     const uploadFile: UploadAdapter = async (_file, ctx) => {
       received = ctx;
+
       return { url: 'https://cdn.example.com/files/notes.txt' };
     };
 
@@ -59,12 +63,15 @@ describe('upload adapters', () => {
     const uploadAudio = vi.fn<UploadAdapter>(async () => ({
       url: 'https://cdn.example.com/audio/voice.webm',
     }));
+
     const editor = mount({ uploadAudio });
 
     await editor.insertRecording(audioFile(), { duration: 3.5, peaks: '10,20,30' });
 
     expect(uploadAudio).toHaveBeenCalledTimes(1);
+
     const html = editor.getHTML();
+
     expect(html).toContain('https://cdn.example.com/audio/voice.webm');
     expect(html).toContain('data-duration="3.5"');
     expect(html).toContain('data-peaks="10,20,30"');
@@ -72,6 +79,7 @@ describe('upload adapters', () => {
 
   it('falls back to a local object URL when no adapter is supplied', async () => {
     const editor = mount();
+
     await editor.insertImageFile(imageFile());
 
     expect(editor.getHTML()).toContain('blob:');
@@ -79,7 +87,9 @@ describe('upload adapters', () => {
 
   it('attaches a text file as a downloadable chip', async () => {
     const editor = mount();
+
     await editor.attachTextFile(textFile());
+
     const html = editor.getHTML();
 
     expect(html).toContain('data-attachment="true"');
@@ -92,6 +102,7 @@ describe('upload adapters', () => {
     const markdown = new File(['# Heading\n**bold**'], 'readme.md', { type: 'text/markdown' });
 
     await editor.insertTextFileContent(markdown);
+
     const html = editor.getHTML();
 
     expect(html).toContain('# Heading');
@@ -102,6 +113,7 @@ describe('upload adapters', () => {
 
   it('reports a localized error and inserts nothing when the adapter fails', async () => {
     const onError = vi.fn();
+
     const editor = mount({
       uploadImage: async () => {
         throw new Error('network down');
@@ -113,7 +125,9 @@ describe('upload adapters', () => {
 
     expect(inserted).toBe(false);
     expect(editor.getHTML()).not.toContain('<img');
+
     const error = onError.mock.calls[0][0] as RichEditorError;
+
     expect(error.code).toBe('upload-failed');
     expect(error.message).toContain('photo.png');
   });
@@ -122,7 +136,11 @@ describe('upload adapters', () => {
 describe('limits', () => {
   it('rejects a file larger than the configured image limit', async () => {
     const onError = vi.fn();
-    const uploadImage = vi.fn<UploadAdapter>(async () => ({ url: 'https://cdn.example.com/x.png' }));
+
+    const uploadImage = vi.fn<UploadAdapter>(async () => ({
+      url: 'https://cdn.example.com/x.png',
+    }));
+
     const editor = mount({ limits: { maxImageSizeBytes: 10 }, uploadImage, onError });
 
     const big = new File([new Uint8Array(64)], 'big.png', { type: 'image/png' });
@@ -146,6 +164,7 @@ describe('limits', () => {
   it('applies limits updated after construction', async () => {
     const onError = vi.fn();
     const editor = mount({ onError });
+
     editor.setLimits({ maxImageSizeBytes: 1 });
 
     expect(await editor.insertImageFile(imageFile())).toBe(false);
@@ -154,6 +173,7 @@ describe('limits', () => {
 
   it('localizes the size error through the active locale', async () => {
     const onError = vi.fn();
+
     const editor = mount({
       locale: 'en',
       messages: { en: { error_file_too_large: 'Too big: {name}' } },

@@ -26,13 +26,11 @@ export interface Dropdown extends UiComponent {
 let dropdownCount = 0;
 
 /** Пункты открытой панели, по которым ходят стрелки, в порядке разметки. */
-function menuItemsOf(panel: HTMLElement): HTMLButtonElement[] {
-  return [
-    ...panel.querySelectorAll<HTMLButtonElement>(
-      ':is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]):not(:disabled)',
-    ),
-  ];
-}
+const menuItemsOf = (panel: HTMLElement): HTMLButtonElement[] => [
+  ...panel.querySelectorAll<HTMLButtonElement>(
+    ':is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]):not(:disabled)',
+  ),
+];
 
 /**
  * Кнопка с выпадающей панелью.
@@ -47,13 +45,15 @@ function menuItemsOf(panel: HTMLElement): HTMLButtonElement[] {
  * документом, а слушатели документа, закрытие по клику мимо и Escape,
  * удержание в границах окна — у поповера уже есть.
  */
-export function createDropdown(options: DropdownOptions): Dropdown {
+export const createDropdown = (options: DropdownOptions): Dropdown => {
   const disposer = createDisposer();
 
   const caret = icon('chevronDown', 14);
+
   caret.classList.add('rte-btn__caret');
 
   dropdownCount += 1;
+
   const buttonId = `rte-dropdown-${dropdownCount}`;
   const valueId = `${buttonId}-value`;
 
@@ -96,19 +96,21 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       button.classList.remove('rte-btn--active');
     },
   });
+
   element.appendChild(popover.element);
 
-  function close(): void {
+  const close = (): void => {
     popover.close();
-  }
+  };
 
-  function open(): void {
+  const open = (): void => {
     if (popover.isVisible) return;
+
     popover.body.replaceChildren(options.renderPanel(close));
     button.setAttribute('aria-expanded', 'true');
     button.classList.add('rte-btn--active');
     popover.open(button.getBoundingClientRect());
-  }
+  };
 
   disposer.add(
     on(popover.element, 'keydown', (event) => {
@@ -118,12 +120,14 @@ export function createDropdown(options: DropdownOptions): Dropdown {
         event.stopPropagation();
         close();
         button.focus();
+
         return;
       }
 
       // Стрелки ходят по пунктам по кругу, Home/End — к краям: меню без этого
       // читалке и клавиатуре доступно только через Tab по всем пунктам подряд.
       const items = menuItemsOf(popover.body);
+
       if (items.length === 0) return;
 
       const active = document.activeElement as HTMLElement | null;
@@ -135,6 +139,7 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       const columns = Number(
         active?.closest<HTMLElement>('[data-menu-columns]')?.dataset.menuColumns ?? 1,
       );
+
       const isGrid = columns > 1;
 
       const moves: Record<string, number | undefined> = {
@@ -145,14 +150,18 @@ export function createDropdown(options: DropdownOptions): Dropdown {
         Home: 0,
         End: items.length - 1,
       };
+
       const next = moves[event.key];
+
       if (next === undefined) return;
 
       event.preventDefault();
+
       const index = isGrid
         ? Math.max(0, Math.min(items.length - 1, next))
         : (next + items.length) % items.length;
-      items[index].focus();
+
+      items[index]?.focus();
     }),
   );
 
@@ -161,9 +170,13 @@ export function createDropdown(options: DropdownOptions): Dropdown {
   disposer.add(
     on(button, 'keydown', (event) => {
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+
       event.preventDefault();
+
       if (!popover.isVisible) open();
+
       const items = menuItemsOf(popover.body);
+
       (event.key === 'ArrowDown' ? items[0] : items[items.length - 1])?.focus();
     }),
   );
@@ -171,14 +184,19 @@ export function createDropdown(options: DropdownOptions): Dropdown {
   // Кнопка и пункты не забирают фокус у документа: команда применится к
   // живому выделению, а не к восстановленному в следующем кадре.
   disposer.add(on(button, 'mousedown', (event) => event.preventDefault()));
+
   disposer.add(
     on(button, 'click', (event) => {
       event.preventDefault();
+
       if (popover.isVisible) {
         close();
+
         return;
       }
+
       open();
+
       // Открыли с клавиатуры (у синтетического клика detail = 0) — фокус
       // должен оказаться в меню, а не остаться на кнопке.
       if (event.detail === 0) menuItemsOf(popover.body)[0]?.focus();
@@ -201,7 +219,9 @@ export function createDropdown(options: DropdownOptions): Dropdown {
     },
     setIcon: (name: string) => {
       if (options.text !== undefined || label.getAttribute('data-icon') === name) return;
+
       const fresh = icon(name, 20);
+
       label.replaceWith(fresh);
       label = fresh;
     },
@@ -211,7 +231,7 @@ export function createDropdown(options: DropdownOptions): Dropdown {
       element.remove();
     },
   };
-}
+};
 
 /**
  * Роль пункта. Обычное действие — `menuitem`; пункт, отражающий состояние
@@ -234,8 +254,9 @@ export interface MenuItemOptions {
 }
 
 /** Пункт выпадающего меню. Вынесен, потому что нужен каждой панели. */
-export function createMenuItem(options: MenuItemOptions): HTMLButtonElement {
+export const createMenuItem = (options: MenuItemOptions): HTMLButtonElement => {
   const role = options.role ?? 'menuitem';
+
   const button = el('button', {
     class: options.active ? 'rte-menu__item rte-menu__item--active' : 'rte-menu__item',
     attrs: {
@@ -252,10 +273,9 @@ export function createMenuItem(options: MenuItemOptions): HTMLButtonElement {
   button.disabled = options.disabled ?? false;
   button.addEventListener('mousedown', (event) => event.preventDefault());
   button.addEventListener('click', options.onSelect);
+
   return button;
-}
+};
 
 /** Разделитель между смысловыми группами пунктов. */
-export function createMenuSeparator(): HTMLElement {
-  return el('div', { class: 'rte-menu__separator' });
-}
+export const createMenuSeparator = (): HTMLElement => el('div', { class: 'rte-menu__separator' });

@@ -23,9 +23,13 @@ export const TEXT_FILE_EXTENSIONS = [
   '.yaml',
 ];
 
+/** Значение `accept` для выбора текстового файла. */
 export const TEXT_FILE_ACCEPT = [...TEXT_FILE_EXTENSIONS, 'text/plain', 'text/markdown'].join(',');
+
+/** Значение `accept` для выбора картинки. */
 export const IMAGE_ACCEPT = 'image/*';
 
+/** Пределы, переводчик и адаптеры загрузки по видам файлов. */
 export interface UploadPipelineOptions {
   limits: EditorLimits;
   t: Translate;
@@ -34,34 +38,37 @@ export interface UploadPipelineOptions {
   onUpload?: (event: UploadEvent) => void;
 }
 
-function hasTextExtension(name: string): boolean {
+const hasTextExtension = (name: string): boolean => {
   const lower = name.toLowerCase();
+
   return TEXT_FILE_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
+};
 
-export function isTextFile(file: File): boolean {
-  return file.type.startsWith('text/') || file.type === 'application/json' || hasTextExtension(file.name);
-}
+/** Текстовый файл по MIME-типу или расширению. */
+export const isTextFile = (file: File): boolean =>
+  file.type.startsWith('text/') || file.type === 'application/json' || hasTextExtension(file.name);
 
-export function isImageFile(file: File): boolean {
-  return file.type.startsWith('image/');
-}
+/** Картинка по MIME-типу. */
+export const isImageFile = (file: File): boolean => file.type.startsWith('image/');
 
-export function isAudioFile(file: File): boolean {
-  return file.type.startsWith('audio/');
-}
+/** Аудиофайл по MIME-типу. */
+export const isAudioFile = (file: File): boolean => file.type.startsWith('audio/');
 
-function limitFor(kind: UploadKind, limits: EditorLimits): number {
+const limitFor = (kind: UploadKind, limits: EditorLimits): number => {
   if (kind === 'image') return limits.maxImageSizeBytes;
-  if (kind === 'audio') return limits.maxAudioSizeBytes;
-  return limits.maxFileSizeBytes;
-}
 
-function matchesKind(kind: UploadKind, file: File): boolean {
+  if (kind === 'audio') return limits.maxAudioSizeBytes;
+
+  return limits.maxFileSizeBytes;
+};
+
+const matchesKind = (kind: UploadKind, file: File): boolean => {
   if (kind === 'image') return isImageFile(file);
+
   if (kind === 'audio') return isAudioFile(file);
+
   return isTextFile(file);
-}
+};
 
 /**
  * Turns a `File` into a URL the document can reference. With no adapter the
@@ -70,6 +77,7 @@ function matchesKind(kind: UploadKind, file: File): boolean {
  */
 export class UploadPipeline {
   private objectUrls = new Set<string>();
+
   private controller = new AbortController();
 
   constructor(private options: UploadPipelineOptions) {}
@@ -89,10 +97,12 @@ export class UploadPipeline {
           t('error_unsupported_type', { type: file.type || file.name }),
         ),
       );
+
       return null;
     }
 
     const max = limitFor(kind, limits);
+
     if (file.size > max) {
       this.fail(
         new RichEditorError(
@@ -104,21 +114,27 @@ export class UploadPipeline {
           }),
         ),
       );
+
       return null;
     }
 
     const adapter = this.options.adapters[kind];
+
     if (!adapter) return this.toObjectUrl(file);
 
     this.options.onUpload?.({ kind, file, phase: 'start' });
+
     try {
       const result = await adapter(file, {
         kind,
         signal: this.controller.signal,
         t,
       });
+
       if (!result?.url) throw new Error('Upload adapter returned no URL');
+
       this.options.onUpload?.({ kind, file, phase: 'done' });
+
       return {
         name: file.name,
         mime: file.type,
@@ -127,9 +143,11 @@ export class UploadPipeline {
       };
     } catch (cause) {
       this.options.onUpload?.({ kind, file, phase: 'failed' });
+
       this.fail(
         new RichEditorError('upload-failed', t('error_upload_failed', { name: file.name }), cause),
       );
+
       return null;
     }
   }
@@ -137,7 +155,9 @@ export class UploadPipeline {
   /** Local fallback pipeline: an object URL owned by this editor instance. */
   toObjectUrl(file: Blob, name?: string, mime?: string): UploadResult {
     const url = URL.createObjectURL(file);
+
     this.objectUrls.add(url);
+
     return {
       url,
       name: name ?? (file instanceof File ? file.name : undefined),
@@ -153,7 +173,7 @@ export class UploadPipeline {
   /** Aborts in-flight uploads and releases every object URL this editor created. */
   destroy(): void {
     this.controller.abort();
-    for (const url of this.objectUrls) URL.revokeObjectURL(url);
+    this.objectUrls.forEach((url) => URL.revokeObjectURL(url));
     this.objectUrls.clear();
   }
 }

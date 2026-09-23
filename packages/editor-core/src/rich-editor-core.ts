@@ -18,7 +18,6 @@ import {
   type FormulaType,
   type Messages,
   type RichEditorCoreOptions,
-  type UploadKind,
   type UploadResult,
 } from './types';
 import { createI18n, type I18n } from './i18n';
@@ -30,7 +29,7 @@ import { normalizeMathML } from './formula/mathml';
 import { AttachmentNode } from './nodes/attachment';
 import { AudioNode } from './nodes/audio';
 import { FormulaNode } from './nodes/formula';
-import { LegacyEmbedNode } from './nodes/legacy-embed';
+import { LegacyEmbedNode } from './nodes/legacy-embed-node';
 import { UploadPipeline, isImageFile, isTextFile } from './media/upload';
 import { readTextFile, textToParagraphs } from './media/text-file';
 
@@ -41,12 +40,34 @@ import './styles.css';
 /** Ниже этого размера картинку уже не за что ухватить. */
 const IMAGE_MIN_SIZE = 40;
 
+/** Расширение файла голосового сообщения по MIME-типу контейнера. */
+const MIME_EXTENSIONS: Record<string, string> = {
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'm4a',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+};
+
+const extensionFor = (mime: string): string => {
+  const base = (mime.split(';')[0] ?? mime).trim();
+
+  return MIME_EXTENSIONS[base] ?? 'webm';
+};
+
+/**
+ * Ядро редактора: собирает TipTap с набором расширений пакета и даёт хосту
+ * (vanilla-интерфейсу, Vue-обёртке) единый API для контента, формул и медиа.
+ */
 export class RichEditorCore {
   readonly editor: Editor;
+
   readonly uploads: UploadPipeline;
 
   private i18n: I18n;
+
   private limits: EditorLimits;
+
   private options: RichEditorCoreOptions;
 
   constructor(options: RichEditorCoreOptions) {
@@ -68,7 +89,9 @@ export class RichEditorCore {
 
     this.editor = new Editor({
       element: options.element,
-      content: options.content ? prepareIncomingHtml(options.content, { legacy: options.legacy }) : '',
+      content: options.content
+        ? prepareIncomingHtml(options.content, { legacy: options.legacy })
+        : '',
       editable: options.editable ?? true,
       extensions: this.buildExtensions(),
       editorProps: {
@@ -86,8 +109,10 @@ export class RichEditorCore {
         handlePaste: (_view, event) => this.insertFiles(event.clipboardData?.files),
         handleDrop: (view, event, _slice, moved) => {
           if (moved) return false;
+
           const dropEvent = event as DragEvent;
           const pos = view.posAtCoords({ left: dropEvent.clientX, top: dropEvent.clientY });
+
           return this.insertFiles(dropEvent.dataTransfer?.files, pos?.pos);
         },
       },
@@ -100,7 +125,7 @@ export class RichEditorCore {
   }
 
   private buildExtensions(): Extensions {
-    const t = this.i18n.t;
+    const { t } = this.i18n;
 
     return [
       StarterKit.configure({
@@ -165,7 +190,9 @@ export class RichEditorCore {
 
   private resolveExtraExtensions(): unknown[] {
     const { extensions } = this.options;
+
     if (typeof extensions === 'function') return extensions({ t: this.i18n.t });
+
     return extensions ?? [];
   }
 
@@ -201,9 +228,14 @@ export class RichEditorCore {
     this.editor.setEditable(editable);
   }
 
-  /** Resolves once pending MathJax renders settle, so `getHTML()` includes SVG. */
-  whenFormulasReady(): Promise<void> {
-    return whenFormulasReady();
+  /**
+   * Resolves once pending MathJax renders settle, so `getHTML()` includes SVG.
+   * Уничтоженному редактору ждать нечего: его формулы уже не отрисуются.
+   */
+  async whenFormulasReady(): Promise<void> {
+    if (this.editor.isDestroyed) return;
+
+    await whenFormulasReady();
   }
 
   // ---------------------------------------------------------------- i18n
@@ -233,19 +265,25 @@ export class RichEditorCore {
 
   insertFormula(mathml: string, type: FormulaType = 'math'): boolean {
     const safe = normalizeMathML(mathml);
+
     if (!safe) {
       this.reportError(new RichEditorError('invalid-mathml', this.i18n.t('error_invalid_mathml')));
+
       return false;
     }
+
     return this.editor.chain().focus().insertFormula({ mathml: safe, type }).run();
   }
 
   updateFormulaAt(pos: number, mathml: string, type: FormulaType = 'math'): boolean {
     const safe = normalizeMathML(mathml);
+
     if (!safe) {
       this.reportError(new RichEditorError('invalid-mathml', this.i18n.t('error_invalid_mathml')));
+
       return false;
     }
+
     return this.editor.chain().focus().updateFormula({ pos, mathml: safe, type }).run();
   }
 
@@ -257,14 +295,18 @@ export class RichEditorCore {
 
   async insertImageFile(file: File, at?: number): Promise<boolean> {
     const result = await this.uploads.upload('image', file);
+
     if (!result) return false;
+
     return this.insertImageUrl(result, at);
   }
 
   insertImageUrl(result: UploadResult, at?: number): boolean {
     const chain = this.editor.chain();
+
     if (typeof at === 'number') chain.focus(at);
     else chain.focus();
+
     return chain.setImage({ src: result.url, alt: result.name ?? '' }).run();
   }
 
@@ -298,6 +340,7 @@ export class RichEditorCore {
   /** Attaches a text file as a download chip (the documented default UX). */
   async attachTextFile(file: File): Promise<boolean> {
     const result = await this.uploads.upload('file', file);
+
     if (!result) return false;
 
     return this.insertAttachment({
@@ -319,18 +362,22 @@ export class RichEditorCore {
   async insertTextFileContent(file: File): Promise<boolean> {
     if (file.size > this.limits.maxFileSizeBytes) {
       await this.uploads.upload('file', file); // Reuses the localized size error.
+
       return false;
     }
 
     try {
       const text = await readTextFile(file, this.i18n.t);
+
       const paragraphs = textToParagraphs(text).map((line) => ({
         type: 'paragraph',
         content: line ? [{ type: 'text', text: line }] : [],
       }));
+
       return this.editor.chain().focus().insertContent(paragraphs).run();
     } catch (error) {
       if (error instanceof RichEditorError) this.reportError(error);
+
       return false;
     }
   }
@@ -345,22 +392,35 @@ export class RichEditorCore {
     const candidates = Array.from(files).filter(
       (file) => isImageFile(file) || isTextFile(file) || file.type.startsWith('audio/'),
     );
+
     if (candidates.length === 0) return false;
 
-    void (async () => {
-      for (const file of candidates) {
-        if (isImageFile(file)) await this.insertImageFile(file, at);
-        else if (file.type.startsWith('audio/')) await this.insertAudioFile(file);
-        else await this.attachTextFile(file);
-      }
-    })();
+    // ProseMirror ждёт синхронный ответ, а каждый шаг сам сообщает о своих
+    // ошибках через onError — поэтому цепочка вставок не ожидается.
+    this.insertFilesInOrder(candidates, at);
 
     return true;
   }
 
+  /**
+   * Вставляет файлы строго по очереди: каждая вставка двигает курсор, и
+   * параллельные загрузки перемешали бы порядок содержимого.
+   */
+  private insertFilesInOrder(files: File[], at?: number): Promise<void> {
+    return files.reduce(async (previous, file) => {
+      await previous;
+
+      if (isImageFile(file)) await this.insertImageFile(file, at);
+      else if (file.type.startsWith('audio/')) await this.insertAudioFile(file);
+      else await this.attachTextFile(file);
+    }, Promise.resolve());
+  }
+
   private async insertAudioFile(file: File): Promise<boolean> {
     const result = await this.uploads.upload('audio', file);
+
     if (!result) return false;
+
     return this.insertAudio({
       src: result.url,
       name: result.name ?? file.name,
@@ -379,18 +439,3 @@ export class RichEditorCore {
     this.editor.destroy();
   }
 }
-
-const MIME_EXTENSIONS: Record<string, string> = {
-  'audio/webm': 'webm',
-  'audio/ogg': 'ogg',
-  'audio/mp4': 'm4a',
-  'audio/mpeg': 'mp3',
-  'audio/wav': 'wav',
-};
-
-function extensionFor(mime: string): string {
-  const base = mime.split(';')[0].trim();
-  return MIME_EXTENSIONS[base] ?? 'webm';
-}
-
-export type { UploadKind };

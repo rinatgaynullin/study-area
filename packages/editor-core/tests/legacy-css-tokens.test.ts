@@ -35,8 +35,9 @@ describe('compat-стили держатся на токенах', () => {
 
   it('не содержат размерных литералов вне var()-фолбэков', () => {
     const withoutFallbacks = RULES.replace(/var\([^)]*\)/g, 'var()');
+
     const sizes = (withoutFallbacks.match(/\b-?\d+(\.\d+)?px\b/g) ?? []).filter(
-      (size) => !NON_DESIGN_LITERALS.test(size),
+      (size: string) => !NON_DESIGN_LITERALS.test(size),
     );
 
     expect(sizes, 'размер должен приходить из токена').toEqual([]);
@@ -46,6 +47,7 @@ describe('compat-стили держатся на токенах', () => {
     const declared = new Set(
       [...CSS.matchAll(/^\s*(--rte-legacy-[a-z-]+):/gm)].map((match) => match[1]),
     );
+
     const used = new Set(
       [...RULES.matchAll(/var\((--rte-legacy-[a-z-]+)/g)].map((match) => match[1]),
     );
@@ -55,6 +57,7 @@ describe('compat-стили держатся на токенах', () => {
 
   it('связывает legacy-переменные с базовыми токенами, кроме помеченных литералов', () => {
     const declarations = [...CSS.matchAll(/^\s*(--rte-legacy-[a-z-]+):\s*([^;]+);/gm)];
+
     expect(declarations.length).toBeGreaterThan(5);
 
     // Литералы допустимы только там, где у сущности Froala нет аналога в новом
@@ -70,7 +73,7 @@ describe('compat-стили держатся на токенах', () => {
 
     const unlinked = declarations
       .filter(([, name]) => !LITERALS_WITHOUT_ANALOGUE.has(name))
-      .filter(([, , value]) => !value.includes('var(--rte-'));
+      .filter(([, , value]) => !value.replace(/\s+/g, '').includes('var(--rte-'));
 
     expect(unlinked.map(([, name]) => name)).toEqual([]);
   });
@@ -79,7 +82,7 @@ describe('compat-стили держатся на токенах', () => {
     // Оба пути кладут .rte-content на элемент с контентом, поэтому один скоуп
     // покрывает обе ветки.
     const rules = RULES.match(/^\.[^{]+\{/gm) ?? [];
-    const unscoped = rules.filter((rule) => !rule.includes('.rte-content.rte-legacy'));
+    const unscoped = rules.filter((rule: string) => !rule.includes('.rte-content.rte-legacy'));
 
     expect(unscoped).toEqual([]);
   });

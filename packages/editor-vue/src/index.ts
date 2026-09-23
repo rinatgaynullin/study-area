@@ -84,6 +84,6 @@ export {
   type UploadResult,
 } from '@rich-editor/core';
 
-export { RichEditorPlugin } from './plugin';
+export { RichEditorPlugin } from './rich-editor-plugin';
 
 export { default } from './components/rich-editor.vue';

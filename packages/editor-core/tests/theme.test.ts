@@ -2,28 +2,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DARK_THEME_CLASS, applyTheme } from '../src';
 
 /** Подставной matchMedia: jsdom его не даёт, а `auto` без него — светлая тема. */
-function stubMatchMedia(matches: boolean) {
+const stubMatchMedia = (matches: boolean) => {
   const listeners = new Set<() => void>();
+
   const query = {
     matches,
     addEventListener: (_: string, listener: () => void) => listeners.add(listener),
     removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
     /** Системная тема сменилась. */
-    flip() {
+    flip: () => {
       query.matches = !query.matches;
-      for (const listener of listeners) listener();
+      listeners.forEach((listener) => listener());
     },
     listeners,
   };
+
   vi.stubGlobal('matchMedia', () => query);
+
   return query;
-}
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('applyTheme', () => {
   it('ставит и снимает класс тёмной темы', () => {
     const element = document.createElement('div');
+
     applyTheme(element, 'dark');
     expect(element.classList.contains(DARK_THEME_CLASS)).toBe(true);
 
@@ -36,6 +40,7 @@ describe('applyTheme', () => {
     const element = document.createElement('div');
 
     const release = applyTheme(element, 'auto');
+
     expect(element.classList.contains(DARK_THEME_CLASS)).toBe(true);
 
     query.flip();
@@ -49,7 +54,9 @@ describe('applyTheme', () => {
 
   it('auto без matchMedia — светлая тема', () => {
     vi.stubGlobal('matchMedia', undefined);
+
     const element = document.createElement('div');
+
     element.classList.add(DARK_THEME_CLASS);
 
     applyTheme(element, 'auto');
