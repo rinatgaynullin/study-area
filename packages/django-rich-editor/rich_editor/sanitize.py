@@ -34,7 +34,7 @@ HTML_ATTRS = [
     'data-attachment', 'data-size', 'data-text-align', 'data-render-host',
     'data-legacy-embed', 'data-color',
     # Спайк геометрии (packages/editor-geometry): построение JessieCode и границы доски.
-    'data-geometry', 'data-bbox', 'data-height',
+    'data-geometry', 'data-bbox', 'data-height', 'data-geometry-state',
     'viewBox', 'viewbox', 'xmlns', 'xmlns:xlink', 'xlink:href', 'd', 'transform',
     'fill', 'stroke', 'stroke-width', 'focusable', 'role', 'aria-hidden',
     'data-c', 'data-mml-node', 'x', 'y', 'rx', 'ry', 'text-anchor',

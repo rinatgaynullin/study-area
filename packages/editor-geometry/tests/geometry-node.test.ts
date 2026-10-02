@@ -55,3 +55,42 @@ describe('узел geometry', () => {
     element.remove();
   });
 });
+
+describe('состояние узла geometry', () => {
+  const STATE_HTML = `<div data-geometry="${SCRIPT}" data-geometry-state='{"a":{"value":2},"Q":{"coords":[1,-1]},"bad":5,"worse":{"coords":["x"]}}'></div>`;
+
+  const mountCore = (content: string) => {
+    const element = document.createElement('div');
+
+    document.body.appendChild(element);
+
+    return new RichEditorCore({
+      element,
+      content,
+      extensions: [GeometryNode.configure({ t: (key: string) => key })],
+    });
+  };
+
+  it('читает data-geometry-state и отбрасывает мусор', () => {
+    const core = mountCore(STATE_HTML);
+    const attrs = core.editor.state.doc.firstChild?.attrs;
+
+    expect(attrs?.state).toEqual({ a: { value: 2 }, Q: { coords: [1, -1] } });
+    expect(core.getHTML()).toContain('data-geometry-state=');
+    expect(core.getHTML()).not.toContain('bad');
+
+    core.destroy();
+  });
+
+  it('без сдвигов атрибут состояния в HTML не пишется', () => {
+    const core = mountCore(`<div data-geometry="${SCRIPT}"></div>`);
+
+    expect(core.getHTML()).not.toContain('data-geometry-state');
+
+    core.destroy();
+  });
+
+  it('санитайзер пропускает data-geometry-state', () => {
+    expect(sanitizeHtml(STATE_HTML)).toContain('data-geometry-state=');
+  });
+});

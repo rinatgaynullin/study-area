@@ -5,10 +5,14 @@ import {
   DEFAULT_BBOX,
   DEFAULT_HEIGHT,
   formatBoundingBox,
+  formatGeometryState,
+  isSameGeometryState,
   parseBoundingBox,
+  parseGeometryState,
   type BoundingBox,
   type GeometryAttributes,
   type GeometryPayload,
+  type GeometryState,
 } from './types';
 
 export interface GeometryOptions {
@@ -34,14 +38,16 @@ const readAttributes = (attrs: Record<string, unknown>): GeometryAttributes => (
   script: (attrs.script as string) ?? '',
   bbox: (attrs.bbox as BoundingBox) ?? [...DEFAULT_BBOX],
   height: (attrs.height as number) ?? DEFAULT_HEIGHT,
+  state: (attrs.state as GeometryState) ?? {},
 });
 
 /**
  * Блочный атом с интерактивной доской JSXGraph.
  *
- * В HTML уезжает `<div data-geometry data-bbox data-height>`: построение хранится
- * текстом JessieCode, так что документ остаётся обычным HTML, а вьюер
- * поднимает доску из тех же атрибутов (`hydrateGeometry`).
+ * В HTML уезжает `<div data-geometry data-bbox data-height data-geometry-state>`:
+ * построение хранится текстом JessieCode, положения сдвинутых точек — JSON
+ * поверх него, так что документ остаётся обычным HTML, а вьюер поднимает
+ * доску из тех же атрибутов (`hydrateGeometry`).
  */
 export const GeometryNode = Node.create<GeometryOptions>({
   name: GEOMETRY_NODE_NAME,
@@ -79,6 +85,18 @@ export const GeometryNode = Node.create<GeometryOptions>({
       },
       renderHTML: (attributes) => ({ 'data-height': String(attributes.height) }),
     },
+    state: {
+      default: {},
+      parseHTML: (element) => parseGeometryState(element.getAttribute('data-geometry-state')),
+      renderHTML: (attributes) => {
+        const state = attributes.state as GeometryState;
+
+        // Пустое состояние в HTML не пишем: атрибут появляется только после сдвига.
+        return Object.keys(state).length === 0
+          ? {}
+          : { 'data-geometry-state': formatGeometryState(state) };
+      },
+    },
   }),
 
   parseHTML: () => [{ tag: 'div[data-geometry]' }],
@@ -103,19 +121,17 @@ export const GeometryNode = Node.create<GeometryOptions>({
 
     return ({ node, getPos, editor }) => {
       let attrs = readAttributes(node.attrs);
+      /** Состояние, которое доска сама отдала после перетаскивания: его не накладывать заново. */
+      let emittedState: GeometryState | null = null;
 
       const dom = document.createElement('div');
 
       dom.className = 'rte-geometry';
       dom.contentEditable = 'false';
-      dom.setAttribute('data-geometry', attrs.script);
-      dom.setAttribute('data-bbox', formatBoundingBox(attrs.bbox));
-      dom.setAttribute('data-height', String(attrs.height));
 
       const host = document.createElement('div');
 
       host.className = 'rte-geometry__board jxgbox';
-      host.style.height = `${attrs.height}px`;
       host.setAttribute('aria-label', options.t('geometry_aria_label'));
       dom.appendChild(host);
 
@@ -134,12 +150,33 @@ export const GeometryNode = Node.create<GeometryOptions>({
       });
       dom.appendChild(editButton);
 
+      const syncDom = (): void => {
+        dom.setAttribute('data-geometry', attrs.script);
+        dom.setAttribute('data-bbox', formatBoundingBox(attrs.bbox));
+        dom.setAttribute('data-height', String(attrs.height));
+        host.style.height = `${attrs.height}px`;
+      };
+
+      syncDom();
+
       const board = new GeometryBoard({
         element: host,
         script: attrs.script,
         bbox: attrs.bbox,
+        state: attrs.state,
         interactive: editor.isEditable,
         onError: (error) => options.onError?.(error),
+        // Сдвиг точки — транзакция документа: попадает в историю и в HTML.
+        onStateChange: (state) => {
+          const pos = getPos();
+
+          if (typeof pos !== 'number') return;
+
+          emittedState = state;
+          editor.view.dispatch(
+            editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...attrs, state }),
+          );
+        },
       });
 
       return {
@@ -148,15 +185,22 @@ export const GeometryNode = Node.create<GeometryOptions>({
           if (updated.type.name !== GEOMETRY_NODE_NAME) return false;
 
           const next = readAttributes(updated.attrs);
-          const isSameBoard = next.script === attrs.script && formatBoundingBox(next.bbox) === formatBoundingBox(attrs.bbox);
+          const isSameBoard =
+            next.script === attrs.script
+            && formatBoundingBox(next.bbox) === formatBoundingBox(attrs.bbox);
+          const isOwnState = emittedState !== null && isSameGeometryState(next.state, emittedState);
 
           attrs = next;
-          dom.setAttribute('data-geometry', next.script);
-          dom.setAttribute('data-bbox', formatBoundingBox(next.bbox));
-          dom.setAttribute('data-height', String(next.height));
-          host.style.height = `${next.height}px`;
+          syncDom();
 
-          if (!isSameBoard) board.update(next.script, next.bbox);
+          if (!isSameBoard) {
+            board.update(next.script, next.bbox, next.state);
+          } else if (!isOwnState) {
+            // Состояние пришло снаружи — например, отмена перетаскивания.
+            board.setState(next.state);
+          }
+
+          emittedState = null;
 
           return true;
         },
@@ -176,9 +220,15 @@ export const GeometryNode = Node.create<GeometryOptions>({
     return {
       Enter: () => {
         const { selection } = editor.state;
-        const selected = 'node' in selection ? (selection as { node: { type: { name: string }; attrs: Record<string, unknown> } }).node : null;
+        const selected =
+          'node' in selection
+            ? (selection as { node: { type: { name: string }; attrs: Record<string, unknown> } })
+                .node
+            : null;
 
-        if (!selected || selected.type.name !== GEOMETRY_NODE_NAME || !editor.isEditable) return false;
+        if (!selected || selected.type.name !== GEOMETRY_NODE_NAME || !editor.isEditable) {
+          return false;
+        }
 
         options.onEdit?.({ pos: selection.from, ...readAttributes(selected.attrs) });
 

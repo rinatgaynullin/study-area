@@ -116,6 +116,7 @@ export const HTML_ATTRS = [
   'data-geometry',
   'data-bbox',
   'data-height',
+  'data-geometry-state',
   // Attributes carried by the embedded MathJax SVG.
   'viewBox',
   'viewbox',

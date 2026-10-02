@@ -1,7 +1,8 @@
-import { Dump, JSXGraph } from 'jsxgraph';
+import { COORDS_BY_USER, Dump, JSXGraph } from 'jsxgraph';
 import { DEFAULT_SCRIPT } from '../src/default-script';
-import { GeometryBoard } from '../src/geometry-board';
+import { GeometryBoard, type GeometryBoardOptions } from '../src/geometry-board';
 import { loadJsxGraph } from '../src/jsxgraph';
+import type { BoundingBox } from '../src/types';
 
 /**
  * Вопросы спайка: разбирается ли JessieCode без DOM-рендера, следует ли глайдер
@@ -145,5 +146,117 @@ describe('JessieCode без eval', () => {
     } finally {
       globalThis.eval = originalEval;
     }
+  });
+});
+
+describe('слой состояния', () => {
+  const SCRIPT = `a = slider([-5, 4.2], [-1, 4.2], [-3, 1, 3]);
+f = functiongraph(function(x) { return a * sin(x); }, -6, 6);
+P = glider(1, 0, f);
+Q = point(-3, -2);
+c = circle(Q, 2);
+K = glider(-1, -2, c);
+F = point(2, 2) << fixed: true >>;
+`;
+  const BBOX: BoundingBox = [-6, 5, 6, -5];
+
+  const settle = async () => {
+    await loadJsxGraph();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+  };
+
+  const mountBoard = async (options: Partial<GeometryBoardOptions> = {}) => {
+    const host = document.createElement('div');
+
+    document.body.appendChild(host);
+
+    const board = new GeometryBoard({
+      element: host,
+      script: SCRIPT,
+      bbox: BBOX,
+      interactive: true,
+      renderer: 'no',
+      ...options,
+    });
+
+    await settle();
+
+    return board;
+  };
+
+  it('снимает только видимые подвижные элементы с именами', async () => {
+    const board = await mountBoard();
+    const state = board.captureState();
+
+    // Слайдер, глайдеры и свободная точка — да; закреплённая F и скрытые
+    // служебные точки слайдера — нет.
+    expect(Object.keys(state).sort()).toEqual(['K', 'P', 'Q', 'a']);
+    expect(state.a).toEqual({ value: 1 });
+    expect(state.Q).toEqual({ coords: [-3, -2] });
+
+    board.destroy();
+  });
+
+  it('восстанавливает значения и координаты на новой доске, глайдер остаётся на кривой', async () => {
+    const source = await mountBoard();
+    const instance = source.instance as unknown as { select(name: string, onlyElements: boolean): unknown; update(): void };
+    const a = instance.select('a', false) as Valued & Movable;
+    const Q = instance.select('Q', false) as Movable & { setPosition(method: number, coords: number[]): unknown };
+
+    a.moveTo([-2, 4.2]);
+    Q.setPosition(COORDS_BY_USER, [1, 1]);
+    instance.update();
+    instance.update();
+
+    const state = source.captureState();
+    const restored = await mountBoard({ state, interactive: false });
+    const target = restored.instance as unknown as { select(name: string, onlyElements: boolean): unknown };
+    const a2 = target.select('a', false) as Valued;
+    const Q2 = target.select('Q', false) as Pointlike;
+    const P2 = target.select('P', false) as Pointlike;
+
+    expect(a2.Value()).toBeCloseTo((state.a as { value: number }).value, 3);
+    expect([Q2.X(), Q2.Y()]).toEqual([1, 1]);
+    expect(P2.Y()).toBeCloseTo(a2.Value() * Math.sin(P2.X()), 3);
+
+    source.destroy();
+    restored.destroy();
+  });
+
+  it('onStateChange зовётся при отпускании указателя и только если положения изменились', async () => {
+    const onStateChange = vi.fn();
+    const board = await mountBoard({ onStateChange });
+    const instance = board.instance as unknown as {
+      select(name: string, onlyElements: boolean): unknown;
+      update(): void;
+      triggerEventHandlers(events: string[], args: unknown[]): void;
+    };
+
+    instance.triggerEventHandlers(['up'], [new Event('pointerup')]);
+    expect(onStateChange).not.toHaveBeenCalled();
+
+    (instance.select('Q', false) as Movable).moveTo([2, -1]);
+    instance.update();
+    instance.triggerEventHandlers(['up'], [new Event('pointerup')]);
+
+    expect(onStateChange).toHaveBeenCalledTimes(1);
+    expect(onStateChange.mock.calls[0]?.[0]).toMatchObject({ Q: { coords: [2, -1] } });
+
+    board.destroy();
+  });
+
+  it('setState накладывает состояние снаружи (например, после отмены) без пересборки доски', async () => {
+    const board = await mountBoard();
+    const before = board.instance;
+
+    board.setState({ a: { value: -2 }, Q: { coords: [0, 3] } });
+
+    const instance = board.instance as unknown as { select(name: string, onlyElements: boolean): unknown };
+
+    expect(board.instance).toBe(before);
+    expect((instance.select('a', false) as Valued).Value()).toBeCloseTo(-2, 3);
+    expect(board.captureState().Q).toEqual({ coords: [0, 3] });
+
+    board.destroy();
   });
 });

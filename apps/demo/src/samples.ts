@@ -22,7 +22,7 @@ export const HTML_SAMPLES: HtmlSample[] = [
 <p>Подвигайте слайдер <em>a</em> или точку <em>P</em> на графике.</p>
 <div data-geometry="a = slider([-5, 4.2], [-1, 4.2], [-3, 1, 3]) << name: 'a', snapWidth: 0.1 >>;
 f = functiongraph(function(x) { return a * sin(x); }, -6, 6) << strokeWidth: 2, name: 'f' >>;
-P = glider(1, 0, f) << name: 'P', size: 4 >>;" data-bbox="-6 5 6 -5" data-height="300"></div>`,
+P = glider(1, 0, f) << name: 'P', size: 4 >>;" data-bbox="-6 5 6 -5" data-height="300" data-geometry-state='{"a":{"value":2},"P":{"coords":[2,0]}}'></div>`,
   },
   {
     id: 'mathml',

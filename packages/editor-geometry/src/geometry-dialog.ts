@@ -160,6 +160,8 @@ class GeometryDialogController implements DialogComponent<GeometryPayload | null
       script: this.scriptField.value,
       bbox: this.bbox,
       height: this.payload?.height ?? DEFAULT_HEIGHT,
+      // Точки, расставленные в предпросмотре, уезжают в документ как состояние.
+      state: this.preview?.captureState() ?? {},
     };
     const chain = this.context.editor.chain().focus();
 
@@ -179,6 +181,7 @@ class GeometryDialogController implements DialogComponent<GeometryPayload | null
       element: this.previewHost,
       script: this.scriptField.value,
       bbox: this.bbox,
+      state: this.payload?.state,
       interactive: true,
       onError: (error) => {
         const detail = error instanceof Error ? error.message : String(error);

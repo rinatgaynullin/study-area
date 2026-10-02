@@ -8,8 +8,13 @@ export {
   DEFAULT_BBOX,
   DEFAULT_HEIGHT,
   formatBoundingBox,
+  formatGeometryState,
+  isSameGeometryState,
   parseBoundingBox,
+  parseGeometryState,
   type BoundingBox,
   type GeometryAttributes,
+  type GeometryElementState,
   type GeometryPayload,
+  type GeometryState,
 } from './types';
