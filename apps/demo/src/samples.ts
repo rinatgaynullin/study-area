@@ -15,6 +15,16 @@ const PIXEL =
 
 export const HTML_SAMPLES: HtmlSample[] = [
   {
+    id: 'geometry',
+    label: 'Геометрия на JSXGraph',
+    hint: 'Построение хранится текстом JessieCode в data-geometry: параметр, график функции и точка на нём.',
+    html: `<h3>Интерактивное построение</h3>
+<p>Подвигайте слайдер <em>a</em> или точку <em>P</em> на графике.</p>
+<div data-geometry="a = slider([-5, 4.2], [-1, 4.2], [-3, 1, 3]) << name: 'a', snapWidth: 0.1 >>;
+f = functiongraph(function(x) { return a * sin(x); }, -6, 6) << strokeWidth: 2, name: 'f' >>;
+P = glider(1, 0, f) << name: 'P', size: 4 >>;" data-bbox="-6 5 6 -5" data-height="300"></div>`,
+  },
+  {
     id: 'mathml',
     label: 'MathML из другого редактора',
     hint: 'Сырые <math> превращаются в редактируемые формулы, а не в «битый» текст.',

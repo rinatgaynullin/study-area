@@ -10,6 +10,7 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@rich-editor/geometry": "0.1.0",
     "@rich-editor/vue": "0.1.0",
     "vue": "^3.5.42"
   }

@@ -9,6 +9,7 @@ import {
   type UploadAdapter,
   type UploadResult,
 } from '@rich-editor/vue';
+import { GEOMETRY_MESSAGES, geometryFeature, hydrateGeometry } from '@rich-editor/geometry';
 import enMessages from './locales/en.json';
 import { HTML_SAMPLES, type HtmlSample } from './samples';
 
@@ -32,10 +33,26 @@ const draftHint = ref('');
 const appliedReport = ref('');
 
 const editorRef = shallowRef<InstanceType<typeof RichEditor> | null>(null);
+const previewRef = shallowRef<InstanceType<typeof RichContent> | null>(null);
+let disposeGeometry: (() => void) | null = null;
+
+/** Вьюер не знает про геометрию: после рендера хост поднимает доски сам. */
+function onPreviewRendered(): void {
+  disposeGeometry?.();
+
+  const root = previewRef.value?.$el as HTMLElement | undefined;
+  disposeGeometry = root ? hydrateGeometry(root) : null;
+}
 
 const messages = computed<Record<string, Messages>>(() => ({
-  en: enMessages as Messages,
+  ru: GEOMETRY_MESSAGES.ru,
+  en: { ...(enMessages as Messages), ...GEOMETRY_MESSAGES.en },
 }));
+
+// Геометрия на JSXGraph — отдельная возможность: ядро про неё не знает.
+const features = [
+  geometryFeature({ onError: (error) => log.value.unshift(`geometry: ${String(error)}`) }),
+];
 
 const limits = {
   maxAudioDurationSec: 120,
@@ -255,6 +272,7 @@ async function reloadSample(): Promise<void> {
         :editable="editable"
         :legacy="isLegacyEnabled"
         :toolbar="toolbarPreset"
+        :features="features"
         :theme="theme"
         :upload-image="adapters.uploadImage"
         :upload-audio="adapters.uploadAudio"
@@ -301,8 +319,10 @@ async function reloadSample(): Promise<void> {
            exported by the editor already carry their SVG, so nothing extra
            loads; MathML-only formulas are rendered on the fly. -->
       <RichContent
+        ref="previewRef"
         :theme="theme"
         v-if="outputTab === 'preview'"
+        @rendered="onPreviewRendered"
         class="demo__preview"
         :html="html"
         :legacy="isLegacyEnabled"
@@ -314,6 +334,8 @@ async function reloadSample(): Promise<void> {
            и его оформляет compat-слой. -->
       <RichContent
         v-else-if="outputTab === 'raw'"
+        ref="previewRef"
+        @rendered="onPreviewRendered"
         class="demo__preview demo__preview--raw"
         :html="draftHtml || html"
         :legacy="isLegacyEnabled"

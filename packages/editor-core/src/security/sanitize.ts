@@ -111,6 +111,11 @@ export const HTML_ATTRS = [
   'data-render-host',
   'data-legacy-embed',
   'data-color',
+  // Спайк геометрии (packages/editor-geometry): построение JessieCode и границы доски.
+  // Станет точкой расширения, когда возможности смогут объявлять свои атрибуты.
+  'data-geometry',
+  'data-bbox',
+  'data-height',
   // Attributes carried by the embedded MathJax SVG.
   'viewBox',
   'viewbox',

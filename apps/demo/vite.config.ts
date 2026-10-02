@@ -48,6 +48,14 @@ export default defineConfig({
         replacement: fromRoot('../../packages/editor-core/src/styles.css'),
       },
       {
+        find: '@rich-editor/geometry/styles.css',
+        replacement: fromRoot('../../packages/editor-geometry/src/styles.css'),
+      },
+      {
+        find: '@rich-editor/geometry',
+        replacement: fromRoot('../../packages/editor-geometry/src/index.ts'),
+      },
+      {
         find: '@rich-editor/vue',
         replacement: fromRoot('../../packages/editor-vue/src/index.ts'),
       },

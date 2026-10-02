@@ -1,0 +1,36 @@
+{
+  "name": "@rich-editor/geometry",
+  "version": "0.1.0",
+  "description": "Interactive geometry and function graphs for @rich-editor/core, built on JSXGraph (spike)",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "vite build && npm run build:types",
+    "build:types": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@rich-editor/core": "0.1.0",
+    "jsxgraph": "^1.13.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,127 @@
+/*
+ * Базовые правила JSXGraph (jsxgraph/distrib/jsxgraph.css, MIT/LGPL): пакет не
+ * экспортирует файл стилей, поэтому нужные правила продублированы здесь.
+ * Навигация и копирайт выключены, их стили не нужны.
+ */
+.jxgbox {
+  position: relative;
+  overflow: hidden;
+  margin: 0;
+  touch-action: none;
+}
+
+.jxgbox svg text {
+  cursor: default;
+  user-select: none;
+}
+
+.JXGtext {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+}
+
+.JXGinfobox {
+  border: 0;
+}
+
+.jxgbox :focus {
+  outline: 2px solid var(--rte-accent, #2563eb);
+  outline-offset: 1px;
+}
+
+.rte-geometry {
+  position: relative;
+  margin: 0.75em 0;
+  border: 1px solid var(--rte-border, #d0d4dc);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-surface, #fff);
+  overflow: hidden;
+}
+
+.rte-geometry--selected {
+  outline: 2px solid var(--rte-accent, #2563eb);
+  outline-offset: 2px;
+}
+
+/* JSXGraph сам задаёт рамку и фон .jxgbox; цвета берём из токенов редактора. */
+.rte-geometry__board.jxgbox {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: var(--rte-surface, #fff);
+  touch-action: none;
+}
+
+.rte-geometry__fallback {
+  display: block;
+  padding: 0.75em;
+  font-family: var(--rte-font-mono, ui-monospace, monospace);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  color: var(--rte-text-muted, #6b7280);
+}
+
+.rte-geometry[data-geometry-mounted] .rte-geometry__fallback {
+  display: none;
+}
+
+.rte-geometry__edit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--rte-border, #d0d4dc);
+  border-radius: 999px;
+  background: var(--rte-surface, #fff);
+  color: var(--rte-text, #111827);
+  font: inherit;
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+.rte-geometry-dialog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .rte-geometry-dialog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rte-geometry-dialog__form {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.rte-geometry-dialog__label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9em;
+  color: var(--rte-text-muted, #6b7280);
+}
+
+.rte-geometry-dialog__script {
+  min-height: 220px;
+  font-family: var(--rte-font-mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  resize: vertical;
+}
+
+.rte-geometry-dialog__status {
+  min-height: 1.2em;
+  font-size: 0.85em;
+}
+
+.rte-geometry-dialog__status--error {
+  color: var(--rte-danger, #b91c1c);
+}
+
+.rte-geometry-dialog__preview {
+  border: 1px solid var(--rte-border, #d0d4dc);
+  border-radius: var(--rte-radius, 8px);
+}

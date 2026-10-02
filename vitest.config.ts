@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
       '@rich-editor/core': resolveFromRoot('packages/editor-core/src/index.ts'),
       '@rich-editor/vue': resolveFromRoot('packages/editor-vue/src/index.ts'),
+      '@rich-editor/geometry': resolveFromRoot('packages/editor-geometry/src/index.ts'),
     },
   },
   test: {
