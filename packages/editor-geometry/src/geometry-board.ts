@@ -67,7 +67,11 @@ export class GeometryBoard {
 
   private bbox: BoundingBox;
 
+  /** Отличия от положений по скрипту — то, что хранит документ. */
   private state: GeometryState;
+
+  /** Положения сразу после разбора скрипта, без наложенного состояния. */
+  private pristine: GeometryState = {};
 
   constructor(private readonly options: GeometryBoardOptions) {
     this.script = options.script;
@@ -81,9 +85,23 @@ export class GeometryBoard {
     return this.board;
   }
 
-  /** Текущие положения подвижных элементов. Пустой объект, пока доски нет. */
-  captureState(): GeometryState {
+  /** Только отличия от положений по скрипту. Пустой объект, пока доски нет. */
+  captureChanges(): GeometryState {
     if (!this.board) return this.state;
+
+    const current = this.captureState();
+
+    return Object.fromEntries(
+      Object.entries(current).filter(
+        ([name, elementState]) =>
+          JSON.stringify(elementState) !== JSON.stringify(this.pristine[name]),
+      ),
+    );
+  }
+
+  /** Текущие положения всех подвижных элементов. Пустой объект, пока доски нет. */
+  captureState(): GeometryState {
+    if (!this.board) return {};
 
     const state: GeometryState = {};
 
@@ -165,6 +183,7 @@ export class GeometryBoard {
       this.options.onError?.(error);
     }
 
+    this.pristine = this.captureState();
     this.applyState();
 
     if (!interactive) {
@@ -202,12 +221,12 @@ export class GeometryBoard {
     board.update();
     board.update();
 
-    // Снимок после наложения — точка отсчёта: отпускание без сдвига не считается изменением.
-    this.state = this.captureState();
+    // Точка отсчёта — отличия после наложения: отпускание без сдвига не считается изменением.
+    this.state = this.captureChanges();
   }
 
   private readonly onPointerUp = (): void => {
-    const state = this.captureState();
+    const state = this.captureChanges();
 
     if (isSameGeometryState(state, this.state)) return;
 

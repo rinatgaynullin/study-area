@@ -218,6 +218,9 @@ F = point(2, 2) << fixed: true >>;
     expect(a2.Value()).toBeCloseTo((state.a as { value: number }).value, 3);
     expect([Q2.X(), Q2.Y()]).toEqual([1, 1]);
     expect(P2.Y()).toBeCloseTo(a2.Value() * Math.sin(P2.X()), 3);
+    // Снимок отличий содержит сдвинутые элементы и глайдеры, которых увели за собой
+    // изменившиеся график и окружность; закреплённая F не попадает.
+    expect(Object.keys(source.captureChanges()).sort()).toEqual(['K', 'P', 'Q', 'a']);
 
     source.destroy();
     restored.destroy();
@@ -240,7 +243,12 @@ F = point(2, 2) << fixed: true >>;
     instance.triggerEventHandlers(['up'], [new Event('pointerup')]);
 
     expect(onStateChange).toHaveBeenCalledTimes(1);
-    expect(onStateChange.mock.calls[0]?.[0]).toMatchObject({ Q: { coords: [2, -1] } });
+    // В документ уезжают только отличия от скрипта: сдвинутая точка и глайдер K
+    // на окружности вокруг неё, которую она утащила за собой; слайдер и P — нет.
+    const emitted = onStateChange.mock.calls[0]?.[0] as Record<string, unknown>;
+
+    expect(emitted).toMatchObject({ Q: { coords: [2, -1] } });
+    expect(Object.keys(emitted).sort()).toEqual(['K', 'Q']);
 
     board.destroy();
   });
@@ -256,6 +264,27 @@ F = point(2, 2) << fixed: true >>;
     expect(board.instance).toBe(before);
     expect((instance.select('a', false) as Valued).Value()).toBeCloseTo(-2, 3);
     expect(board.captureState().Q).toEqual({ coords: [0, 3] });
+
+    board.destroy();
+  });
+});
+
+describe('отличия от скрипта', () => {
+  it('без сдвигов отличий нет, даже если состояние снималось', async () => {
+    const host = document.createElement('div');
+    const board = new GeometryBoard({
+      element: host,
+      script: DEFAULT_SCRIPT,
+      bbox: [-6, 5, 6, -5],
+      interactive: true,
+      renderer: 'no',
+    });
+
+    await loadJsxGraph();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(board.captureChanges()).toEqual({});
+    expect(Object.keys(board.captureState()).sort()).toEqual(['P', 'a']);
 
     board.destroy();
   });

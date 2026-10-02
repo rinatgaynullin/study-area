@@ -161,7 +161,7 @@ class GeometryDialogController implements DialogComponent<GeometryPayload | null
       bbox: this.bbox,
       height: this.payload?.height ?? DEFAULT_HEIGHT,
       // Точки, расставленные в предпросмотре, уезжают в документ как состояние.
-      state: this.preview?.captureState() ?? {},
+      state: this.preview?.captureChanges() ?? {},
     };
     const chain = this.context.editor.chain().focus();
 
