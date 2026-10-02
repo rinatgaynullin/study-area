@@ -718,6 +718,7 @@ and `npm run build`.
 
 ## Documentation
 
+- [docs/library/](docs/library/README.md) — полная документация библиотеки на русском: архитектура, ядро, интерфейс, формулы, медиа, Vue, standalone и Django, безопасность, разработка, рецепты, справочник API
 - [ARCHITECTURE.md](ARCHITECTURE.md) — package split, data flow, plugin boundaries
 - [THEMING.md](THEMING.md) — every CSS variable, what it controls, its default
 - [LIMITATIONS.md](LIMITATIONS.md) — what v1 does not do, and why
