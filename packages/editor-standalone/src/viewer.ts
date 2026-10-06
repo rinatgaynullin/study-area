@@ -5,7 +5,7 @@
  * до чего дотягиваются эти экспорты. MathJax остаётся ленивым чанком и
  * грузится лишь для формул, пришедших без готового SVG.
  */
-import '@rich-editor/core/styles.css';
+import '@rich-editor/core/viewer.css';
 
 export {
   createRichContent,
@@ -17,4 +17,4 @@ export {
   type RichContentOptions,
   type RichContentUpdate,
   type EditorTheme,
-} from '@rich-editor/core';
+} from '@rich-editor/core/viewer';

@@ -7,7 +7,9 @@
  */
 import 'mathlive/fonts.css';
 import '@rich-editor/core/styles.css';
-import { createRichContent, createRichEditor } from '@rich-editor/core';
+import { createRichEditor } from '@rich-editor/core';
+// Вьюер берётся из отдельного входа: страница только для чтения не тянет TipTap.
+import { createRichContent } from '@rich-editor/core/viewer';
 import './styles.css';
 
 const host = document.querySelector<HTMLElement>('#editor');

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Единая таблица стилей пакета. Импорт живёт в компонентах, а не в index.ts,
 // который по соглашению содержит только реэкспорты.
-import '../styles/index.css';
+import '../styles/viewer.css';
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
-import { createRichContent, type EditorTheme, type RichContent } from '@rich-editor/core';
+import { createRichContent, type EditorTheme, type RichContent } from '@rich-editor/core/viewer';
 
 /**
  * Обёртка над ванильным вьюером `createRichContent`.

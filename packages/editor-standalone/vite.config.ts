@@ -20,6 +20,9 @@ const core = (path: string) => resolve(import.meta.dirname, '../editor-core', pa
 export default defineConfig({
   resolve: {
     alias: [
+      // Подпути раньше корня: alias сопоставляется по префиксу в порядке списка.
+      { find: '@rich-editor/core/viewer.css', replacement: core('src/content.css') },
+      { find: '@rich-editor/core/viewer', replacement: core('src/viewer.ts') },
       { find: '@rich-editor/core/styles.css', replacement: core('src/styles.css') },
       { find: '@rich-editor/core', replacement: core('src/index.ts') },
     ],

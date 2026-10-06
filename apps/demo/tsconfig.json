@@ -3,6 +3,8 @@
   "compilerOptions": {
     "types": ["vite/client", "node"],
     "paths": {
+      "@rich-editor/core/viewer": ["../../packages/editor-core/src/viewer.ts"],
+      "@rich-editor/vue/viewer": ["../../packages/editor-vue/src/viewer.ts"],
       "@rich-editor/core": ["../../packages/editor-core/src/index.ts"],
       "@rich-editor/vue": ["../../packages/editor-vue/src/index.ts"]
     }

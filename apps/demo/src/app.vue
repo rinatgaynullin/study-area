@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 import {
-  RichContent,
   RichEditor,
   latexToMathML,
   type Messages,
@@ -9,6 +8,8 @@ import {
   type UploadAdapter,
   type UploadResult,
 } from '@rich-editor/vue';
+// Вьюер из отдельного входа: он не тянет редактор и TipTap.
+import { RichContent } from '@rich-editor/vue/viewer';
 import enMessages from './locales/en.json';
 import { HTML_SAMPLES, type HtmlSample } from './samples';
 

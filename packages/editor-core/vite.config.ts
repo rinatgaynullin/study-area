@@ -7,9 +7,15 @@ export default defineConfig({
     sourcemap: true,
     cssCodeSplit: false,
     lib: {
-      entry: resolve(import.meta.dirname, 'src/index.ts'),
+      // Два входа: редактор целиком и вьюер без него. Общие модули Rollup
+      // выносит в chunks/, поэтому вьюер не тянет TipTap.
+      entry: {
+        index: resolve(import.meta.dirname, 'src/index.ts'),
+        viewer: resolve(import.meta.dirname, 'src/viewer.ts'),
+      },
       formats: ['es'],
-      fileName: () => 'index.js',
+      fileName: (_format, name) => `${name}.js`,
+      // Один styles.css на оба входа; viewer.css кладёт copy-css.mjs.
       cssFileName: 'styles',
     },
     rollupOptions: {
@@ -23,6 +29,9 @@ export default defineConfig({
         'mathlive/ssr',
         'mathml-to-latex',
       ],
+      output: {
+        chunkFileNames: 'chunks/[name]-[hash].js',
+      },
     },
   },
 });

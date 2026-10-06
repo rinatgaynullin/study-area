@@ -7,6 +7,12 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- Viewer entry points: `@rich-editor/core/viewer` and `@rich-editor/vue/viewer`
+  export only the read-only viewer (`createRichContent`, `<RichContent />`, theme,
+  HTML preparation, sanitizer, formula rendering) and come with `viewer.css` —
+  the document styles and theme tokens without the editor chrome. The core
+  build fails if the viewer graph pulls in TipTap, ProseMirror or MathLive
+  (`scripts/check-viewer.mjs`). `styles.css` is now `content.css` + `editor.css`.
 - `setOptions()` on `RichEditorUi` and `RichEditorCore`: change several live
   options in one call — `editable`, `locale`, `messages`, `limits`, `theme`,
   `placeholder`, `ariaLabel`, `minHeight`, `statusLine`, `linkStyles` and the

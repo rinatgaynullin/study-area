@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string): string =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
 
-const STYLES = read('../src/styles.css');
+const STYLES = [read('../src/content.css'), read('../src/editor.css')].join('\n');
 const LEGACY = read('../src/legacy.css');
 const THEMING = read('../../../THEMING.md');
 

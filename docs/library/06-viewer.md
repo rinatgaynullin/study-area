@@ -58,8 +58,9 @@ SSR рендерится пустая оболочка с классами, на
 ## Пример
 
 ```ts
-import { createRichContent } from '@rich-editor/core';
-import '@rich-editor/core/styles.css';
+// Отдельный вход: без TipTap, MathLive и стилей тулбара.
+import { createRichContent } from '@rich-editor/core/viewer';
+import '@rich-editor/core/viewer.css';
 
 const viewer = createRichContent({
   element: document.querySelector('#answer')!,
@@ -73,14 +74,33 @@ viewer.destroy();
 ```
 
 ```vue
-<RichContent :html="html" theme="auto" @rendered="onRendered" />
+<script setup lang="ts">
+// Вход вьюера Vue-пакета: только <RichContent /> и ванильный вьюер.
+import { RichContent } from '@rich-editor/vue/viewer';
+import '@rich-editor/vue/viewer.css';
+</script>
+
+<template>
+  <RichContent :html="html" theme="auto" @rendered="onRendered" />
+</template>
 ```
+
+### Точки входа
+
+| Импорт | Что даёт |
+| --- | --- |
+| `@rich-editor/core/viewer`, `@rich-editor/core/viewer.css` | `createRichContent`, тема, `prepareIncomingHtml`, санитайзер, рендер формул; стили документа и токены темы без интерфейса редактора |
+| `@rich-editor/vue/viewer`, `@rich-editor/vue/viewer.css` | `<RichContent />` плюс то же, что выше |
+| `@rich-editor/core`, `@rich-editor/vue` | Полный пакет: редактор и вьюер вместе, `styles.css` на оба |
+
+Сборка ядра проверяет, что граф импортов входа `./viewer` не содержит TipTap,
+ProseMirror и MathLive (`packages/editor-core/scripts/check-viewer.mjs`).
 
 ## Ограничения
 
 - Только клиент: санитайзеру нужен DOM, серверного рендера контента нет.
-- Вьюеру нужен тот же `styles.css`, что и редактору; для legacy —
-  дополнительно `legacy.css`.
+- Вьюеру достаточно `viewer.css` (документ и токены темы); для legacy —
+  дополнительно `legacy.css`. Полный `styles.css` его включает.
 
 ## См. также
 

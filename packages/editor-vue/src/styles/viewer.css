@@ -1,0 +1,6 @@
+/*
+ * Стили вьюера без редактора: документ и токены темы из ядра.
+ * Точка входа `@rich-editor/vue/viewer.css`.
+ */
+
+@import '../../../editor-core/src/content.css';

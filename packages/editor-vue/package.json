@@ -19,12 +19,17 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./viewer": {
+      "types": "./dist/types/viewer.d.ts",
+      "import": "./dist/viewer.js"
+    },
     "./styles.css": "./dist/styles.css",
+    "./viewer.css": "./dist/viewer.css",
     "./legacy.css": "./dist/legacy.css",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "vite build && npm run build:types",
+    "build": "vite build && npm run build:types && node ../../scripts/copy-css.mjs vue",
     "build:types": "vue-tsc -p tsconfig.build.json",
     "typecheck": "vue-tsc -p tsconfig.json --noEmit"
   },
