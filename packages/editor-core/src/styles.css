@@ -1,7 +1,9 @@
 /*
- * Полный набор стилей: документ с токенами темы (content.css) и интерфейс
- * редактора (editor.css). Вьюеру без редактора достаточно content.css —
- * он отдаётся как `@rich-editor/core/viewer.css`.
+ * Полный набор стилей: документ с токенами темы (content.css), compat-слой
+ * старой разметки (legacy.css, действует только внутри `.rte-legacy`) и
+ * интерфейс редактора (editor.css). Вьюеру без редактора достаточно первых
+ * двух — они отдаются как `@rich-editor/core/viewer.css`.
  */
 @import './content.css';
+@import './legacy.css';
 @import './editor.css';

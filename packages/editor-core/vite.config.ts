@@ -27,6 +27,9 @@ export default defineConfig({
         'dompurify',
         'mathlive',
         'mathlive/ssr',
+        // Шрифты: импорт остаётся в index.js как есть, файлы выдаёт бандлер
+        // хоста. В режиме библиотеки Vite иначе заинлайнил бы их в CSS base64.
+        'mathlive/fonts.css',
         'mathml-to-latex',
       ],
       output: {

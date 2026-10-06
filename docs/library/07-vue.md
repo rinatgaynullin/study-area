@@ -21,13 +21,14 @@
 ### Подключение
 
 ```ts
-import 'mathlive/fonts.css';            // шрифты поля ввода формул
-import '@rich-editor/vue/styles.css';   // стили редактора и вьюера
-import '@rich-editor/vue/legacy.css';   // только если есть контент Froala
-
 import { RichEditorPlugin } from '@rich-editor/vue';
 app.use(RichEditorPlugin);              // регистрирует RichEditor и RichContent глобально
 ```
+
+Стили, compat-слой для разметки Froala и шрифты MathLive приезжают вместе с
+компонентами: отдельные импорты CSS не нужны. Файлы `styles.css`, `viewer.css`
+и `legacy.css` по-прежнему экспортируются для хостов, которые подключают CSS
+тегом `<link>`.
 
 Или локально: `import { RichEditor, RichContent } from '@rich-editor/vue'`.
 Экспорт по умолчанию — `RichEditor`. Странице только для чтения достаточно
@@ -140,7 +141,7 @@ const exportHtml = async () => {
 ### Nuxt
 
 Редактор работает только на клиенте: оборачивайте в `ClientOnly`, в
-`nuxt.config.ts` добавьте `css: ['@rich-editor/vue/styles.css']` и
+`nuxt.config.ts` добавьте
 `vite: { optimizeDeps: { include: ['mathlive'] } }`. `RichContent` можно
 ставить где угодно: на сервере — пустая оболочка, на клиенте — наполнение.
 

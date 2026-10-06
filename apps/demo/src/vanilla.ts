@@ -5,8 +5,7 @@
  * `createRichEditor`. Если она работает, значит обёртке действительно
  * достаточно смонтировать готовый интерфейс.
  */
-import 'mathlive/fonts.css';
-import '@rich-editor/core/styles.css';
+// Стили и шрифты MathLive приезжают вместе с createRichEditor.
 import { createRichEditor } from '@rich-editor/core';
 // Вьюер берётся из отдельного входа: страница только для чтения не тянет TipTap.
 import { createRichContent } from '@rich-editor/core/viewer';

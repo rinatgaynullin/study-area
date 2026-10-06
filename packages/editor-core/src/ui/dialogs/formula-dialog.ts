@@ -1,3 +1,7 @@
+// Шрифты MathLive едут вместе со стилями редактора: хосту с бандлером ничего
+// подключать не нужно. Хост, раздающий шрифты сам, передаёт fontsDirectory —
+// MathLive объявит свои @font-face поверх этих.
+import 'mathlive/fonts.css';
 import type { MathfieldElement } from 'mathlive';
 import { MATHLIVE_STRINGS } from '../../i18n/mathlive';
 import { latexToMathML, mathmlToLatex } from '../../formula/mathml';

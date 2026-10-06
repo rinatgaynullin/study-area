@@ -20,6 +20,9 @@ const core = (path: string) => resolve(import.meta.dirname, '../editor-core', pa
 export default defineConfig({
   resolve: {
     alias: [
+      // Шрифты кладёт copy-assets.mjs в dist/fonts, а MathLive берёт их по
+      // fontsDirectory; fonts.css из ядра здесь только дублировал бы файлы.
+      { find: 'mathlive/fonts.css', replacement: resolve(import.meta.dirname, 'src/empty.css') },
       // Подпути раньше корня: alias сопоставляется по префиксу в порядке списка.
       { find: '@rich-editor/core/viewer.css', replacement: core('src/content.css') },
       { find: '@rich-editor/core/viewer', replacement: core('src/viewer.ts') },

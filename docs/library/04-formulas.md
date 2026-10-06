@@ -89,7 +89,7 @@ HTML с бэкенда может содержать либо полный ко�
 
 | Ситуация | Что сделать |
 | --- | --- |
-| Бандлер (Vite, webpack) | `import 'mathlive/fonts.css'`; опция `mathliveFontsDirectory` остаётся `null` |
+| Бандлер (Vite, webpack) | Ничего: редактор импортирует `mathlive/fonts.css` сам, бандлер выдаёт файлы шрифтов; `mathliveFontsDirectory` остаётся `null` |
 | Шрифты раздаются самостоятельно | `mathliveFontsDirectory: '/fonts/mathlive'` |
 | Standalone-сборка | `editor.js` сам берёт соседний `fonts/`; явная опция главнее |
 

@@ -28,7 +28,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "vite build && npm run build:types && node ../../scripts/copy-css.mjs core && node scripts/check-viewer.mjs",
+    "build": "vite build && npm run build:types && node ../../scripts/copy-css.mjs core && node scripts/check-dist.mjs",
     "build:types": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

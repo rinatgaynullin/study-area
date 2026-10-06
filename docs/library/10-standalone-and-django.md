@@ -23,7 +23,7 @@
 | `editor.js` | Всё API `@rich-editor/core` плюс `MATHLIVE_FONTS_DIRECTORY`; `createRichEditor` сам берёт шрифты из соседнего `fonts/` |
 | `viewer.js` | Только вьюер: `createRichContent`, `applyTheme`, `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml` |
 | `chunks/` | Ленивые чанки: MathLive и MathJax грузятся при первой формуле |
-| `styles.css`, `legacy.css` | Стили редактора и вьюера; compat-слой Froala |
+| `styles.css`, `legacy.css` | Стили редактора и вьюера (compat-слой уже внутри); `legacy.css` остаётся для совместимости |
 | `fonts/` | Шрифты MathLive |
 
 Каталог раздаётся целиком и с той же структурой: чанки и шрифты ищутся

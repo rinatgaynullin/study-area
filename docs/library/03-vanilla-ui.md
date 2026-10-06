@@ -31,7 +31,7 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 | `toolbarItems` | `Record<string, ToolbarItemDescriptor>` | — | Свои пункты; запись со встроенным `id` заменяет встроенный пункт |
 | `features` | `EditorFeature[]` | — | Возможности: расширения схемы, пункты тулбара и диалоги одним объявлением |
 | `linkStyles` | `LinkStyle[]` | `DEFAULT_LINK_STYLES` | Варианты оформления ссылки в поповере (класс на ссылке) |
-| `mathliveFontsDirectory` | `string` или `null` | `null` | Каталог шрифтов MathLive; `null` — подключён `mathlive/fonts.css` |
+| `mathliveFontsDirectory` | `string` или `null` | `null` | Каталог шрифтов MathLive, если хост раздаёт их сам; `null` — шрифты из бандла |
 | `collapseBelow` | `number` | `760` | Ширина, ниже которой схлопываемые группы уходят в меню «Ещё» |
 | `textSwatches`, `highlightSwatches` | `string[]` | `DEFAULT_TEXT_SWATCHES`, `DEFAULT_HIGHLIGHT_SWATCHES` | Палитры цвета текста и выделения |
 | `minHeight` | `string` | — | `min-height` области ввода |
@@ -140,7 +140,6 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 
 ```ts
 import { createRichEditor, type ToolbarItemDescriptor } from '@rich-editor/core';
-import '@rich-editor/core/styles.css';
 
 const toolbarItems: Record<string, ToolbarItemDescriptor> = {
   stamp: {

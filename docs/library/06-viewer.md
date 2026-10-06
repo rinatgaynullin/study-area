@@ -25,7 +25,7 @@
 | `element` | `HTMLElement` | — | Станет вьюером: получает классы `rte-content-root rte-content` и содержимое |
 | `html` | `string` | `''` | Документ; санитизируется всегда |
 | `formulaScale` | `number` | `1` | Масштаб формул; при значении, отличном от 1, все формулы перерисовываются |
-| `legacy` | `boolean` | `false` | Разметка Froala + Wiris; нужен `legacy.css` |
+| `legacy` | `boolean` | `false` | Разметка Froala + Wiris; compat-стили уже в `styles.css` и `viewer.css` |
 | `theme` | `EditorTheme` | `'light'` | `'light'`, `'dark'`, `'auto'`; или класс `rte-theme-dark` на предке |
 | `onRendered` | `() => void` | — | Все ожидавшие формулы отрисованы (после каждого `update`) |
 
@@ -99,8 +99,9 @@ ProseMirror и MathLive (`packages/editor-core/scripts/check-viewer.mjs`).
 ## Ограничения
 
 - Только клиент: санитайзеру нужен DOM, серверного рендера контента нет.
-- Вьюеру достаточно `viewer.css` (документ и токены темы); для legacy —
-  дополнительно `legacy.css`. Полный `styles.css` его включает.
+- Вьюеру достаточно `viewer.css`: документ, токены темы и compat-слой; он
+  подключается самим входом `./viewer`. Отдельный `legacy.css` остаётся для
+  страниц, где стили подключают тегом `<link>`.
 
 ## См. также
 

@@ -7,6 +7,11 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- Styles need no manual imports: the editor imports `mathlive/fonts.css` itself
+  (kept external in the library build, so the host bundler emits the font
+  files), and the Froala compat layer is part of `styles.css` and `viewer.css`
+  (its rules only apply under `.rte-legacy`). `legacy.css` stays exported for
+  `<link>`-based hosts. The core build guards this in `scripts/check-dist.mjs`.
 - Viewer entry points: `@rich-editor/core/viewer` and `@rich-editor/vue/viewer`
   export only the read-only viewer (`createRichContent`, `<RichContent />`, theme,
   HTML preparation, sanitizer, formula rendering) and come with `viewer.css` —
