@@ -28,6 +28,22 @@ export default defineConfig({
     // build. Subpath entries come first: alias matching is order-sensitive.
     alias: [
       {
+        find: '@rich-editor/core/viewer.css',
+        replacement: fromRoot('../../packages/editor-core/src/content.css'),
+      },
+      {
+        find: '@rich-editor/vue/viewer.css',
+        replacement: fromRoot('../../packages/editor-vue/src/styles/viewer.css'),
+      },
+      {
+        find: '@rich-editor/core/viewer',
+        replacement: fromRoot('../../packages/editor-core/src/viewer.ts'),
+      },
+      {
+        find: '@rich-editor/vue/viewer',
+        replacement: fromRoot('../../packages/editor-vue/src/viewer.ts'),
+      },
+      {
         find: '@rich-editor/core/styles.css',
         replacement: fromRoot('../../packages/editor-core/src/styles.css'),
       },

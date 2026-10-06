@@ -1,0 +1,585 @@
+/*
+ * Content styles for the editable area and for rendering exported HTML.
+ * Everything visual resolves through CSS variables, so a host can restyle the
+ * editor by overriding variables on `.rte-root` without forking the package.
+ */
+
+.rte-content {
+  font-family: var(--rte-font-family, inherit);
+  font-size: var(--rte-font-size, 15px);
+  line-height: var(--rte-line-height, 1.47);
+  color: var(--rte-color-text, #221f2e);
+  outline: none;
+  word-break: break-word;
+}
+
+.rte-content > * + * {
+  margin-top: var(--rte-block-gap, 0.75em);
+}
+
+.rte-content p {
+  margin: 0;
+}
+
+.rte-content h1,
+.rte-content h2,
+.rte-content h3,
+.rte-content h4,
+.rte-content h5,
+.rte-content h6 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.rte-content h1 {
+  font-size: 1.9em;
+}
+.rte-content h2 {
+  font-size: 1.6em;
+}
+.rte-content h3 {
+  font-size: 1.35em;
+}
+.rte-content h4 {
+  font-size: 1.15em;
+}
+.rte-content h5 {
+  font-size: 1em;
+}
+.rte-content h6 {
+  font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rte-content ul,
+.rte-content ol {
+  padding-left: 1.5em;
+  margin: 0;
+}
+
+.rte-content li > p {
+  margin: 0;
+}
+
+.rte-content blockquote {
+  margin: 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--rte-color-border, #dedce3);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-content code {
+  font-family: var(--rte-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.9em;
+  background: var(--rte-color-code-bg, #f5f5f7);
+  border-radius: var(--rte-radius-sm, 4px);
+  padding: 0.15em 0.35em;
+}
+
+.rte-content pre {
+  font-family: var(--rte-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  background: var(--rte-color-code-block-bg, #f5f5f7);
+  border-radius: var(--rte-radius, 8px);
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.rte-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.875em;
+}
+
+.rte-content hr {
+  border: none;
+  border-top: 1px solid var(--rte-color-border, #dedce3);
+  margin: 1.25em 0;
+}
+
+.rte-content a {
+  /* Ссылка — свой токен: в дизайн-системе она не акцентного цвета. */
+  color: var(--rte-color-link, #396fdb);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.rte-content mark {
+  /* Подсветка — светлая пастель из палитры, поэтому текст на ней тёмный и
+     в тёмной теме: иначе он сливается с маркером. !important нужен, потому
+     что расширение Highlight пишет в тег инлайновый `color: inherit`. */
+  color: var(--rte-color-on-highlight, #221f2e) !important;
+  border-radius: var(--rte-radius-sm, 4px);
+  padding: 0 0.1em;
+}
+
+/* ------------------------------------------------------------------ tables */
+
+.rte-content table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  overflow: hidden;
+}
+
+.rte-content th,
+.rte-content td {
+  border: 1px solid var(--rte-color-border, #dedce3);
+  padding: 0.4em 0.6em;
+  vertical-align: top;
+  position: relative;
+  min-width: 2em;
+}
+
+.rte-content th {
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  font-weight: 600;
+  text-align: left;
+}
+
+.rte-content .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--rte-color-selection, #fff1e0);
+  pointer-events: none;
+}
+
+.rte-content .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--rte-color-primary, #ff892e);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ images */
+
+.rte-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--rte-radius, 8px);
+  display: block;
+}
+
+.rte-content img.ProseMirror-selectednode {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+}
+
+/* ---------------------------------------------------------------- formulas */
+
+.rte-formula {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 var(--rte-formula-padding, 2px);
+  border-radius: var(--rte-radius-sm, 4px);
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.rte-formula:hover {
+  background: var(--rte-color-formula-hover, #fff1e0);
+}
+
+.rte-formula--selected,
+.rte-formula.ProseMirror-selectednode {
+  background: var(--rte-color-formula-hover, #fff1e0);
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
+}
+
+.rte-formula__render {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.rte-formula__render svg {
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+/* ------------------------------------------------------------------- audio */
+
+.rte-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--rte-audio-padding, 10px 12px);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-lg, 12px);
+  max-width: var(--rte-audio-max-width, 420px);
+}
+
+.rte-audio.ProseMirror-selectednode {
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
+}
+
+.rte-audio__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rte-audio__toggle {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: var(--rte-color-primary, #ff892e);
+  color: var(--rte-color-on-primary, #fff);
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rte-audio__waveform {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.rte-audio__bar {
+  flex: 1 1 auto;
+  min-width: 2px;
+  border-radius: 1px;
+  background: var(--rte-color-waveform, #dedce3);
+  transition: background-color 80ms linear;
+}
+
+.rte-audio__bar--played {
+  background: var(--rte-color-primary, #ff892e);
+}
+
+.rte-audio__time {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-audio__name {
+  font-size: 12px;
+  color: var(--rte-color-muted, #898794);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The editor replaces audio blocks with its own waveform player, so the native
+ * element is never in the DOM there. Everywhere the raw HTML is displayed —
+ * the read-only viewer, an email, another site — this plain player is what
+ * makes the recording playable, so it must stay visible.
+ */
+.rte-audio__native {
+  width: 100%;
+}
+
+/* -------------------------------------------------------------- attachment */
+
+.rte-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-lg, 12px);
+  max-width: 100%;
+}
+
+.rte-attachment.ProseMirror-selectednode {
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
+}
+
+.rte-attachment__icon {
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.rte-attachment__link {
+  color: var(--rte-color-primary, #ff892e);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rte-attachment__meta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--rte-color-muted, #898794);
+}
+
+/* ------------------------------------------------------------- placeholder */
+
+.rte-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--rte-color-placeholder, #898794);
+}
+
+/* ------------------------------------------------------------- gapcursor */
+
+.rte-content .ProseMirror-gapcursor::after {
+  border-top-color: var(--rte-color-text, #221f2e);
+}
+
+/*
+ * Ручки изменения размера картинки. Разметку строит ResizableNodeView из
+ * @tiptap/core, здесь только оформление: контейнер, обёртка и по ручке на
+ * каждый угол размечены data-атрибутами.
+ */
+.rte-content [data-resize-container] {
+  max-width: 100%;
+}
+
+.rte-content [data-resize-wrapper] {
+  max-width: 100%;
+}
+
+.rte-content [data-resize-handle] {
+  width: var(--rte-resize-handle-size, 10px);
+  height: var(--rte-resize-handle-size, 10px);
+  background: var(--rte-color-primary, #ff892e);
+  border: 1px solid var(--rte-color-on-primary, #fff);
+  border-radius: var(--rte-radius-sm, 4px);
+  /* Ручки видны только когда картинка выбрана: иначе они перекрывают контент
+     при простом чтении документа. */
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.rte-content [data-resize-container]:hover [data-resize-handle],
+.rte-content [data-resize-state='true'] [data-resize-handle],
+.rte-content .ProseMirror-selectednode [data-resize-handle],
+.rte-content [data-resize-container]:has(.ProseMirror-selectednode) [data-resize-handle] {
+  opacity: 1;
+}
+
+.rte-content [data-resize-handle='top-left'] {
+  cursor: nwse-resize;
+}
+
+.rte-content [data-resize-handle='top-right'] {
+  cursor: nesw-resize;
+}
+
+.rte-content [data-resize-handle='bottom-left'] {
+  cursor: nesw-resize;
+}
+
+.rte-content [data-resize-handle='bottom-right'] {
+  cursor: nwse-resize;
+}
+
+/* Во время перетаскивания выделение текста только мешает. */
+.rte-content [data-resize-state='true'] {
+  user-select: none;
+}
+
+/*
+ * Варианты оформления ссылок. Класс ставится маркой, поэтому переживает
+ * экспорт и читается вьюером без участия редактора.
+ */
+.rte-content a.rte-link--strong {
+  font-weight: 700;
+}
+
+.rte-content a.rte-link--muted {
+  color: var(--rte-color-muted, #898794);
+}
+
+/* ===================================================================
+ * Оформление интерфейса: токены темы, тулбар, меню, модалки, поповеры.
+ *
+ * Переехало сюда из Vue-пакета вместе с самим интерфейсом. UI ядра
+ * ванильный, и стили к нему должны приезжать из того же пакета — иначе
+ * ванильный редактор без Vue остаётся без внешнего вида.
+ *
+ * Токены — единственный интерфейс кастомизации (THEMING.md). Цвет, шрифт,
+ * радиус, тень и размер контрола в правилах ниже берутся только из них;
+ * тест theme-tokens это сторожит. Значения по умолчанию повторяют язык
+ * дизайн-системы umschool, а другой UI подключается переопределением
+ * токенов на `.rte-root` и `.rte-content-root` — без правки этого файла.
+ * =================================================================== */
+
+/*
+ * Theme variables live on both the editor shell and the standalone read-only
+ * viewer, so overriding them once restyles either surface.
+ */
+.rte-root,
+.rte-content-root {
+  /* Палитра */
+  --rte-color-primary: #ff892e;
+  --rte-color-primary-hover: #f56600;
+  --rte-color-primary-soft: #fff1e0;
+  --rte-color-on-primary: #ffffff;
+  --rte-color-text: #221f2e;
+  --rte-color-muted: #898794;
+  --rte-color-placeholder: #898794;
+  --rte-color-link: #396fdb;
+  --rte-color-bg: #ffffff;
+  --rte-color-subtle-bg: #f5f5f7;
+  --rte-color-border: #dedce3;
+  --rte-color-border-hover: #afadb8;
+  --rte-color-danger: #f23e3e;
+  --rte-color-danger-soft: #ffebeb;
+  --rte-color-code-bg: #f5f5f7;
+  --rte-color-code-block-bg: #f5f5f7;
+  --rte-color-selection: var(--rte-color-primary-soft);
+  --rte-color-formula-hover: var(--rte-color-primary-soft);
+  --rte-color-waveform: #dedce3;
+  --rte-color-overlay: rgb(34 31 46 / 45%);
+  --rte-color-on-highlight: #221f2e;
+
+  /* Типографика */
+  --rte-font-family: Golos, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --rte-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --rte-font-size: 15px;
+  --rte-line-height: 1.47;
+  --rte-ui-font-size: 15px;
+  --rte-ui-font-size-sm: 14px;
+  --rte-ui-font-size-xs: 13px;
+  --rte-ui-font-weight: 500;
+  --rte-title-font-size: 18px;
+  --rte-title-font-weight: 600;
+  --rte-display-font-size: 24px;
+  --rte-formula-input-font-size: 20px;
+
+  /* Форма, тени, слои */
+  --rte-radius-sm: 4px;
+  --rte-radius: 8px;
+  --rte-radius-lg: 12px;
+  --rte-radius-pill: 999px;
+  --rte-input-radius: 10px;
+  --rte-shadow: 0 3px 7px rgb(35 31 51 / 5%), 0 10px 24px rgb(35 31 51 / 8%);
+  --rte-shadow-lg: 0 8px 24px rgb(35 31 51 / 8%), 0 32px 80px rgb(35 31 51 / 16%);
+  --rte-focus-ring: 2px solid var(--rte-color-primary);
+  --rte-z-modal: 2000;
+
+  /* Тулбар */
+  --rte-toolbar-bg: var(--rte-color-bg);
+  --rte-toolbar-gap: 2px;
+  --rte-toolbar-padding: 4px 6px;
+  --rte-btn-size: 36px;
+  --rte-btn-text-width: 9.5em;
+  --rte-btn-hover-bg: var(--rte-color-subtle-bg);
+  --rte-btn-active-bg: var(--rte-color-primary-soft);
+  --rte-btn-active-color: var(--rte-color-primary);
+
+  /* Контролы диалогов */
+  --rte-input-height: 44px;
+  --rte-input-padding-x: 11px;
+  --rte-input-focus-shadow: none;
+  --rte-button-height: 44px;
+  --rte-button-padding-x: 24px;
+  --rte-button-hover-bg: var(--rte-color-subtle-bg);
+
+  /* Модалки, поповеры, меню */
+  --rte-modal-width: 480px;
+  --rte-modal-width-wide: 860px;
+  --rte-modal-padding-x: 32px;
+  --rte-modal-padding-y: 16px;
+  --rte-popover-padding: 12px;
+  --rte-menu-item-padding: 8px 12px;
+  --rte-menu-min-width: 180px;
+
+  /* Контент и медиа */
+  --rte-content-padding: 12px 16px;
+  --rte-block-gap: 0.75em;
+  --rte-formula-padding: 2px;
+  --rte-audio-max-width: 420px;
+  --rte-audio-padding: 10px 12px;
+  --rte-resize-handle-size: 10px;
+
+  color: var(--rte-color-text);
+  font-family: var(--rte-font-family);
+}
+
+/* Вьюер несёт поверхность сам: под тёмной темой светлый текст на фоне хоста
+   был бы нечитаем. Хост, которому нужна прозрачность, ставит
+   `--rte-color-bg: transparent` на своём экземпляре. */
+.rte-content-root {
+  background: var(--rte-color-bg);
+}
+
+/*
+ * Тёмная тема — те же токены под классом; значения — тёмная палитра
+ * дизайн-системы umschool. Класс ставится на сам элемент редактора или вьюера
+ * либо на любого предка (например, на <html> рядом с темой хоста); опция
+ * `theme` у createRichEditor и createRichContent ставит его сама.
+ * `color-scheme` красит нативные контролы — чекбокс, поле цвета, скроллбар.
+ */
+.rte-theme-dark .rte-root,
+.rte-root.rte-theme-dark,
+.rte-theme-dark .rte-content-root,
+.rte-content-root.rte-theme-dark {
+  color-scheme: dark;
+  --rte-color-primary: #ff8f39;
+  --rte-color-primary-hover: #ff722e;
+  --rte-color-primary-soft: #42393b;
+  --rte-color-text: #ebebf0;
+  --rte-color-muted: #7f7e8f;
+  --rte-color-placeholder: #7f7e8f;
+  --rte-color-link: #3a95ff;
+  --rte-color-bg: #2d2c36;
+  --rte-color-subtle-bg: #363542;
+  --rte-color-border: #4e4c5e;
+  --rte-color-border-hover: #6a697a;
+  --rte-color-danger: #f24b42;
+  --rte-color-danger-soft: #3d3130;
+  --rte-color-code-bg: #363542;
+  --rte-color-code-block-bg: #363542;
+  --rte-color-waveform: #4e4c5e;
+  --rte-color-overlay: rgb(38 36 46 / 75%);
+  --rte-shadow: 0 3px 7px rgb(17 17 20 / 20%), 0 10px 24px rgb(17 17 20 / 32%);
+  --rte-shadow-lg: 0 8px 24px rgb(17 17 20 / 24%), 0 32px 80px rgb(17 17 20 / 32%);
+}
+
+.rte-root {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rte-color-border);
+  /* Редактор целиком — поле ввода, поэтому радиус поля, а не карточки. */
+  border-radius: var(--rte-input-radius);
+  background: var(--rte-color-bg);
+  overflow: hidden;
+}
+
+.rte-root *,
+.rte-content-root *,
+.rte-modal * {
+  box-sizing: border-box;
+}
+
+/*
+ * Кольцо фокуса у всего, на что можно встать с клавиатуры: образцы цвета,
+ * вкладки и шаблоны формул, кнопка плеера, ссылка вложения. Правило общее и
+ * с низкой специфичностью — у кнопок тулбара и пунктов меню своё, со
+ * смещением внутрь. `:where` не даёт ему перебить их.
+ */
+.rte-root :where(button, a, [tabindex]):focus-visible,
+.rte-content-root :where(button, a, [tabindex]):focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: 2px;
+}
+

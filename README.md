@@ -57,8 +57,9 @@ of the editor.
 
 ```vue
 <script setup lang="ts">
-import { RichContent } from '@rich-editor/vue';
-import '@rich-editor/vue/styles.css';
+// The viewer entry: no editor, no TipTap in the graph.
+import { RichContent } from '@rich-editor/vue/viewer';
+import '@rich-editor/vue/viewer.css';
 
 const props = defineProps<{ html: string }>();
 </script>
@@ -75,7 +76,8 @@ that stores just the source — are rendered on demand.
 The viewer, like the editor, is built in the core; without Vue it is one call:
 
 ```ts
-import { createRichContent } from '@rich-editor/core';
+import { createRichContent } from '@rich-editor/core/viewer';
+import '@rich-editor/core/viewer.css';
 
 const viewer = createRichContent({ element: document.querySelector('#answer')!, html });
 await viewer.update({ html: nextHtml });   // re-sanitizes and re-renders pending formulas

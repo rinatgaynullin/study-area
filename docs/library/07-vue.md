@@ -30,7 +30,9 @@ app.use(RichEditorPlugin);              // регистрирует RichEditor �
 ```
 
 Или локально: `import { RichEditor, RichContent } from '@rich-editor/vue'`.
-Экспорт по умолчанию — `RichEditor`.
+Экспорт по умолчанию — `RichEditor`. Странице только для чтения достаточно
+входа `@rich-editor/vue/viewer` и `@rich-editor/vue/viewer.css`: он не тянет
+редактор и TipTap ([06](06-viewer.md#точки-входа)).
 
 ### Пропы `RichEditor`
 

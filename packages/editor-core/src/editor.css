@@ -1,0 +1,860 @@
+/*
+ * Оформление интерфейса редактора: тулбар, меню, строка статуса, модалки,
+ * поповеры, диалоги. Токены темы и стили документа живут в content.css.
+ */
+
+/* ----------------------------------------------------------------- toolbar */
+
+.rte-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rte-toolbar-gap);
+  padding: var(--rte-toolbar-padding);
+  background: var(--rte-toolbar-bg);
+  border-bottom: 1px solid var(--rte-color-border);
+}
+
+.rte-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--rte-toolbar-gap);
+}
+
+.rte-toolbar__group + .rte-toolbar__group::before {
+  content: '';
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 4px;
+  background: var(--rte-color-border);
+}
+
+.rte-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: var(--rte-btn-size);
+  height: var(--rte-btn-size);
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--rte-radius);
+  background: transparent;
+  color: var(--rte-color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-xs);
+  line-height: 1;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rte-btn:hover:not(:disabled) {
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-btn:focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: -2px;
+}
+
+.rte-btn--active {
+  background: var(--rte-btn-active-bg);
+  color: var(--rte-btn-active-color);
+}
+
+.rte-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.rte-btn__text {
+  font-weight: var(--rte-title-font-weight);
+  padding: 0 2px;
+  /* Ширина фиксирована: подпись меняется вслед за кареткой («H1» →
+     «Обычный текст»), и тулбар не должен перестраиваться под неё.
+     Не влезло — многоточие. */
+  width: var(--rte-btn-text-width);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.rte-btn__caret {
+  opacity: 0.6;
+  margin-left: -2px;
+}
+
+.rte-icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* ---------------------------------------------------------------- dropdown */
+
+.rte-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.rte-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: var(--rte-menu-item-padding);
+  border: none;
+  border-radius: var(--rte-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rte-menu__item:hover:not(:disabled) {
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-menu__item:focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: -2px;
+}
+
+.rte-menu__item--active {
+  color: var(--rte-color-primary);
+  font-weight: var(--rte-title-font-weight);
+}
+
+.rte-menu__item:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.rte-menu__separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--rte-color-border);
+}
+
+.rte-menu__heading--1 {
+  font-size: 1.5em;
+  font-weight: 700;
+}
+.rte-menu__heading--2 {
+  font-size: 1.3em;
+  font-weight: 700;
+}
+.rte-menu__heading--3 {
+  font-size: 1.15em;
+  font-weight: 600;
+}
+.rte-menu__heading--4 {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.rte-menu__heading--5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+.rte-menu__heading--6 {
+  font-size: 0.9em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ colors */
+
+.rte-colors {
+  width: 208px;
+  padding: 4px;
+}
+
+.rte-colors__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.rte-colors__swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius-sm);
+  cursor: pointer;
+  padding: 0;
+}
+
+.rte-colors__swatch--active {
+  box-shadow: 0 0 0 2px var(--rte-color-primary);
+}
+
+.rte-colors__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: var(--rte-ui-font-size-xs);
+}
+
+.rte-colors__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-xs);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--rte-radius-sm);
+}
+
+.rte-colors__reset:hover {
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-colors__custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.rte-colors__custom input {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ status */
+
+/* Строка под тулбаром: идущие загрузки и последняя ошибка. */
+.rte-status {
+  padding: 4px 12px;
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-muted);
+  background: var(--rte-color-subtle-bg);
+  border-bottom: 1px solid var(--rte-color-border);
+}
+
+/*
+ * Пустая строка схлопывается, но остаётся в дереве: это живая область, и
+ * читалка объявит текст только в регионе, который существовал до него.
+ */
+.rte-status:empty {
+  height: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+}
+
+.rte-status--error {
+  color: var(--rte-color-danger);
+}
+
+/* ----------------------------------------------------------------- surface */
+
+.rte-surface {
+  display: flex;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.rte-host {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rte-host .rte-content {
+  padding: var(--rte-content-padding);
+  min-height: 100%;
+}
+
+.rte-root--readonly .rte-surface {
+  background: var(--rte-color-subtle-bg);
+}
+
+.rte-hidden-input {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ modals */
+
+.rte-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--rte-z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-family: var(--rte-font-family);
+  /*
+   * Оверлей — контейнер прокрутки, которому нечего прокручивать: колесо и
+   * палец над подложкой или над шапкой панели упираются в него и не уходят
+   * на страницу под диалогом.
+   */
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.rte-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--rte-color-overlay);
+}
+
+.rte-modal__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(var(--rte-modal-width), 100%);
+  /* Доля оверлея, а не vh: оверлей подогнан под видимую часть окна, а vh на
+     телефоне считает и то, что под адресной строкой и под клавиатурой. */
+  max-height: min(90%, 860px);
+  background: var(--rte-color-bg);
+  color: var(--rte-color-text);
+  border-radius: var(--rte-radius-lg);
+  box-shadow: var(--rte-shadow-lg);
+  overflow: hidden;
+}
+
+.rte-modal__panel--wide {
+  width: min(var(--rte-modal-width-wide), 100%);
+}
+
+.rte-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: var(--rte-modal-padding-y) var(--rte-modal-padding-x);
+  border-bottom: 1px solid var(--rte-color-border);
+}
+
+.rte-modal__title {
+  margin: 0;
+  font-size: var(--rte-title-font-size);
+  font-weight: var(--rte-title-font-weight);
+}
+
+.rte-modal__close {
+  display: inline-flex;
+  padding: 6px;
+  border: none;
+  border-radius: var(--rte-radius);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rte-modal__close:hover {
+  background: var(--rte-btn-hover-bg);
+}
+
+.rte-modal__close:focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: -2px;
+}
+
+.rte-modal__body {
+  flex: 1 1 auto;
+  /* Флекс-элемент не сжимается ниже содержимого, пока не разрешить: без
+     этого тело не прокручивалось, а панель обрезала его вместе с подвалом. */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--rte-modal-padding-y) var(--rte-modal-padding-x);
+}
+
+.rte-modal__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--rte-modal-padding-y) var(--rte-modal-padding-x);
+  border-top: 1px solid var(--rte-color-border);
+}
+
+.rte-modal__spacer {
+  flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------------------ inputs */
+
+.rte-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.rte-field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.rte-field-row .rte-field {
+  flex: 1 1 0;
+}
+
+.rte-field__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--rte-ui-font-size);
+  color: var(--rte-color-text);
+}
+
+.rte-field__error {
+  margin: 0 0 12px;
+  color: var(--rte-color-danger);
+  font-size: var(--rte-ui-font-size-xs);
+}
+
+.rte-input {
+  height: var(--rte-input-height);
+  padding: 0 var(--rte-input-padding-x);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-input-radius);
+  background: var(--rte-color-bg);
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size);
+  caret-color: var(--rte-color-text);
+}
+
+.rte-input::placeholder {
+  color: var(--rte-color-placeholder);
+}
+
+.rte-input:hover:not(:focus) {
+  border-color: var(--rte-color-border-hover);
+}
+
+.rte-input:focus {
+  outline: none;
+  border-color: var(--rte-color-primary);
+  box-shadow: var(--rte-input-focus-shadow);
+}
+
+.rte-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--rte-ui-font-size-sm);
+  cursor: pointer;
+}
+
+/* Нативный чекбокс красится в акцент: своей отрисовки у него нет. */
+.rte-checkbox input {
+  accent-color: var(--rte-color-primary);
+}
+
+.rte-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--rte-button-height);
+  padding: 0 var(--rte-button-padding-x);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size);
+  font-weight: var(--rte-ui-font-weight);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.rte-button:hover:not(:disabled) {
+  background: var(--rte-button-hover-bg);
+  border-color: var(--rte-color-border-hover);
+}
+
+.rte-button:focus-visible {
+  outline: var(--rte-focus-ring);
+  outline-offset: 2px;
+}
+
+.rte-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rte-button--primary {
+  background: var(--rte-color-primary);
+  border-color: var(--rte-color-primary);
+  color: var(--rte-color-on-primary);
+}
+
+.rte-button--primary:hover:not(:disabled) {
+  background: var(--rte-color-primary-hover);
+  border-color: var(--rte-color-primary-hover);
+}
+
+.rte-button--danger {
+  color: var(--rte-color-danger);
+  border-color: var(--rte-color-danger);
+}
+
+.rte-button--danger:hover:not(:disabled) {
+  background: var(--rte-color-danger-soft);
+  border-color: var(--rte-color-danger);
+}
+
+/* --------------------------------------------------------- formula editor */
+
+.rte-formula-editor,
+.rte-formula-editor__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rte-formula-editor__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--rte-color-border);
+}
+
+.rte-formula-editor__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--rte-color-muted);
+  font: inherit;
+  font-size: var(--rte-ui-font-size-sm);
+  font-weight: var(--rte-ui-font-weight);
+  cursor: pointer;
+}
+
+.rte-formula-editor__tab--active {
+  color: var(--rte-color-primary);
+  border-bottom-color: var(--rte-color-primary);
+  font-weight: var(--rte-title-font-weight);
+}
+
+.rte-formula-editor__status {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-muted);
+}
+
+.rte-formula-editor__host {
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-input-radius);
+  padding: 10px 12px;
+  min-height: 56px;
+  background: var(--rte-color-bg);
+}
+
+.rte-formula-editor__field {
+  width: 100%;
+  font-size: var(--rte-formula-input-font-size);
+}
+
+/* The dialog has its own template gallery, so MathLive's on-screen keyboard is
+   redundant here. `mathVirtualKeyboardPolicy: 'manual'` stops it opening on
+   focus; this hides the toggle that would still open it by hand. MathLive
+   exposes the button as a shadow part, so no style injection is needed. */
+.rte-formula-editor__field::part(virtual-keyboard-toggle) {
+  display: none;
+}
+
+.rte-formula-editor__hint {
+  margin: 6px 0 0;
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-muted);
+}
+
+.rte-formula-editor__section-title {
+  margin: 0 0 8px;
+  font-size: var(--rte-ui-font-size-xs);
+  font-weight: var(--rte-title-font-weight);
+  color: var(--rte-color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rte-formula-editor__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.rte-formula-editor__category {
+  padding: 5px 10px;
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-xs);
+  cursor: pointer;
+}
+
+.rte-formula-editor__category:hover:not(.rte-formula-editor__category--active) {
+  border-color: var(--rte-color-border-hover);
+  background: var(--rte-color-subtle-bg);
+}
+
+.rte-formula-editor__category--active {
+  background: var(--rte-color-primary);
+  border-color: var(--rte-color-primary);
+  color: var(--rte-color-on-primary);
+}
+
+.rte-formula-editor__gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.rte-formula-editor__template {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 6px;
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  background: var(--rte-color-bg);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.rte-formula-editor__template:hover {
+  border-color: var(--rte-color-primary);
+  background: var(--rte-color-selection);
+}
+
+.rte-formula-editor__template-preview svg {
+  max-width: 100%;
+  max-height: 34px;
+}
+
+.rte-formula-editor__preview-box {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px dashed var(--rte-color-border);
+  border-radius: var(--rte-radius);
+  background: var(--rte-color-subtle-bg);
+  overflow-x: auto;
+}
+
+.rte-formula-editor__empty {
+  color: var(--rte-color-placeholder);
+  font-size: var(--rte-ui-font-size-xs);
+}
+
+/* ---------------------------------------------------------------- recorder */
+
+.rte-recorder {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.rte-recorder__indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--rte-color-subtle-bg);
+  color: var(--rte-color-muted);
+}
+
+.rte-recorder__indicator--live {
+  background: var(--rte-color-danger);
+  color: var(--rte-color-on-primary);
+  /* Scales with live input level, so the user sees the mic is picking up. */
+  transform: scale(var(--rte-level, 1));
+  transition: transform 100ms ease-out;
+}
+
+.rte-recorder__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rte-recorder__time {
+  font-size: var(--rte-display-font-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.rte-recorder__limit,
+.rte-recorder__hint {
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-muted);
+  margin: 0;
+}
+
+.rte-recorder__preview {
+  width: 100%;
+  margin: 12px 0;
+}
+
+.rte-recorder__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ mobile */
+
+@media (max-width: 640px) {
+  .rte-root {
+    --rte-btn-size: 40px;
+    --rte-font-size: 16px;
+    --rte-content-padding: 10px 12px;
+    --rte-modal-padding-x: 20px;
+  }
+
+  .rte-toolbar {
+    overflow-x: auto;
+    flex-wrap: wrap;
+  }
+
+  .rte-modal {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .rte-modal__panel,
+  .rte-modal__panel--wide {
+    width: 100%;
+    max-height: 92%;
+    border-radius: var(--rte-radius-lg) var(--rte-radius-lg) 0 0;
+  }
+
+  .rte-formula-editor__gallery {
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    max-height: 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rte-btn,
+  .rte-button,
+  .rte-recorder__indicator--live,
+  .rte-audio__bar {
+    transition: none;
+  }
+}
+
+/*
+ * Режим принудительных цветов (высокая контрастность Windows) стирает фоны,
+ * а с ними — подсветку активного состояния. Рамка в нём остаётся, ею и
+ * сообщаем «включено»; образцы цвета без своих цветов бессмысленны.
+ */
+@media (forced-colors: active) {
+  .rte-btn--active,
+  .rte-menu__item--active,
+  .rte-formula-editor__tab--active,
+  .rte-formula-editor__category--active {
+    outline: 2px solid ButtonText;
+    outline-offset: -2px;
+  }
+
+  .rte-colors__swatch {
+    forced-color-adjust: none;
+  }
+}
+
+/* Панель у элемента: ссылка под курсором, размеры картинки и т. п. */
+.rte-popover {
+  position: fixed;
+  z-index: var(--rte-z-modal);
+  background: var(--rte-color-bg);
+  border: 1px solid var(--rte-color-border);
+  border-radius: var(--rte-radius-lg);
+  box-shadow: var(--rte-shadow);
+  padding: var(--rte-popover-padding);
+  font-family: var(--rte-font-family);
+  font-size: var(--rte-ui-font-size-xs);
+  color: var(--rte-color-text);
+}
+
+/*
+ * Панель дропдауна — поповер: фиксированное позиционирование не даёт
+ * `overflow: hidden` корня обрезать длинное меню у низкого редактора.
+ */
+.rte-popover.rte-dropdown__panel {
+  min-width: var(--rte-menu-min-width);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.rte-link-popover {
+  display: grid;
+  gap: 8px;
+  min-width: 280px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.rte-link-popover__field {
+  display: grid;
+  gap: 3px;
+}
+
+.rte-link-popover__label {
+  color: var(--rte-color-muted);
+  font-size: var(--rte-ui-font-size-xs);
+}
+
+.rte-link-popover__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rte-link-popover__spacer {
+  flex: 1;
+}
+
+/*
+ * Скрытое скрыто: ни отрисовки, ни перехвата кликов.
+ *
+ * Ванильный UI переключает видимость атрибутом `hidden`, а правило браузера
+ * `[hidden] { display: none }` проигрывает любому авторскому `display` —
+ * у тулбара, кнопок, панелей и оверлеев он задан. Без этого правила режим
+ * чтения не прятал тулбар, диалог записи показывал кнопки всех фаз разом,
+ * а невидимая модалка ловила клики по тулбару. Во Vue-версии этого не было
+ * видно: элементы удалялись из DOM через `v-if`.
+ *
+ * Одно правило на весь интерфейс с `!important`, чтобы каждый новый
+ * `display` не требовал своего исключения и не ломал скрытие молча.
+ */
+.rte-root [hidden],
+.rte-modal[hidden],
+.rte-modal [hidden],
+.rte-popover[hidden],
+.rte-popover [hidden] {
+  display: none !important;
+}

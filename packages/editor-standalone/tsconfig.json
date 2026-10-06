@@ -5,6 +5,8 @@
     // Ядро проверяется по исходникам, как и собирается: его dist/types на CI
     // ещё нет — typecheck идёт раньше сборки.
     "paths": {
+      "@rich-editor/core/viewer": ["../editor-core/src/viewer.ts"],
+      "@rich-editor/core/viewer.css": ["../editor-core/src/content.css"],
       "@rich-editor/core": ["../editor-core/src/index.ts"],
       "@rich-editor/core/styles.css": ["../editor-core/src/styles.css"]
     }

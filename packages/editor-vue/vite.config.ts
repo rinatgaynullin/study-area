@@ -9,14 +9,18 @@ export default defineConfig({
     sourcemap: true,
     cssCodeSplit: false,
     lib: {
-      entry: resolve(import.meta.dirname, 'src/index.ts'),
+      // Два входа: пакет целиком и вьюер без редактора.
+      entry: {
+        index: resolve(import.meta.dirname, 'src/index.ts'),
+        viewer: resolve(import.meta.dirname, 'src/viewer.ts'),
+      },
       formats: ['es'],
-      fileName: () => 'index.js',
+      fileName: (_format, name) => `${name}.js`,
       cssFileName: 'styles',
     },
     rollupOptions: {
-      external: ['vue', '@rich-editor/core', /^@tiptap\//],
-      output: { globals: { vue: 'Vue' } },
+      external: ['vue', /^@rich-editor\/core/, /^@tiptap\//],
+      output: { globals: { vue: 'Vue' }, chunkFileNames: 'chunks/[name]-[hash].js' },
     },
   },
 });

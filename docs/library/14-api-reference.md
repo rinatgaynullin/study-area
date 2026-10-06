@@ -296,7 +296,11 @@ export type { Editor } from '@tiptap/core';
 // TextStyleOptions, HighlightOptions, ImageOptions, Subscript/SuperscriptExtensionOptions, PlaceholderOptions, UndoRedoOptions)
 ```
 
-Subpath-экспорты: `@rich-editor/core/styles.css`, `@rich-editor/core/legacy.css`.
+Subpath-экспорты: `@rich-editor/core/viewer` (вьюер без редактора: `createRichContent`, `applyTheme`,
+`DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`, `decodeWirisMathml`, `sanitizeHtml`,
+`sanitizeMathML`, `sanitizeSvg`, `renderMathML`, `whenFormulasReady`, `normalizeMathML`,
+`extractFormulaType`, `isMathMLEmpty` и их типы), `@rich-editor/core/styles.css`,
+`@rich-editor/core/viewer.css`, `@rich-editor/core/legacy.css`.
 
 ## `@rich-editor/vue`
 
@@ -322,7 +326,8 @@ export type ToolbarItemId = string;
 /** @deprecated */ export type ToolbarGroup = ToolbarGroupConfig;
 ```
 
-Subpath-экспорты: `@rich-editor/vue/styles.css`, `@rich-editor/vue/legacy.css`.
+Subpath-экспорты: `@rich-editor/vue/viewer` (`RichContent` и реэкспорт `@rich-editor/core/viewer`),
+`@rich-editor/vue/styles.css`, `@rich-editor/vue/viewer.css`, `@rich-editor/vue/legacy.css`.
 Остальное (`EditorFeature`, `prepareIncomingHtml`, санитайзер, узлы,
 `UploadPipeline`, `VoiceRecorder`, `createI18n`, шаблоны, палитры)
 импортируется из `@rich-editor/core` — он зависимость Vue-пакета.

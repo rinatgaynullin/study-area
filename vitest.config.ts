@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: {
     // Tests run against sources so no build step is needed first.
     alias: {
+      '@rich-editor/core/viewer': resolveFromRoot('packages/editor-core/src/viewer.ts'),
+      '@rich-editor/vue/viewer': resolveFromRoot('packages/editor-vue/src/viewer.ts'),
       '@rich-editor/core': resolveFromRoot('packages/editor-core/src/index.ts'),
       '@rich-editor/vue': resolveFromRoot('packages/editor-vue/src/index.ts'),
     },
