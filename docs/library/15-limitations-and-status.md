@@ -68,7 +68,7 @@
 | ADR 0006 («Consequences») | Runtime-зависимости Vue-пакета — ядро и MathLive | Единственная зависимость `@rich-editor/vue` — `@rich-editor/core` |
 | ADR 0001 (аддендум) | Упоминает `toolbar-state.ts` и ~50 вызовов команд в `rich-editor.vue` | После ADR 0008 этих файлов и вызовов нет |
 | `LIMITATIONS.md` («Accessibility») | Доступность формул вне скоупа, SVG «фактически aria-hidden» | Формула — `role="img"` с `aria-label` из LaTeX в редакторе, экспорте и вьюере |
-| `README.md` (Vue props) | Не сказано, какие пропы читаются один раз | Без watcher: адаптеры, `placeholder`, `formulaScale`, `linkStyles`, `minHeight`, `statusLine`, `ariaLabel`, `mathliveFontsDirectory` |
+| `README.md` (Vue props) | Не сказано, какие пропы читаются один раз | Без watcher: `toolbar`, `toolbarItems`, `features`, `legacy`, `formulaScale`, `mathliveFontsDirectory`; остальные уходят в `setOptions()` |
 | `packages/django-rich-editor/README.md` | Параметр `limits` без описания ключей | Ключи клиентские: `maxAudioDurationSec`, `maxAudioSizeBytes`, `maxImageSizeBytes`, `maxFileSizeBytes` |
 | Коммит «стиль под eslint-конфиг» | — | Файла конфигурации ESLint в репозитории нет |
 

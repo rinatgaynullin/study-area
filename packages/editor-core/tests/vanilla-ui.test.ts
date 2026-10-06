@@ -1,5 +1,5 @@
 import { Extension } from '@tiptap/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   IMAGE_ACCEPT,
   TEXT_FILE_ACCEPT,
@@ -576,5 +576,83 @@ describe('доступность узлов документа', () => {
 
     expect(link.getAttribute('aria-label')).toBe('Скачать: отчёт.txt');
     expect(link.textContent).toBe('отчёт.txt');
+  });
+});
+
+describe('setOptions: живые опции', () => {
+  it('меняет подсказку, имя для читалки и высоту без пересоздания', () => {
+    const editor = mountEditor({ content: '', placeholder: 'Было', ariaLabel: 'Ответ' });
+    const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+
+    expect(content.getAttribute('aria-placeholder')).toBe('Было');
+    expect(content.getAttribute('aria-label')).toBe('Ответ');
+
+    editor.setOptions({ placeholder: 'Стало', ariaLabel: 'Комментарий', minHeight: '400px' });
+
+    expect(content.getAttribute('aria-placeholder')).toBe('Стало');
+    expect(content.getAttribute('aria-label')).toBe('Комментарий');
+    expect(content.querySelector('[data-placeholder]')?.getAttribute('data-placeholder')).toBe('Стало');
+    expect(editor.element.querySelector<HTMLElement>('.rte-host')?.style.minHeight).toBe('400px');
+  });
+
+  it('подсказка и имя по умолчанию следуют за языком', () => {
+    const editor = mountEditor({ content: '', locale: 'ru' });
+    const content = editor.element.querySelector<HTMLElement>('.rte-content')!;
+    const before = content.getAttribute('aria-placeholder');
+
+    editor.setOptions({ locale: 'en' });
+
+    expect(content.getAttribute('aria-placeholder')).not.toBe(before);
+    expect(content.querySelector('[data-placeholder]')?.getAttribute('data-placeholder')).toBe(
+      content.getAttribute('aria-placeholder'),
+    );
+  });
+
+  it('включает и выключает строку статуса', () => {
+    const editor = mountEditor({ statusLine: false });
+
+    expect(editor.element.querySelector('.rte-status')).toBeNull();
+
+    editor.setOptions({ statusLine: true });
+
+    const status = editor.element.querySelector('.rte-status');
+
+    expect(status).not.toBeNull();
+    expect(status?.previousElementSibling?.classList.contains('rte-toolbar')).toBe(true);
+
+    editor.setOptions({ statusLine: false });
+
+    expect(editor.element.querySelector('.rte-status')).toBeNull();
+  });
+
+  it('подменяет адаптеры загрузки у живого редактора', async () => {
+    const first = vi.fn(async () => ({ url: 'https://cdn.example/first.png' }));
+    const second = vi.fn(async () => ({ url: 'https://cdn.example/second.png' }));
+    const editor = mountEditor({ uploadImage: first });
+    const file = new File(['x'], 'a.png', { type: 'image/png' });
+
+    editor.setOptions({ uploadImage: second });
+
+    await expect(editor.core.uploads.upload('image', file)).resolves.toMatchObject({
+      url: 'https://cdn.example/second.png',
+    });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('язык, переводы, стили ссылок, тема и режим применяются одним вызовом', () => {
+    const editor = mountEditor({ locale: 'ru' });
+
+    editor.setOptions({
+      locale: 'en',
+      messages: { en: { toolbar_bold: 'Strong' } },
+      linkStyles: [{ labelKey: 'link_style_plain', className: '' }],
+      theme: 'dark',
+      editable: false,
+    });
+
+    expect(toolbarButton('Strong')).toBeTruthy();
+    expect(editor.element.classList.contains('rte-theme-dark')).toBe(true);
+    expect(editor.element.classList.contains('rte-root--readonly')).toBe(true);
   });
 });

@@ -16,7 +16,11 @@ export { ICONS, type IconName } from './ui/icons';
 
 // Ванильный интерфейс: редактор целиком и вьюер, без фреймворка.
 export { createRichEditor } from './ui/rich-editor-ui';
-export type { RichEditorUi, RichEditorUiOptions } from './ui/rich-editor-ui';
+export type {
+  RichEditorLiveOptions,
+  RichEditorUi,
+  RichEditorUiOptions,
+} from './ui/rich-editor-ui';
 export { createRichContent } from './ui/rich-content';
 export { applyTheme, DARK_THEME_CLASS, type EditorTheme } from './ui/theme';
 export type { RichContent, RichContentOptions, RichContentUpdate } from './ui/rich-content';
@@ -68,6 +72,7 @@ export type {
 export {
   DEFAULT_LIMITS,
   RichEditorError,
+  type RichEditorCoreLiveOptions,
   type AttachmentAttributes,
   type AudioAttributes,
   type EditorLimits,

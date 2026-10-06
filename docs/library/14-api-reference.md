@@ -21,6 +21,7 @@ class RichEditorCore {                                               // 02-core.
   setLocale(locale: string): void; setMessages(messages: Record<string, Messages> | undefined): void;
   t(key: string, params?: Record<string, string | number>): string;
   setLimits(limits: Partial<EditorLimits>): void; getLimits(): EditorLimits;
+  setOptions(next: RichEditorCoreLiveOptions): void;
   insertFormula(mathml: string, type?: FormulaType): boolean;
   updateFormulaAt(pos: number, mathml: string, type?: FormulaType): boolean;
   deleteFormulaAt(pos: number): boolean;
@@ -44,6 +45,8 @@ interface RichEditorCoreOptions {
   onUpload?: (event: UploadEvent) => void; onFormulaEdit?: (payload: FormulaPayload) => void;
   onError?: (error: RichEditorError) => void;
 }
+type RichEditorCoreLiveOptions = Pick<RichEditorCoreOptions,
+  'editable' | 'locale' | 'messages' | 'limits' | 'placeholder' | 'ariaLabel' | 'uploadImage' | 'uploadAudio' | 'uploadFile'>;
 
 interface PrepareIncomingHtmlOptions { legacy?: boolean }
 const prepareIncomingHtml: (html: string, options?: PrepareIncomingHtmlOptions) => string;
@@ -75,10 +78,13 @@ interface RichEditorUiOptions extends Omit<RichEditorCoreOptions, 'element'> {
 }
 interface RichEditorUi {
   readonly core: RichEditorCore; readonly element: HTMLElement;
+  setOptions(options: RichEditorLiveOptions): void;
   setEditable(editable: boolean): void; setLocale(locale: string): void;
   setMessages(messages: Record<string, Messages> | undefined): void; refreshLabels(): void;
   setLimits(limits: Partial<EditorLimits>): void; setTheme(theme: EditorTheme): void; destroy(): void;
 }
+type RichEditorLiveOptions = RichEditorCoreLiveOptions
+  & Pick<RichEditorUiOptions, 'theme' | 'minHeight' | 'statusLine' | 'linkStyles'>;
 
 const createRichContent: (options: RichContentOptions) => RichContent;    // 06-viewer.md
 interface RichContentOptions {
@@ -307,7 +313,7 @@ export {
 };
 export { en as enMessages, ru as ruMessages };
 export type {
-  Dropdown, LinkStyle, MathliveStrings, Modal, Popover, RichEditorUi, RichEditorUiOptions,
+  Dropdown, LinkStyle, MathliveStrings, Modal, Popover, RichEditorUi, RichEditorUiOptions, RichEditorLiveOptions,
   RichContent as RichContentViewer, RichContentOptions, EditorTheme, Toolbar, ToolbarConfig, ToolbarGroupConfig,
   ToolbarItemDescriptor, ToolbarPreset, DialogComponent, EditorUiContext, UiComponent, IconName,
   EditorLimits, FormulaPayload, FormulaType, Messages, UploadAdapter, UploadContext, UploadEvent, UploadKind, UploadResult,

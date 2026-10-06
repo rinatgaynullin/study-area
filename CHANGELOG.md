@@ -7,6 +7,11 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `setOptions()` on `RichEditorUi` and `RichEditorCore`: change several live
+  options in one call — `editable`, `locale`, `messages`, `limits`, `theme`,
+  `placeholder`, `ariaLabel`, `minHeight`, `statusLine`, `linkStyles` and the
+  upload adapters. Labels are rebuilt once per call. The Vue component watches
+  all of them; the default placeholder and aria-label now follow the locale.
 - `@rich-editor/standalone`: a self-contained build for hosts without a
   bundler — `editor.js` and the light `viewer.js` as ES modules with lazy
   chunks, `styles.css`, `legacy.css` and the MathLive fonts next to the

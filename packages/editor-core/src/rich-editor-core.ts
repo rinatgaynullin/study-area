@@ -17,6 +17,7 @@ import {
   type EditorLimits,
   type FormulaType,
   type Messages,
+  type RichEditorCoreLiveOptions,
   type RichEditorCoreOptions,
   type UploadResult,
 } from './types';
@@ -103,15 +104,7 @@ export class RichEditorCore {
       editable: options.editable ?? true,
       extensions: this.buildExtensions(),
       editorProps: {
-        attributes: {
-          class: options.legacy ? 'rte-content rte-legacy' : 'rte-content',
-          role: 'textbox',
-          'aria-multiline': 'true',
-          'aria-label': options.ariaLabel ?? this.i18n.t('editor_aria_label'),
-          // Подсказка пустого поля рисуется псевдоэлементом, читалке её не
-          // видно — сообщаем отдельно.
-          'aria-placeholder': options.placeholder ?? this.i18n.t('editor_placeholder'),
-        },
+        attributes: this.buildEditorAttributes(),
         // Every externally authored fragment goes through the sanitizer.
         transformPastedHTML: (html) => prepareIncomingHtml(html, { legacy: this.options.legacy }),
         handlePaste: (_view, event) => this.insertFiles(event.clipboardData?.files),
@@ -130,6 +123,37 @@ export class RichEditorCore {
       onFocus: () => options.onFocus?.(),
       onBlur: () => options.onBlur?.(),
     });
+  }
+
+  /** Атрибуты области ввода: класс, роль и подписи для читалки. */
+  private buildEditorAttributes(): Record<string, string> {
+    return {
+      class: this.options.legacy ? 'rte-content rte-legacy' : 'rte-content',
+      role: 'textbox',
+      'aria-multiline': 'true',
+      'aria-label': this.options.ariaLabel ?? this.i18n.t('editor_aria_label'),
+      // Подсказка пустого поля рисуется псевдоэлементом, читалке её не
+      // видно — сообщаем отдельно.
+      'aria-placeholder': this.options.placeholder ?? this.i18n.t('editor_placeholder'),
+    };
+  }
+
+  private refreshEditorAttributes(): void {
+    if (this.editor.isDestroyed) return;
+
+    this.editor.setOptions({
+      editorProps: { ...this.editor.options.editorProps, attributes: this.buildEditorAttributes() },
+    });
+  }
+
+  /**
+   * Подсказка задана функцией, которую плагин зовёт при отрисовке: достаточно
+   * перерисовать документ пустой транзакцией.
+   */
+  private refreshPlaceholder(): void {
+    if (this.editor.isDestroyed) return;
+
+    this.editor.view.dispatch(this.editor.state.tr);
   }
 
   private buildExtensions(): Extensions {
@@ -181,7 +205,9 @@ export class RichEditorCore {
         },
       }),
       Placeholder.configure({
-        placeholder: this.options.placeholder ?? t('editor_placeholder'),
+        // Функция, а не строка: текст читается при каждой отрисовке, поэтому
+        // смена подсказки или языка не требует пересоздания расширения.
+        placeholder: () => this.options.placeholder ?? this.i18n.t('editor_placeholder'),
       }),
       FormulaNode.configure({
         onEdit: (payload) => this.options.onFormulaEdit?.(payload),
@@ -238,6 +264,50 @@ export class RichEditorCore {
   }
 
   /**
+   * Меняет у живого редактора всё, что не требует пересоздания: режим,
+   * язык и таблицы переводов, пределы, подсказку, имя для читалки и адаптеры
+   * загрузки. Ключ, которого нет в объекте, не трогается.
+   */
+  setOptions(next: RichEditorCoreLiveOptions): void {
+    if (next.editable !== undefined) this.setEditable(next.editable);
+
+    if (next.locale !== undefined) this.i18n.setLocale(next.locale);
+
+    if ('messages' in next) this.i18n.setMessages(next.messages);
+
+    if (next.limits) this.setLimits(next.limits);
+
+    if ('placeholder' in next || 'ariaLabel' in next) {
+      this.options = {
+        ...this.options,
+        ...('placeholder' in next ? { placeholder: next.placeholder } : {}),
+        ...('ariaLabel' in next ? { ariaLabel: next.ariaLabel } : {}),
+      };
+    }
+
+    if ('uploadImage' in next || 'uploadAudio' in next || 'uploadFile' in next) {
+      this.options = {
+        ...this.options,
+        ...('uploadImage' in next ? { uploadImage: next.uploadImage } : {}),
+        ...('uploadAudio' in next ? { uploadAudio: next.uploadAudio } : {}),
+        ...('uploadFile' in next ? { uploadFile: next.uploadFile } : {}),
+      };
+      this.uploads.setOptions({
+        adapters: {
+          image: this.options.uploadImage,
+          audio: this.options.uploadAudio,
+          file: this.options.uploadFile,
+        },
+      });
+    }
+
+    // Подсказка и имя по умолчанию переводятся, поэтому обновляются и при
+    // смене языка, а не только когда их задали явно.
+    this.refreshEditorAttributes();
+    this.refreshPlaceholder();
+  }
+
+  /**
    * Resolves once pending MathJax renders settle, so `getHTML()` includes SVG.
    * Уничтоженному редактору ждать нечего: его формулы уже не отрисуются.
    */
@@ -250,11 +320,11 @@ export class RichEditorCore {
   // ---------------------------------------------------------------- i18n
 
   setLocale(locale: string): void {
-    this.i18n.setLocale(locale);
+    this.setOptions({ locale });
   }
 
   setMessages(messages: Record<string, Messages> | undefined): void {
-    this.i18n.setMessages(messages);
+    this.setOptions({ messages });
   }
 
   t(key: string, params?: Record<string, string | number>): string {

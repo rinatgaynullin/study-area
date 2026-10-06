@@ -34,28 +34,29 @@ app.use(RichEditorPlugin);              // регистрирует RichEditor �
 
 ### Пропы `RichEditor`
 
-«Реактивен» — компонент следит за пропом; остальные читаются один раз при
-монтировании (для смены пересоздайте компонент через `:key`).
+«Реактивен» — компонент передаёт изменение в `setOptions()` живого редактора;
+остальные читаются один раз при монтировании (для смены пересоздайте компонент
+через `:key`).
 
 | Проп | Тип | По умолчанию | Реактивен | Что делает |
 | --- | --- | --- | --- | --- |
 | `modelValue` | `string` | `''` | да | HTML документа (`v-model`); санитизируется на входе |
 | `locale` | `string` | `'ru'` | да | Язык интерфейса |
 | `messages` | `Record<string, Messages>` | — | да, deep | Таблицы переводов ([09](09-i18n.md)) |
-| `uploadImage`, `uploadAudio`, `uploadFile` | `UploadAdapter` | — | нет | Адаптеры загрузки ([05](05-media-and-uploads.md)) |
+| `uploadImage`, `uploadAudio`, `uploadFile` | `UploadAdapter` | — | да | Адаптеры загрузки ([05](05-media-and-uploads.md)) |
 | `limits` | `Partial<EditorLimits>` | — | да, deep | Пределы размеров и длительности |
 | `editable` | `boolean` | `true` | да | `false` прячет тулбар и запирает документ |
 | `toolbar` | `ToolbarConfig` | `'full'` | нет | Пресет или список групп ([03](03-vanilla-ui.md#тулбар)) |
 | `toolbarItems` | `Record<string, ToolbarItemDescriptor>` | — | нет | Свои пункты и замены встроенных |
 | `features` | `EditorFeature[]` | — | нет | Возможности; тип импортируется из `@rich-editor/core` |
-| `placeholder` | `string` | локализованный | нет | Подсказка пустого документа |
-| `ariaLabel` | `string` | «Текстовый редактор» | нет | Имя области ввода для читалки |
+| `placeholder` | `string` | локализованный | да | Подсказка пустого документа |
+| `ariaLabel` | `string` | «Текстовый редактор» | да | Имя области ввода для читалки |
 | `formulaScale` | `number` | `1` | нет | Масштаб формул |
-| `linkStyles` | `LinkStyle[]` | три встроенных | нет | Варианты оформления ссылки |
+| `linkStyles` | `LinkStyle[]` | три встроенных | да, deep | Варианты оформления ссылки |
 | `legacy` | `boolean` | `false` | нет | Разметка Froala + Wiris; меняет схему |
 | `mathliveFontsDirectory` | `string` или `null` | `null` | нет | Каталог шрифтов MathLive ([04](04-formulas.md#шрифты-и-локаль-mathlive)) |
-| `minHeight` | `string` | `'220px'` | нет | Минимальная высота области ввода |
-| `statusLine` | `boolean` | `true` | нет | Строка статуса под тулбаром |
+| `minHeight` | `string` | `'220px'` | да | Минимальная высота области ввода |
+| `statusLine` | `boolean` | `true` | да | Строка статуса под тулбаром |
 | `theme` | `EditorTheme` | `'light'` | да | `'light'`, `'dark'`, `'auto'` |
 
 ### События `RichEditor`

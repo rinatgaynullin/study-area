@@ -140,3 +140,21 @@ export interface RichEditorCoreOptions {
   onFormulaEdit?: (payload: FormulaPayload) => void;
   onError?: (error: RichEditorError) => void;
 }
+
+/**
+ * Опции, которые ядро меняет у живого редактора через `setOptions`.
+ * Остальные (`legacy`, `extensions`, `formulaScale`, `content`, колбэки)
+ * читаются один раз при создании: для их смены редактор пересоздают.
+ */
+export type RichEditorCoreLiveOptions = Pick<
+  RichEditorCoreOptions,
+  | 'editable'
+  | 'locale'
+  | 'messages'
+  | 'limits'
+  | 'placeholder'
+  | 'ariaLabel'
+  | 'uploadImage'
+  | 'uploadAudio'
+  | 'uploadFile'
+>;
