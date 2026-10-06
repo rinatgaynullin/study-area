@@ -149,9 +149,11 @@ watch(
   () => props.modelValue,
   (html) => {
     const instance = ui.value;
+
     // Пришло то же, что мы только что отдали, или то, что и так в документе, —
     // переприменять нечего: setHTML сбросил бы выделение и добавил шаг в историю.
     if (!instance || html === lastEmitted || html === instance.core.getHTML()) return;
+
     instance.core.setHTML(html);
   },
 );

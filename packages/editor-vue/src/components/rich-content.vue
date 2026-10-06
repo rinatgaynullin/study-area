@@ -33,6 +33,7 @@ const viewer = shallowRef<RichContent | null>(null);
 
 onMounted(() => {
   if (!root.value) return;
+
   viewer.value = createRichContent({
     element: root.value,
     html: props.html,

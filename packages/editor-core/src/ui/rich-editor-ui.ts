@@ -1,4 +1,4 @@
-import { Extension, type Editor } from '@tiptap/core';
+import { Extension } from '@tiptap/core';
 import { RichEditorCore } from '../rich-editor-core';
 import { DEFAULT_LOCALE } from '../i18n';
 import { IMAGE_ACCEPT, TEXT_FILE_ACCEPT } from '../media/upload';

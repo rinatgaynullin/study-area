@@ -125,7 +125,7 @@ describe('toolbar commands', () => {
 
   it('applies and clears formatting', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
-    const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+    const vm = w.vm as unknown as { focus(): void; core: { editor: { commands: { selectAll(): void } } } };
 
     vm.focus();
     vm.core?.editor.commands.selectAll();
@@ -140,7 +140,7 @@ describe('toolbar commands', () => {
 
   it('undoes and redoes', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
-    const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+    const vm = w.vm as unknown as { focus(): void; core: { editor: { commands: { selectAll(): void } } } };
 
     vm.focus();
     vm.core?.editor.commands.selectAll();
@@ -157,7 +157,7 @@ describe('toolbar commands', () => {
 
   it('reflects the active state of the current selection', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
-    const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+    const vm = w.vm as unknown as { focus(): void; core: { editor: { commands: { selectAll(): void } } } };
 
     vm.focus();
     vm.core?.editor.commands.selectAll();
@@ -198,7 +198,7 @@ describe('toolbar commands', () => {
 
   it('applies a colour swatch', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
-    const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+    const vm = w.vm as unknown as { focus(): void; core: { editor: { commands: { selectAll(): void } } } };
 
     vm.focus();
     vm.core?.editor.commands.selectAll();
@@ -231,7 +231,7 @@ describe('toolbar commands', () => {
 describe('v-model', () => {
   it('emits updated HTML as the document changes', async () => {
     const w = await mountEditor({ modelValue: '<p>текст</p>' });
-    const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
+    const vm = w.vm as unknown as { focus(): void; core: { editor: { commands: { selectAll(): void } } } };
 
     vm.focus();
     vm.core?.editor.commands.selectAll();
