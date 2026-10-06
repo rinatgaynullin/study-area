@@ -148,14 +148,12 @@ const editor = ref<InstanceType<typeof RichEditor>>();
 
 editor.value.getHTML();
 editor.value.setHTML('<p>…</p>');
-editor.value.getJSON();
 editor.value.getText();
 editor.value.isEmpty();
 editor.value.focus();
 editor.value.insertFormula(mathml, 'chem');
 await editor.value.whenFormulasReady();  // resolves once formula SVGs are cached
-editor.value.editor;                     // the underlying TipTap editor
-editor.value.core;                        // the RichEditorCore instance
+editor.value.core;                        // the RichEditorCore instance; the TipTap editor is not exposed
 ```
 
 `getHTML()` is synchronous and includes the rendered SVG for every formula that

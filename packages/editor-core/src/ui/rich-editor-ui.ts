@@ -561,9 +561,9 @@ class RichEditorUiController implements RichEditorUi {
     this.options.onUpload?.(event);
   };
 
-  private readonly onTransaction = (editor: Editor): void => {
+  private readonly onTransaction = (): void => {
     this.refresh();
-    this.options.onTransaction?.(editor);
+    this.options.onTransaction?.();
   };
 
   /**

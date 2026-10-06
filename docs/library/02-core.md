@@ -35,7 +35,7 @@
 | `extensions` | `unknown[]` или функция `({ t }) => unknown[]` | — | Дополнительные расширения TipTap; функция получает переводчик |
 | `legacy` | `boolean` | `false` | Разбор разметки Froala + Wiris; меняет схему, читается один раз |
 | `onChange` | `(html: string) => void` | — | Каждое изменение документа; `html` — результат `getHTML()` |
-| `onSelectionUpdate`, `onTransaction` | `(editor: Editor) => void` | — | Смена выделения; любая транзакция |
+| `onSelectionUpdate`, `onTransaction` | `() => void` | — | Смена выделения; любая транзакция |
 | `onFocus`, `onBlur` | `() => void` | — | Фокус области ввода |
 | `onUpload` | `(event: UploadEvent) => void` | — | Начало и конец загрузки через адаптер |
 | `onFormulaEdit` | `(payload: FormulaPayload) => void` | — | Пользователь вставляет или правит формулу; хост открывает свой редактор |
@@ -45,10 +45,8 @@
 
 | Член | Возвращает | Что делает |
 | --- | --- | --- |
-| `editor` | `Editor` | TipTap-редактор: `chain()`, `commands`, `state`, `view` |
 | `uploads` | `UploadPipeline` | Пайплайн загрузок ([05](05-media-and-uploads.md)) |
 | `getHTML()` | `string` | Синхронная сериализация; SVG формул берётся из кэша |
-| `getJSON()` | `Record<string, unknown>` | ProseMirror JSON |
 | `getText()` | `string` | Текст без разметки |
 | `setHTML(html, options?)` | `void` | Заменяет документ через `prepareIncomingHtml`; `emitUpdate` по умолчанию `false` — `onChange` не вызывается |
 | `isEmpty()` | `boolean` | Пуст ли документ |
@@ -146,12 +144,12 @@ const core = new RichEditorCore({
   },
   onError: (error) => console.warn(error.code, error.message),
 });
-
-myBoldButton.onclick = () => core.editor.chain().focus().toggleBold().run();
 ```
 
 ## Ограничения
 
+- TipTap-редактор и ProseMirror-JSON наружу не отдаются: команды доступны
+  через возможности (`features`, [03](03-vanilla-ui.md)) и `extensions`.
 - `setHTML()` не вызывает `onChange` — после программной подстановки
   документа модель хоста не обновится сама.
 - `legacy`, `extensions`, `formulaScale`, `placeholder`, `ariaLabel` и адаптеры

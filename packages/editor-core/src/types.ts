@@ -1,4 +1,3 @@
-import type { Editor } from '@tiptap/core';
 
 /** Kind of asset an upload adapter is being asked to handle. */
 export type UploadKind = 'image' | 'audio' | 'file';
@@ -131,8 +130,8 @@ export interface RichEditorCoreOptions {
    */
   legacy?: boolean;
   onChange?: (html: string) => void;
-  onSelectionUpdate?: (editor: Editor) => void;
-  onTransaction?: (editor: Editor) => void;
+  onSelectionUpdate?: () => void;
+  onTransaction?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
   /** Начало и конец загрузки через адаптер — для индикации в интерфейсе. */

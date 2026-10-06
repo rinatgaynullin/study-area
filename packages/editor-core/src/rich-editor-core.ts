@@ -60,6 +60,14 @@ const extensionFor = (mime: string): string => {
  * (vanilla-интерфейсу, Vue-обёртке) единый API для контента, формул и медиа.
  */
 export class RichEditorCore {
+  /**
+   * TipTap-движок. Не часть публичного API: нужен интерфейсу и тестам пакета,
+   * из опубликованных типов вырезается (`@internal` + `stripInternal`). Хосту
+   * достаточно методов этого класса; расширениям TipTap доступен через
+   * `EditorUiContext.editor`.
+   *
+   * @internal
+   */
   readonly editor: Editor;
 
   readonly uploads: UploadPipeline;
@@ -117,8 +125,8 @@ export class RichEditorCore {
         },
       },
       onUpdate: () => options.onChange?.(this.getHTML()),
-      onSelectionUpdate: ({ editor }) => options.onSelectionUpdate?.(editor),
-      onTransaction: ({ editor }) => options.onTransaction?.(editor),
+      onSelectionUpdate: () => options.onSelectionUpdate?.(),
+      onTransaction: () => options.onTransaction?.(),
       onFocus: () => options.onFocus?.(),
       onBlur: () => options.onBlur?.(),
     });
@@ -202,6 +210,7 @@ export class RichEditorCore {
     return this.editor.getHTML();
   }
 
+  /** ProseMirror-JSON документа. Формат внутренний, наружу не отдаётся. @internal */
   getJSON(): Record<string, unknown> {
     return this.editor.getJSON() as Record<string, unknown>;
   }

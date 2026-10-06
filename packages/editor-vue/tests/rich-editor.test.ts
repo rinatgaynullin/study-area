@@ -99,8 +99,8 @@ describe('toolbar commands', () => {
     (w.vm as unknown as { focus(): void }).focus();
 
     (
-      w.vm as unknown as { editor: { commands: { selectAll(): void } } }
-    ).editor.commands.selectAll();
+      w.vm as unknown as { core: { editor: { commands: { selectAll(): void } } } }
+    ).core?.editor.commands.selectAll();
 
     await button(w, label).trigger('click');
 
@@ -128,12 +128,12 @@ describe('toolbar commands', () => {
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
 
     vm.focus();
-    vm.editor.commands.selectAll();
+    vm.core?.editor.commands.selectAll();
 
     await button(w, 'Полужирный').trigger('click');
     expect(html(w)).toContain('<strong>');
 
-    vm.editor.commands.selectAll();
+    vm.core?.editor.commands.selectAll();
     await button(w, 'Очистить форматирование').trigger('click');
     expect(html(w)).not.toContain('<strong>');
   });
@@ -143,7 +143,7 @@ describe('toolbar commands', () => {
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
 
     vm.focus();
-    vm.editor.commands.selectAll();
+    vm.core?.editor.commands.selectAll();
 
     await button(w, 'Полужирный').trigger('click');
     expect(html(w)).toContain('<strong>');
@@ -160,7 +160,7 @@ describe('toolbar commands', () => {
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
 
     vm.focus();
-    vm.editor.commands.selectAll();
+    vm.core?.editor.commands.selectAll();
 
     expect(button(w, 'Полужирный').classes()).not.toContain('rte-btn--active');
 
@@ -201,7 +201,7 @@ describe('toolbar commands', () => {
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
 
     vm.focus();
-    vm.editor.commands.selectAll();
+    vm.core?.editor.commands.selectAll();
 
     await button(w, 'Цвет текста').trigger('click');
     await w.findAll('.rte-colors__swatch')[3].trigger('click');
@@ -234,7 +234,7 @@ describe('v-model', () => {
     const vm = w.vm as unknown as { focus(): void; editor: { commands: { selectAll(): void } } };
 
     vm.focus();
-    vm.editor.commands.selectAll();
+    vm.core?.editor.commands.selectAll();
 
     await button(w, 'Полужирный').trigger('click');
 
