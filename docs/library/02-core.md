@@ -130,7 +130,6 @@
 
 ```ts
 import { RichEditorCore, latexToMathML, mathmlToLatex } from '@rich-editor/core';
-import '@rich-editor/core/styles.css';
 
 const core = new RichEditorCore({
   element: document.querySelector('#surface')!,

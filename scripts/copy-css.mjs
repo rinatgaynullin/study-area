@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 /**
@@ -12,9 +12,13 @@ import { dirname, resolve } from 'node:path';
  * Аргумент — `core`, `vue` или ничего (оба пакета).
  */
 const root = resolve(import.meta.dirname, '..');
+const coreSrc = resolve(root, 'packages/editor-core/src');
+/** Что кладём: имя файла в dist → содержимое. */
 const sources = {
-  'legacy.css': resolve(root, 'packages/editor-core/src/legacy.css'),
-  'viewer.css': resolve(root, 'packages/editor-core/src/content.css'),
+  'legacy.css': () => readFileSync(resolve(coreSrc, 'legacy.css'), 'utf8'),
+  // Вьюеру нужны документ, токены темы и compat-слой — без интерфейса редактора.
+  'viewer.css': () =>
+    [readFileSync(resolve(coreSrc, 'content.css'), 'utf8'), readFileSync(resolve(coreSrc, 'legacy.css'), 'utf8')].join('\n'),
 };
 const packages = { core: 'packages/editor-core', vue: 'packages/editor-vue' };
 const selected = process.argv[2] ? [process.argv[2]] : Object.keys(packages);
@@ -24,11 +28,11 @@ for (const name of selected) {
 
   if (!dir) throw new Error(`Неизвестный пакет: ${name}`);
 
-  for (const [file, source] of Object.entries(sources)) {
+  for (const [file, read] of Object.entries(sources)) {
     const target = resolve(root, dir, 'dist', file);
 
     mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(source, target);
+    writeFileSync(target, read());
     console.log(`${file} -> ${target.slice(root.length + 1)}`);
   }
 }

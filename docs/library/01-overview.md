@@ -22,7 +22,7 @@ allowlist на клиенте и сервере.
 
 | Пакет | Каталог | Что внутри |
 | --- | --- | --- |
-| `@rich-editor/core` | `packages/editor-core` | Движок, редактор с тулбаром, вьюер, формулы, загрузки, i18n; входы `.` и `./viewer`, стили `styles.css`, `viewer.css`, `legacy.css` |
+| `@rich-editor/core` | `packages/editor-core` | Движок, редактор с тулбаром, вьюер, формулы, загрузки, i18n; входы `.` и `./viewer`; стили подключаются сами, файлы `styles.css`, `viewer.css`, `legacy.css` — для `<link>` |
 | `@rich-editor/vue` | `packages/editor-vue` | Компоненты `RichEditor`, `RichContent`, `RteIcon`, плагин; реэкспорт API ядра; вход `./viewer` только с `RichContent` |
 | `@rich-editor/standalone` | `packages/editor-standalone` | Та же библиотека одной ES-сборкой со всеми зависимостями: `editor.js`, `viewer.js`, стили, шрифты |
 | `django-rich-editor` | `packages/django-rich-editor` | Виджет и поля Django, серверный санитайзер, вьюхи загрузок, теги шаблонов |
@@ -80,7 +80,6 @@ flowchart LR
 
 ```ts
 import { createRichEditor, createRichContent } from '@rich-editor/core';
-import '@rich-editor/core/styles.css';
 
 const viewer = createRichContent({ element: document.querySelector('#preview')! });
 

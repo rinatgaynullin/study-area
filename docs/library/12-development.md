@@ -23,7 +23,7 @@ Python ≥ 3.10 для Django-пакета, Chromium для Playwright
 | `npm test`, `npm run test:watch`, `npm run test:coverage` | Vitest (jsdom): ядро, оболочка, Vue |
 | `npm run test:e2e` | Playwright, проекты `desktop` и `mobile`; демо поднимается сам |
 | `npm run typecheck` | `tsc` / `vue-tsc` для core, vue, standalone, demo |
-| `npm run build` | core → vue → копия `legacy.css` → standalone |
+| `npm run build` | core → vue → standalone; `copy-css.mjs` кладёт `viewer.css` и `legacy.css`, `check-dist.mjs` сторожит dist ядра |
 | `npm run build:demo` | Сборка демо (`DEMO_BASE` — префикс для GitHub Pages) |
 | `npm run ci` | typecheck + test + build |
 | `npm run smoke:standalone` | Дымовая проверка автономной сборки в Chromium |

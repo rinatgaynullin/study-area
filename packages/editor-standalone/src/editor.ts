@@ -11,7 +11,6 @@ import {
   type RichEditorUi,
   type RichEditorUiOptions,
 } from '@rich-editor/core';
-import '@rich-editor/core/styles.css';
 
 export * from '@rich-editor/core';
 

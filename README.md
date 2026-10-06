@@ -36,7 +36,6 @@ npm install @rich-editor/vue vue
 <script setup lang="ts">
 import { ref } from 'vue';
 import { RichEditor } from '@rich-editor/vue';
-import '@rich-editor/vue/styles.css';
 
 const html = ref('<p>Начните писать…</p>');
 </script>
@@ -442,13 +441,9 @@ portable projection:
 
 ### Formula fonts
 
-MathLive needs its fonts. Either let your bundler handle them:
-
-```ts
-import 'mathlive/fonts.css';   // Vite/webpack emit the font files
-```
-
-or serve them yourself and point the editor at them:
+MathLive needs its fonts. With a bundler there is nothing to do: the editor
+imports `mathlive/fonts.css` itself and Vite/webpack emit the font files. To
+serve them yourself, point the editor at them:
 
 ```vue
 <RichEditor v-model="html" mathlive-fonts-directory="/fonts/mathlive" />
@@ -524,12 +519,8 @@ need more than variables.
 ### Legacy content (Froala)
 
 Content saved by a Froala-based editor renders through an opt-in compatibility
-layer. It is a separate stylesheet, so a host without legacy data never
-downloads it:
-
-```ts
-import '@rich-editor/vue/legacy.css';
-```
+layer. Its rules ship with the editor styles and apply only under the `legacy`
+flag; `legacy.css` is still exported for hosts that link stylesheets by hand.
 
 ```vue
 <RichContent :html="html" legacy />
@@ -586,7 +577,6 @@ for MathLive.
 ```ts
 // nuxt.config.ts
 export default defineNuxtConfig({
-  css: ['@rich-editor/vue/styles.css'],
   vite: { optimizeDeps: { include: ['mathlive'] } },
 });
 ```
@@ -639,7 +629,6 @@ on plain DOM. Any page or framework can mount it:
 
 ```ts
 import { createRichEditor } from '@rich-editor/core';
-import '@rich-editor/core/styles.css';
 
 const editor = createRichEditor({
   element: document.querySelector('#editor')!,
