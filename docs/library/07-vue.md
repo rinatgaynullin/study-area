@@ -75,11 +75,11 @@ app.use(RichEditorPlugin);              // регистрирует RichEditor �
 
 | Член | Что делает |
 | --- | --- |
-| `getHTML()`, `setHTML(html)`, `getJSON()`, `getText()` | Контент ([02](02-core.md#поля-и-методы)) |
+| `getHTML()`, `setHTML(html)`, `getText()` | Контент ([02](02-core.md#поля-и-методы)) |
 | `isEmpty()`, `focus()` | Состояние и фокус |
 | `insertFormula(mathml, type?)` | Вставка формулы |
 | `whenFormulasReady()` | Дождаться SVG перед экспортом |
-| `editor`, `core` | TipTap `Editor` и `RichEditorCore` (`null` до монтирования) |
+| `core` | `RichEditorCore` (`null` до монтирования); TipTap-редактор не отдаётся |
 
 Язык, тема, пределы и режим чтения меняются пропами, не методами.
 

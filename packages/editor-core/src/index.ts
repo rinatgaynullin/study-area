@@ -150,6 +150,11 @@ export { readTextFile, textToParagraphs } from './media/text-file';
 
 export { formatBytes, formatDuration } from './utils/format';
 
+/*
+ * TipTap доступен только авторам возможностей (`EditorUiContext.editor`,
+ * `extensions`); у экземпляров `RichEditorCore` и `RichEditorUi` его в
+ * публичных типах нет.
+ */
 export type { Editor } from '@tiptap/core';
 
 /**

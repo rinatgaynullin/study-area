@@ -13,8 +13,8 @@
 ```ts
 class RichEditorCore {                                               // 02-core.md
   constructor(options: RichEditorCoreOptions);
-  readonly editor: Editor; readonly uploads: UploadPipeline;
-  getHTML(): string; getJSON(): Record<string, unknown>; getText(): string;
+  readonly uploads: UploadPipeline;
+  getHTML(): string; getText(): string;
   setHTML(html: string, options?: { emitUpdate?: boolean }): void;
   isEmpty(): boolean; focus(): void; setEditable(editable: boolean): void;
   whenFormulasReady(): Promise<void>;
@@ -39,8 +39,8 @@ interface RichEditorCoreOptions {
   locale?: string; messages?: Record<string, Messages>; limits?: Partial<EditorLimits>;
   uploadImage?: UploadAdapter; uploadAudio?: UploadAdapter; uploadFile?: UploadAdapter;
   formulaScale?: number; extensions?: unknown[] | ((context: { t: Translate }) => unknown[]); legacy?: boolean;
-  onChange?: (html: string) => void; onSelectionUpdate?: (editor: Editor) => void;
-  onTransaction?: (editor: Editor) => void; onFocus?: () => void; onBlur?: () => void;
+  onChange?: (html: string) => void; onSelectionUpdate?: () => void;
+  onTransaction?: () => void; onFocus?: () => void; onBlur?: () => void;
   onUpload?: (event: UploadEvent) => void; onFormulaEdit?: (payload: FormulaPayload) => void;
   onError?: (error: RichEditorError) => void;
 }
@@ -284,6 +284,7 @@ const mathliveRu: Record<string, string>;
 interface MathliveStrings { [locale: string]: Record<string, string> }
 const MATHLIVE_STRINGS: MathliveStrings;
 
+// Только для авторов возможностей: TipTap-редактор приходит в EditorUiContext.editor.
 export type { Editor } from '@tiptap/core';
 // и типы опций установленных расширений TipTap (StarterKitOptions, TableKitOptions, TextAlignOptions, ColorOptions,
 // TextStyleOptions, HighlightOptions, ImageOptions, Subscript/SuperscriptExtensionOptions, PlaceholderOptions, UndoRedoOptions)

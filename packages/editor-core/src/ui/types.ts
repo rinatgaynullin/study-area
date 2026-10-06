@@ -13,6 +13,10 @@ import type { UploadPipeline } from '../media/upload';
 
 /** Всё, что нужно любому куску UI, чтобы работать с документом. */
 export interface EditorUiContext {
+  /**
+   * TipTap-редактор — точка расширения для авторов возможностей (команды,
+   * состояние). Экземпляр редактора хосту его не отдаёт.
+   */
   editor: Editor;
   t: Translate;
   limits: EditorLimits;

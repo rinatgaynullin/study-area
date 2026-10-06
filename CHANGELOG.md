@@ -85,6 +85,12 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Changed
 
+- `@rich-editor/core`: the TipTap editor and ProseMirror JSON are no longer part of
+  the public API. `RichEditorCore.editor` and `getJSON()` are `@internal` and
+  stripped from the published types, `onSelectionUpdate` / `onTransaction` no
+  longer receive the `Editor`, and the Vue component no longer exposes `editor`
+  or `getJSON()`. Feature authors still get TipTap through
+  `EditorUiContext.editor` and `extensions`.
 - Default theme re-based on the umschool design language: Golos, 15/22 text,
   8/10/12 px radii, orange accent, umschool shadows and overlay. The token
   contract grew to cover everything a design system changes — UI font sizes

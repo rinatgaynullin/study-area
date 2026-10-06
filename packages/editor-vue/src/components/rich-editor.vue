@@ -166,16 +166,12 @@ watch(() => props.theme, (theme) => ui.value?.setTheme(theme));
 defineExpose({
   getHTML: () => ui.value?.core.getHTML() ?? '',
   setHTML: (html: string) => ui.value?.core.setHTML(html),
-  getJSON: () => ui.value?.core.getJSON(),
   getText: () => ui.value?.core.getText() ?? '',
   focus: () => ui.value?.core.focus(),
   isEmpty: () => ui.value?.core.isEmpty() ?? true,
   insertFormula: (mathml: string, type: FormulaType = 'math') =>
     ui.value?.core.insertFormula(mathml, type) ?? false,
   whenFormulasReady: () => ui.value?.core.whenFormulasReady() ?? Promise.resolve(),
-  get editor() {
-    return ui.value?.core.editor ?? null;
-  },
   get core() {
     return ui.value?.core ?? null;
   },
