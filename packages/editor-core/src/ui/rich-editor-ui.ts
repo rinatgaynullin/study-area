@@ -6,6 +6,7 @@ import type {
   EditorLimits,
   FormulaPayload,
   Messages,
+  RichEditorCoreLiveOptions,
   RichEditorCoreOptions,
   RichEditorError,
   UploadEvent,
@@ -94,10 +95,24 @@ const createUiShortcuts = (handlers: { focusToolbar(): void; editLink(): void })
     }),
   });
 
+/**
+ * Опции, которые меняются у живого редактора через `setOptions`. Всё
+ * остальное (`toolbar`, `toolbarItems`, `features`, `extensions`, `legacy`,
+ * `formulaScale`, `collapseBelow`, палитры, `mathliveFontsDirectory`)
+ * читается один раз при создании.
+ */
+export type RichEditorLiveOptions = RichEditorCoreLiveOptions
+  & Pick<RichEditorUiOptions, 'theme' | 'minHeight' | 'statusLine' | 'linkStyles'>;
+
 export interface RichEditorUi {
   /** Движок: документ, команды, загрузки. */
   readonly core: RichEditorCore;
   readonly element: HTMLElement;
+  /**
+   * Меняет несколько живых опций разом: тулбар и диалоги пересобираются один
+   * раз, даже если поменялись и язык, и переводы, и стили ссылок.
+   */
+  setOptions(options: RichEditorLiveOptions): void;
   /** Переключает режим чтения: вместе с движком прячет и тулбар. */
   setEditable(editable: boolean): void;
   /** Меняет язык и пересобирает интерфейс: подписи приходят из переводчика. */
@@ -192,7 +207,10 @@ class RichEditorUiController implements RichEditorUi {
   /** Корень оболочки: тулбар, строка статуса, область ввода и скрытые поля. */
   readonly element: HTMLElement;
 
-  private readonly options: RichEditorUiOptions;
+  private options: RichEditorUiOptions;
+
+  /** Область ввода; её минимальная высота меняется на лету. */
+  private readonly host: HTMLElement;
 
   private readonly disposer = createDisposer();
 
@@ -205,7 +223,7 @@ class RichEditorUiController implements RichEditorUi {
    */
   private readonly status: HTMLElement;
 
-  private readonly hasStatusLine: boolean;
+  private hasStatusLine: boolean;
 
   /** Загрузки в полёте, по видам: параллельных может быть несколько. */
   private readonly uploading = new Map<UploadKind, number>();
@@ -256,6 +274,8 @@ class RichEditorUiController implements RichEditorUi {
 
     const host = el('div', { class: 'rte-host' });
     const surface = el('div', { class: 'rte-surface', children: [host] });
+
+    this.host = host;
 
     if (options.minHeight) host.style.minHeight = options.minHeight;
 
@@ -352,20 +372,40 @@ class RichEditorUiController implements RichEditorUi {
     this.applyEditable(this.core.editor.isEditable);
   }
 
+  setOptions(next: RichEditorLiveOptions): void {
+    const { theme, minHeight, statusLine, linkStyles, ...coreOptions } = next;
+
+    if (next.locale !== undefined) this.locale = next.locale;
+
+    this.core.setOptions(coreOptions);
+
+    if (next.editable !== undefined) this.applyEditable(next.editable);
+
+    if ('linkStyles' in next) this.options = { ...this.options, linkStyles };
+
+    if (theme !== undefined) this.setTheme(theme);
+
+    if ('minHeight' in next) this.host.style.minHeight = minHeight ?? '';
+
+    if (statusLine !== undefined) this.setStatusLine(statusLine);
+
+    // Подписи запекаются при сборке: язык, переводы и стили ссылок требуют
+    // пересборки тулбара и диалогов, но одной на всё.
+    if (next.locale !== undefined || 'messages' in next || 'linkStyles' in next) {
+      this.refreshLabels();
+    }
+  }
+
   setEditable(editable: boolean): void {
-    this.core.setEditable(editable);
-    this.applyEditable(editable);
+    this.setOptions({ editable });
   }
 
   setLocale(locale: string): void {
-    this.locale = locale;
-    this.core.setLocale(locale);
-    this.refreshLabels();
+    this.setOptions({ locale });
   }
 
   setMessages(messages: Record<string, Messages> | undefined): void {
-    this.core.setMessages(messages);
-    this.refreshLabels();
+    this.setOptions({ messages });
   }
 
   /** Пересобирает всё, что запекает подписи при создании: тулбар и оверлеи. */
@@ -377,7 +417,7 @@ class RichEditorUiController implements RichEditorUi {
   }
 
   setLimits(limits: Partial<EditorLimits>): void {
-    this.core.setLimits(limits);
+    this.setOptions({ limits });
   }
 
   setTheme(theme: EditorTheme): void {
@@ -503,6 +543,20 @@ class RichEditorUiController implements RichEditorUi {
 
     this.toolbar.syncState();
     this.overlays.linkPopover.sync();
+  }
+
+  /** Строка статуса включается и выключается на лету: узел добавляется под тулбар или убирается. */
+  private setStatusLine(enabled: boolean): void {
+    if (enabled === this.hasStatusLine) return;
+
+    this.hasStatusLine = enabled;
+
+    if (enabled) {
+      this.toolbar.element.after(this.status);
+      this.refreshStatus();
+    } else {
+      this.status.remove();
+    }
   }
 
   private refreshStatus(): void {

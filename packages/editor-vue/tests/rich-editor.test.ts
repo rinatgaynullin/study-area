@@ -408,3 +408,38 @@ describe('errors', () => {
     expect(w.emitted('error')).toBeTruthy();
   });
 });
+
+describe('live props', () => {
+  it('placeholder, ariaLabel, minHeight and statusLine update the mounted editor', async () => {
+    const w = await mountEditor({ modelValue: '', placeholder: 'Было', ariaLabel: 'Ответ' });
+
+    expect(w.find('.rte-content').attributes('aria-placeholder')).toBe('Было');
+
+    await w.setProps({
+      placeholder: 'Стало',
+      ariaLabel: 'Комментарий',
+      minHeight: '400px',
+      statusLine: false,
+    });
+
+    expect(w.find('.rte-content').attributes('aria-placeholder')).toBe('Стало');
+    expect(w.find('.rte-content').attributes('aria-label')).toBe('Комментарий');
+    expect((w.find('.rte-host').element as HTMLElement).style.minHeight).toBe('400px');
+    expect(w.find('.rte-status').exists()).toBe(false);
+  });
+
+  it('swapping an upload adapter prop takes effect without remounting', async () => {
+    const first = vi.fn(async () => ({ url: 'https://cdn.example/first.png' }));
+    const second = vi.fn(async () => ({ url: 'https://cdn.example/second.png' }));
+    const w = await mountEditor({ uploadImage: first });
+
+    await w.setProps({ uploadImage: second });
+
+    const core = (w.vm as unknown as { core: { uploads: { upload(kind: string, file: File): Promise<unknown> } } }).core;
+
+    await core.uploads.upload('image', new File(['x'], 'a.png', { type: 'image/png' }));
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+});

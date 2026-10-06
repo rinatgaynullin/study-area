@@ -13,6 +13,7 @@ import {
   type Messages,
   type RichEditorCore,
   type RichEditorError,
+  type RichEditorLiveOptions,
   type RichEditorUi,
   type ToolbarConfig,
   type ToolbarItemDescriptor,
@@ -157,11 +158,36 @@ watch(
 
 // Всё, что меняет не только документ, но и интерфейс — режим чтения, язык,
 // переводы, пределы записи, — идёт через оболочку, а не напрямую в движок.
-watch(() => props.editable, (editable) => ui.value?.setEditable(editable));
-watch(() => props.locale, (locale) => ui.value?.setLocale(locale));
-watch(() => props.messages, (messages) => ui.value?.setMessages(messages), { deep: true });
-watch(() => props.limits, (limits) => limits && ui.value?.setLimits(limits), { deep: true });
-watch(() => props.theme, (theme) => ui.value?.setTheme(theme));
+/**
+ * Пропы, которые редактор меняет на лету через `setOptions`; остальные
+ * читаются один раз при создании. Объекты сравниваются глубоко: хост часто
+ * собирает их заново при каждом рендере.
+ */
+const LIVE_PROPS = [
+  'editable',
+  'locale',
+  'messages',
+  'limits',
+  'theme',
+  'minHeight',
+  'placeholder',
+  'ariaLabel',
+  'statusLine',
+  'linkStyles',
+  'uploadImage',
+  'uploadAudio',
+  'uploadFile',
+] as const satisfies ReadonlyArray<keyof RichEditorLiveOptions>;
+
+const DEEP_PROPS: ReadonlySet<string> = new Set(['messages', 'limits', 'linkStyles']);
+
+LIVE_PROPS.forEach((key) => {
+  watch(
+    () => props[key],
+    (value) => ui.value?.setOptions({ [key]: value } as RichEditorLiveOptions),
+    { deep: DEEP_PROPS.has(key) },
+  );
+});
 
 defineExpose({
   getHTML: () => ui.value?.core.getHTML() ?? '',

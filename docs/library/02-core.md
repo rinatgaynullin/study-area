@@ -56,6 +56,7 @@
 | `setLocale(locale)`, `setMessages(messages)` | `void` | Переводчик ядра; уже смонтированные плееры и вложения не перерисовываются |
 | `t(key, params?)` | `string` | Переводчик текущей локали |
 | `setLimits(limits)`, `getLimits()` | `void`, `EditorLimits` | Пределы у живого редактора |
+| `setOptions(options)` | `void` | Разом: `editable`, `locale`, `messages`, `limits`, `placeholder`, `ariaLabel`, адаптеры загрузки |
 | `insertFormula(mathml, type = 'math')` | `boolean` | Нормализует MathML; непригодный → ошибка `invalid-mathml` и `false` |
 | `updateFormulaAt(pos, mathml, type?)` | `boolean` | Меняет формулу по позиции |
 | `deleteFormulaAt(pos)` | `boolean` | Удаляет формулу |
@@ -152,8 +153,9 @@ const core = new RichEditorCore({
   через возможности (`features`, [03](03-vanilla-ui.md)) и `extensions`.
 - `setHTML()` не вызывает `onChange` — после программной подстановки
   документа модель хоста не обновится сама.
-- `legacy`, `extensions`, `formulaScale`, `placeholder`, `ariaLabel` и адаптеры
-  читаются один раз: для смены пересоздайте редактор.
+- `legacy`, `extensions` и `formulaScale` читаются один раз: для смены
+  пересоздайте редактор. Подсказка, имя для читалки и адаптеры меняются через
+  `setOptions()`.
 - `insertRecording()` без `uploadAudio` кладёт `blob:` напрямую, минуя проверку
   `maxAudioSizeBytes`; предел размера в этом случае держит рекордер.
 - При редактировании legacy-документа теряются декоративные классы Froala
