@@ -11,6 +11,8 @@ import { createRichEditor } from '@rich-editor/core';
 import { createRichContent } from '@rich-editor/core/viewer';
 import { createChemistryFeature } from '@rich-editor/chemistry';
 import { chemistryContent } from '@rich-editor/chemistry/viewer';
+import { createDrawingsFeature } from '@rich-editor/drawings';
+import { drawingsContent } from '@rich-editor/drawings/viewer';
 import './styles.css';
 
 const host = document.querySelector<HTMLElement>('#editor');
@@ -19,13 +21,13 @@ if (!host || !viewerHost) throw new Error('Не найдены контейне�
 
 // Вьюер получает документ редактора при каждом изменении — как это делал бы
 // хост, показывающий сохранённый ответ рядом с полем ввода.
-const viewer = createRichContent({ element: viewerHost, features: [chemistryContent] });
+const viewer = createRichContent({ element: viewerHost, features: [chemistryContent, drawingsContent] });
 
 const editor = createRichEditor({
   element: host,
   content: '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>',
   minHeight: '280px',
-  features: [createChemistryFeature()],
+  features: [createChemistryFeature(), createDrawingsFeature()],
   onChange: (html) => void viewer.update({ html }),
 });
 void viewer.update({ html: editor.core.getHTML() });

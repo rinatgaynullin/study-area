@@ -1,0 +1,86 @@
+/*
+ * Карточка чертежа: в документе редактора и во вьюере.
+ * Токены темы — из ядра (`--rte-*`); без него работают запасные значения.
+ */
+
+.rte-drawing {
+  display: block;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  margin: 12px auto;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-lg, 12px);
+  background: var(--rte-color-bg, #fff);
+  color: var(--rte-color-text, #221f2e);
+  user-select: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.rte-drawing__title {
+  margin-bottom: 6px;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  font-weight: var(--rte-ui-font-weight, 500);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-drawing__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 200px;
+  min-height: 80px;
+}
+
+.rte-drawing__preview svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  color: var(--rte-color-text, #221f2e);
+}
+
+/* Подложка подписей, «бумажные» заливки и сетка — цвета документа, а не белый. */
+.rte-drawing__halo {
+  fill: var(--rte-color-bg, #fff);
+  stroke: var(--rte-color-bg, #fff);
+}
+
+.rte-drawing__paper {
+  fill: var(--rte-color-bg, #fff);
+}
+
+.rte-drawing__grid {
+  stroke: var(--rte-color-border, #dedce3);
+  opacity: 0.6;
+}
+
+.rte-drawing__axis {
+  stroke: var(--rte-color-muted, #898794);
+}
+
+/* Пустая или нечитаемая сцена: короткая подпись вместо картинки. */
+.rte-drawing--empty .rte-drawing__preview {
+  padding: 16px 24px;
+  border: 1px dashed var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-drawing--invalid .rte-drawing__preview {
+  color: var(--rte-color-danger, #f23e3e);
+}
+
+/* В редакторе карточка кликабельна и выделяется, как формула. */
+.ProseMirror .rte-drawing {
+  cursor: pointer;
+}
+
+.rte-drawing--selected,
+.rte-drawing.ProseMirror-selectednode {
+  border-color: var(--rte-color-primary, #ff892e);
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
+}

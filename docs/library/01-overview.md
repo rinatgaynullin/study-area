@@ -25,6 +25,7 @@ allowlist на клиенте и сервере.
 | `@rich-editor/core` | `packages/editor-core` | Движок, редактор с тулбаром, вьюер, формулы, загрузки, i18n; входы `.` и `./viewer`; стили подключаются сами, файлы `styles.css`, `viewer.css`, `legacy.css` — для `<link>` |
 | `@rich-editor/vue` | `packages/editor-vue` | Компоненты `RichEditor`, `RichContent`, `RteIcon`, плагин; реэкспорт API ядра; вход `./viewer` только с `RichContent` |
 | `@rich-editor/chemistry` | `packages/editor-chemistry` | Структурные формулы chemfig: узел, диалог, рендер в SVG; вход `./viewer` для вьюера ([16](16-chemistry.md)) |
+| `@rich-editor/drawings` | `packages/editor-drawings` | Чертежи геометрии и физики из JSON-сцен: узлы, диалог, SVG, TikZ; вход `./viewer` ([17](17-drawings.md)) |
 | `@rich-editor/standalone` | `packages/editor-standalone` | Та же библиотека одной ES-сборкой со всеми зависимостями: `editor.js`, `viewer.js`, стили, шрифты |
 | `django-rich-editor` | `packages/django-rich-editor` | Виджет и поля Django, серверный санитайзер, вьюхи загрузок, теги шаблонов |
 | демо | `apps/demo` | Три страницы: Vue, ядро без фреймворка, standalone как статика |

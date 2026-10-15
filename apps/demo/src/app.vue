@@ -13,6 +13,9 @@ import { RichContent } from '@rich-editor/vue/viewer';
 // Структурные формулы: возможность для редактора и её документная часть для вьюера.
 import { createChemistryFeature } from '@rich-editor/chemistry';
 import { chemistryContent } from '@rich-editor/chemistry/viewer';
+// Чертежи: геометрия и физические схемы из JSON-сцен PinQueen.
+import { createDrawingsFeature } from '@rich-editor/drawings';
+import { drawingsContent } from '@rich-editor/drawings/viewer';
 import enMessages from './locales/en.json';
 import { HTML_SAMPLES, type HtmlSample } from './samples';
 
@@ -42,8 +45,8 @@ const messages = computed<Record<string, Messages>>(() => ({
 }));
 
 /** Возможности поверх встроенных; читаются один раз при создании редактора. */
-const features = [createChemistryFeature()];
-const contentFeatures = [chemistryContent];
+const features = [createChemistryFeature(), createDrawingsFeature()];
+const contentFeatures = [chemistryContent, drawingsContent];
 
 const limits = {
   maxAudioDurationSec: 120,

@@ -199,7 +199,7 @@ const ICONS: Record<string, string>; type IconName = keyof typeof ICONS;
 // bold italic underline strike heading paragraph subscript superscript bulletList orderedList blockquote
 // code codeBlock horizontalRule link unlink table alignLeft alignCenter alignRight alignJustify textColor
 // highlight clearFormat undo redo image audio file formulaMath formulaChem more chevronDown close check
-// openLink trash play pause stop record noColor; возможности дописывают свои: chemistry
+// openLink trash play pause stop record noColor; возможности дописывают свои: chemistry, geometry, physics
 ```
 
 ### Формулы
@@ -400,6 +400,70 @@ type ChemStructure = ChemChain | ChemRing;
 ```
 
 Стили: `@rich-editor/chemistry/styles.css` — узел и диалог одним файлом.
+
+## `@rich-editor/drawings`
+
+```ts
+// 17-drawings.md. Вход `.` — возможность для редактора.
+const createDrawingsFeature: (options?: DrawingsFeatureOptions) => EditorFeature;
+interface DrawingsFeatureOptions { toolbarItems?: boolean }
+const GeometryNode: Node<DrawingOptions>; const PhysicsNode: Node<DrawingOptions>;   // узлы `geometry`, `physics`
+const createDrawingNode: (kind: DrawingKind) => Node<DrawingOptions>;
+interface DrawingOptions { t: Translate | null; onEdit: ((payload: DrawingPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
+const createDrawingDialog: (context: EditorUiContext, options: DrawingDialogOptions) => DialogComponent<DrawingPayload | null>;
+interface DrawingDialogOptions { onSave(payload: DrawingPayload): void; onRemove(pos: number): void }
+interface DrawingPayload { kind: DrawingKind; data: string; tikz: string; pos: number | null }
+const DRAWINGS_MESSAGES: Record<string, Messages>;
+const DRAWING_TEMPLATES: DrawingTemplate[];
+const DRAWINGS_FEATURE_ID = 'drawings'; const GEOMETRY_NODE_NAME = 'geometry'; const PHYSICS_NODE_NAME = 'physics';
+// Команды TipTap: insertGeometry({ data, tikz? }), updateGeometry({ pos, data, tikz? }), insertPhysics(…), updatePhysics(…), deleteDrawingAt(pos)
+const geometryToTikz: (scene: GeometryScene) => string;
+const physicsToTikz: (scene: PhysicsScene) => string;
+
+// Вход `./viewer` — документная часть, нормализация и рендер, без TipTap (входит и в `.`).
+const drawingsContent: ContentFeature;
+const createDrawingsContent: (options?: { locale?: string }) => ContentFeature;
+const DRAWINGS_SANITIZER_RULES: SanitizerRules;                            // пять атрибутов data-geometry*, data-physics*, data-tikz-code
+const hydrateDrawings: (root: HTMLElement, context: ContentHydrateContext, locale?: string) => void;
+const paintDrawingNode: (element: HTMLElement, kind: DrawingKind, data: string, options: PaintDrawingOptions) => void;
+const readScene: (kind: DrawingKind, data: string) => GeometryScene | PhysicsScene | null;
+const renderDrawingPreview: (kind: DrawingKind, scene: GeometryScene | PhysicsScene, scale?: number) => string | null;
+const sceneTitleKey: (kind: DrawingKind, scene: GeometryScene | PhysicsScene) => string;
+
+const parseSceneJson: (text: string) => unknown | null;                   // терпимый разбор, без eval
+const stringifyScene: (scene: unknown) => string;
+const normalizeGeometryScene: (raw: unknown) => GeometryScene;
+const normalizePhysicsScene: (raw: unknown) => PhysicsScene;
+const detectDrawingKind: (raw: unknown, subjectHint?: DrawingKind) => DrawingKind;
+const hasDrawableContent: (scene: GeometryScene | PhysicsScene) => boolean;
+const splitEdgesThroughVertices: (scene: GeometryScene) => boolean;
+
+const renderGeometrySvg: (scene: GeometryScene, options?: GeometryRenderOptions) => string;
+interface GeometryRenderOptions { width?: number; height?: number; highlight?: GeometryHighlight | null; autoFit?: boolean }
+const renderPhysicsSvg: (scene: PhysicsScene, options?: PhysicsRenderOptions) => string;
+interface PhysicsRenderOptions { width?: number; height?: number; highlight?: PhysicsHighlight | null; autoFit?: boolean }
+const parsePgfplotsTikz: (tikz: string) => Record<string, unknown> | null;
+const worldToSvg: (point: Point, scale: number, cx: number, cy: number) => SvgPoint;
+const svgToWorld: (point: SvgPoint, scale: number, cx: number, cy: number) => Vec2;
+const rotatePoint3d: (point: Point, angleY: number, angleZ: number) => Vec3;
+const projectOblique: (point: Vec3, scale: number, cx: number, cy: number) => SvgPoint;
+const fitViewport: (points: Vec2[], options: FitOptions) => Viewport;
+const latexToSvgTspans: (latex: string) => string;                        // экранированная разметка <tspan>
+const latexToPlainText: (latex: string) => string;
+
+type DrawingKind = 'geometry' | 'physics';
+interface GeometryScene { type: '2d' | '3d' | 'plot_2d'; vertices: Record<string, Point>; edges: GeometryEdge[]; angles: GeometryAngle[];
+  labels: Record<string, string>; textLabels: GeometryTextLabel[]; sections: GeometrySection[]; cylinders: GeometryCylinder[]; plots: Plot[];
+  angleY: number; angleZ: number; scale?: number; offsetX: number; offsetY: number; showGrid: boolean; showAxes: boolean; showAxesTicks: boolean;
+  axes: { xLabel: string; yLabel: string } }
+interface PhysicsScene { type: 'physics'; scale?: number; offsetX: number; offsetY: number; showGrid: boolean; elements: PhysicsElement[] }
+interface PhysicsElement { id: string; type: PhysicsElementType; label?: string; color?: string; dashed?: boolean; points?: Vec2[]; center?: Vec2; coords?: Vec2; … }
+type GeometryHighlight = { type: 'edge'; from; to } | { type: 'vertex' | 'vertex_draft'; id } | { type: 'angle'; id } | { type: 'section'; vertices }
+  | { type: 'plot' | 'circle_plot'; id } | { type: 'angle_draft'; points };
+interface PhysicsHighlight { id: string }
+```
+
+Стили: `@rich-editor/drawings/styles.css` — карточка и диалог одним файлом.
 
 ## `@rich-editor/standalone`
 

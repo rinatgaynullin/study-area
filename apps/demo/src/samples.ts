@@ -25,6 +25,19 @@ export const HTML_SAMPLES: HtmlSample[] = [
 <p>Код вне подмножества сохраняется как есть: <span data-chemistry-code="A-B>C" data-chemistry-type="chemfig"></span></p>`,
   },
   {
+    id: 'drawings',
+    label: 'Чертежи PinQueen',
+    hint: 'JSON-сцены в data-geometry-data и data-physics-data становятся карточками с SVG; TikZ в data-tikz-code сохраняется.',
+    html: `<h3>Чертежи</h3>
+<p>Прямоугольный треугольник:</p>
+<div data-geometry-data='{"type":"2d","vertices":{"A":[0,0],"B":[4,0],"C":[0,3]},"edges":[["A","B"],["B","C"],["C","A"]],"angles":[{"points":["B","A","C"],"style":"right"}],"labels":{"A":"below left","B":"below right","C":"above"}}' data-tikz-code="\\begin{tikzpicture}\\end{tikzpicture}"></div>
+<p>Пирамида (формат PinQueen: span внутри абзаца):</p>
+<p><span data-geometry-data='{"type":"3d","vertices":{"S":[1.5,1.5,3.5],"A":[0,0,0],"B":[3,0,0],"C":[3,3,0],"D":[0,3,0]},"edges":[{"from":"A","to":"B"},{"from":"B","to":"C"},{"from":"C","to":"D"},{"from":"D","to":"A","style":"dashed"},{"from":"S","to":"A"},{"from":"S","to":"B"},{"from":"S","to":"C"},{"from":"S","to":"D","style":"dashed"}],"angleY":15,"angleZ":-30}'></span></p>
+<p>Брусок с силой:</p>
+<div data-physics-data='{"elements":[{"id":"floor","type":"surface","points":[[-5,0],[5,0]],"hatching":"bottom"},{"id":"m","type":"block","subtype":"rectangle","center":[0,0.5],"width":1.6,"height":1},{"id":"F","type":"vector","vectorType":"force","points":[[0.8,0.5],[3,0.5]],"label":"\\vec{F}"}]}'></div>
+<p>Битый JSON сохраняется как есть: <span data-geometry-data="{vertices: ">не разобрано</span></p>`,
+  },
+  {
     id: 'mathml',
     label: 'MathML из другого редактора',
     hint: 'Сырые <math> превращаются в редактируемые формулы, а не в «битый» текст.',
