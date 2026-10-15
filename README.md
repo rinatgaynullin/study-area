@@ -21,6 +21,7 @@ packages/editor-core   @rich-editor/core   the editor: engine, schema, plugins a
 packages/editor-vue    @rich-editor/vue    Vue 3 wrapper over the core UI  ← install this for Vue
 packages/editor-chemistry  @rich-editor/chemistry  structural formulas (chemfig subset) as an editor feature
 packages/editor-drawings   @rich-editor/drawings   geometry and physics drawings from JSON scenes, SVG and TikZ
+packages/editor-ocr        @rich-editor/ocr        PinQueen OCR text (Markdown + LaTeX + markers) to the document and back
 apps/demo                                  runnable demo (Vue page + a no-framework page)
 ```
 

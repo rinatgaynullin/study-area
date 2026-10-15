@@ -36,6 +36,10 @@ export default defineConfig({
         replacement: fromRoot('../../packages/editor-vue/src/styles/viewer.css'),
       },
       {
+        find: '@rich-editor/ocr',
+        replacement: fromRoot('../../packages/editor-ocr/src/index.ts'),
+      },
+      {
         find: '@rich-editor/drawings/viewer',
         replacement: fromRoot('../../packages/editor-drawings/src/viewer.ts'),
       },

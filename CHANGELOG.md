@@ -7,6 +7,18 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/ocr`: the PinQueen OCR text format in both directions.
+  `ocrTextToHtml(text, { subject, metadata })` turns Markdown + LaTeX with
+  `TIKZ`/`DATA` markers, `\chemfig{}`, `\ce{}`, `$…$`/`$$…$$`, tables and
+  lists into the editor's HTML contract (MathML formulas with a LaTeX
+  annotation, chemistry and drawing nodes), reads PinQueen's own HTML export,
+  places drawings from the status metadata onto `$GEOMETRY_n$` placeholders
+  and escapes text. `htmlToOcrText(html)` writes the text back: headings,
+  marks, numbered and nested lists, tables, `$…$`, display formulas as
+  `$$…$$`, `\chemfig{}`, `TIKZ` + `DATA` blocks and an `SVG` block for physics.
+  The losses of the original are fixed: ordered-list numbering, strike-through,
+  the physics TikZ and the chemistry type survive the round trip; the drawing
+  kind comes from the scene before the subject.
 - `@rich-editor/drawings`: geometry and physics drawings as an editor feature.
   Block nodes `geometry` and `physics` keep the PinQueen JSON scene in
   `data-geometry-data` / `data-physics-data` and TikZ in `data-tikz-code`
