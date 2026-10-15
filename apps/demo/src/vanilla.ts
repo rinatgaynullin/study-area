@@ -23,9 +23,7 @@ const viewer = createRichContent({ element: viewerHost, features: [chemistryCont
 
 const editor = createRichEditor({
   element: host,
-  content:
-    '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>'
-    + '<p>Структурная формула: <span data-chemistry-code="CH_3-CH_2-OH" data-chemistry-type="chemfig"></span></p>',
+  content: '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>',
   minHeight: '280px',
   features: [createChemistryFeature()],
   onChange: (html) => void viewer.update({ html }),
