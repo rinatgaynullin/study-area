@@ -98,15 +98,13 @@ export class RichEditorCore {
 
     this.editor = new Editor({
       element: options.element,
-      content: options.content
-        ? prepareIncomingHtml(options.content, { legacy: options.legacy })
-        : '',
+      content: options.content ? this.prepare(options.content) : '',
       editable: options.editable ?? true,
       extensions: this.buildExtensions(),
       editorProps: {
         attributes: this.buildEditorAttributes(),
         // Every externally authored fragment goes through the sanitizer.
-        transformPastedHTML: (html) => prepareIncomingHtml(html, { legacy: this.options.legacy }),
+        transformPastedHTML: (html) => this.prepare(html),
         handlePaste: (_view, event) => this.insertFiles(event.clipboardData?.files),
         handleDrop: (view, event, _slice, moved) => {
           if (moved) return false;
@@ -246,8 +244,20 @@ export class RichEditorCore {
   }
 
   setHTML(html: string, options: { emitUpdate?: boolean } = {}): void {
-    this.editor.commands.setContent(prepareIncomingHtml(html, { legacy: this.options.legacy }), {
+    this.editor.commands.setContent(this.prepare(html), {
       emitUpdate: options.emitUpdate ?? false,
+    });
+  }
+
+  /**
+   * Единственный путь входа контента: начальный документ, `setHTML` и
+   * вставка. Санитайзер знает разметку хоста и возможностей, legacy-разбор
+   * включён по опции.
+   */
+  private prepare(html: string): string {
+    return prepareIncomingHtml(html, {
+      legacy: this.options.legacy,
+      sanitize: this.options.sanitize,
     });
   }
 

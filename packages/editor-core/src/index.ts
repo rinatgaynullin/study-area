@@ -1,5 +1,11 @@
 export { RichEditorCore } from './rich-editor-core';
 export { prepareIncomingHtml, type PrepareIncomingHtmlOptions } from './prepare-html';
+export type {
+  ContentFeature,
+  ContentHydrateContext,
+  ContentHydrateDispose,
+  ContentHydrateResult,
+} from './content-feature';
 export { decodeWirisMathml } from './legacy/decode-wiris-mathml';
 export { upgradeLegacyHtml } from './legacy/upgrade-legacy-html';
 export { DEFAULT_FORMULA_FONT_SIZE_PX } from './formula/mathjax';
@@ -92,7 +98,14 @@ export {
 export { createI18n, DEFAULT_LOCALE, en, ru, type I18n, type I18nOptions } from './i18n';
 export { MATHLIVE_STRINGS, mathliveRu, type MathliveStrings } from './i18n/mathlive';
 
-export { sanitizeHtml, sanitizeMathML, sanitizeSvg, resetSanitizers } from './security/sanitize';
+export {
+  mergeSanitizerRules,
+  sanitizeHtml,
+  sanitizeMathML,
+  sanitizeSvg,
+  resetSanitizers,
+  type SanitizerRules,
+} from './security/sanitize';
 
 export {
   buildMathML,

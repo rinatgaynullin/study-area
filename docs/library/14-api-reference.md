@@ -40,6 +40,7 @@ interface RichEditorCoreOptions {
   locale?: string; messages?: Record<string, Messages>; limits?: Partial<EditorLimits>;
   uploadImage?: UploadAdapter; uploadAudio?: UploadAdapter; uploadFile?: UploadAdapter;
   formulaScale?: number; extensions?: unknown[] | ((context: { t: Translate }) => unknown[]); legacy?: boolean;
+  sanitize?: SanitizerRules;                                             // 11-security.md
   onChange?: (html: string) => void; onSelectionUpdate?: () => void;
   onTransaction?: () => void; onFocus?: () => void; onBlur?: () => void;
   onUpload?: (event: UploadEvent) => void; onFormulaEdit?: (payload: FormulaPayload) => void;
@@ -48,7 +49,7 @@ interface RichEditorCoreOptions {
 type RichEditorCoreLiveOptions = Pick<RichEditorCoreOptions,
   'editable' | 'locale' | 'messages' | 'limits' | 'placeholder' | 'ariaLabel' | 'uploadImage' | 'uploadAudio' | 'uploadFile'>;
 
-interface PrepareIncomingHtmlOptions { legacy?: boolean }
+interface PrepareIncomingHtmlOptions { legacy?: boolean; sanitize?: SanitizerRules }
 const prepareIncomingHtml: (html: string, options?: PrepareIncomingHtmlOptions) => string;
 const upgradeLegacyHtml: (html: string) => string;
 const decodeWirisMathml: (raw: string) => string;
@@ -60,7 +61,9 @@ const decodeWirisMathml: (raw: string) => string;
 const HTML_TAGS: string[]; const HTML_ATTRS: string[];                // 11-security.md
 const MATHML_TAGS: string[]; const MATHML_ATTRS: string[];
 const SVG_EXTRA_ATTRS: string[]; const ALLOWED_URI_SCHEMES: string[];
-const sanitizeHtml: (html: string) => string;
+interface SanitizerRules { tags?: readonly string[]; attributes?: readonly string[]; }
+const mergeSanitizerRules: (...rules: Array<SanitizerRules | undefined>) => SanitizerRules | undefined;
+const sanitizeHtml: (html: string, rules?: SanitizerRules) => string;
 const sanitizeMathML: (mathml: string) => string;                      // '' если не <math>
 const sanitizeSvg: (svg: string) => string;
 const resetSanitizers: () => void;                                     // тестовый шов
@@ -89,8 +92,14 @@ type RichEditorLiveOptions = RichEditorCoreLiveOptions
 const createRichContent: (options: RichContentOptions) => RichContent;    // 06-viewer.md
 interface RichContentOptions {
   element: HTMLElement; html?: string; formulaScale?: number; legacy?: boolean; theme?: EditorTheme;
-  onRendered?(): void;
+  features?: ContentFeature[]; onRendered?(): void;
 }
+interface ContentFeature {                                               // документная часть возможности
+  id: string; sanitize?: SanitizerRules;
+  hydrate?(root: HTMLElement, context: ContentHydrateContext): ContentHydrateResult | Promise<ContentHydrateResult>;
+}
+interface ContentHydrateContext { formulaScale: number; }
+type ContentHydrateDispose = () => void; type ContentHydrateResult = ContentHydrateDispose | void;
 type RichContentUpdate = Partial<Pick<RichContentOptions, 'html' | 'formulaScale' | 'legacy' | 'theme'>>;
 interface RichContent {
   readonly element: HTMLElement; update(next: RichContentUpdate): Promise<void>;
@@ -131,8 +140,8 @@ interface ToolbarItemDescriptor {
   isActive?(editor: Editor): boolean; isDisabled?(editor: Editor): boolean;
   renderPanel?(context: EditorUiContext, close: () => void): HTMLElement;
 }
-interface EditorFeature {
-  id: string; extensions?(options: FeatureBuildOptions): unknown[];
+interface EditorFeature extends ContentFeature {
+  extensions?(options: FeatureBuildOptions): unknown[];
   toolbarItems?(): ToolbarItemDescriptor[]; dialogs?(context: EditorUiContext): UiComponent[];
 }
 interface FeatureBuildOptions {
@@ -298,8 +307,9 @@ export type { Editor } from '@tiptap/core';
 
 Subpath-экспорты: `@rich-editor/core/viewer` (вьюер без редактора: `createRichContent`, `applyTheme`,
 `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`, `decodeWirisMathml`, `sanitizeHtml`,
-`sanitizeMathML`, `sanitizeSvg`, `renderMathML`, `whenFormulasReady`, `normalizeMathML`,
-`extractFormulaType`, `isMathMLEmpty` и их типы), `@rich-editor/core/styles.css`,
+`sanitizeMathML`, `sanitizeSvg`, `mergeSanitizerRules`, `renderMathML`, `whenFormulasReady`,
+`normalizeMathML`, `extractFormulaType`, `isMathMLEmpty` и их типы, включая `ContentFeature`,
+`ContentHydrateContext`, `SanitizerRules`), `@rich-editor/core/styles.css`,
 `@rich-editor/core/viewer.css`, `@rich-editor/core/legacy.css`.
 
 ## `@rich-editor/vue`
@@ -320,6 +330,7 @@ export type {
   Dropdown, LinkStyle, MathliveStrings, Modal, Popover, RichEditorUi, RichEditorUiOptions, RichEditorLiveOptions,
   RichContent as RichContentViewer, RichContentOptions, EditorTheme, Toolbar, ToolbarConfig, ToolbarGroupConfig,
   ToolbarItemDescriptor, ToolbarPreset, DialogComponent, EditorUiContext, UiComponent, IconName,
+  ContentFeature, ContentHydrateContext, SanitizerRules,
   EditorLimits, FormulaPayload, FormulaType, Messages, UploadAdapter, UploadContext, UploadEvent, UploadKind, UploadResult,
 };
 export type ToolbarItemId = string;

@@ -7,6 +7,20 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- Extension points for document features (groundwork for chemistry and
+  drawings): `SanitizerRules` — a feature or a host declares the tags and
+  attributes of its nodes, `sanitizeHtml(html, rules?)` and
+  `prepareIncomingHtml(html, { sanitize })` honour them on every input path
+  (initial content, `setHTML`, paste, viewer) while `FORBID_TAGS`, URL and
+  style checks still apply; `mergeSanitizerRules()`; `RichEditorCoreOptions.sanitize`
+  for raw `extensions`. `ContentFeature` — the document side of a feature
+  (`id`, `sanitize`, `hydrate(root, { formulaScale })`) that the viewer takes
+  via `RichContentOptions.features` and `<RichContent :features>`: hydrators run
+  after every paint, their disposers run before the next paint and on
+  `destroy()`, async hydrators are awaited by `update()` and `onRendered`.
+  `EditorFeature` now extends `ContentFeature`, so one object serves both the
+  editor and the viewer. The viewer is a class under the hood
+  (`createRichContent` is unchanged).
 - Styles need no manual imports: the editor imports `mathlive/fonts.css` itself
   (kept external in the library build, so the host bundler emits the font
   files), and the Froala compat layer is part of `styles.css` and `viewer.css`

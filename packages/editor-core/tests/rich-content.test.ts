@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { createRichContent, latexToMathML, type RichContent } from '../src';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createRichContent,
+  latexToMathML,
+  type ContentFeature,
+  type RichContent,
+} from '../src';
 
 /**
  * Ванильный вьюер: санитизация, классы темы, отрисовка формул без SVG.
@@ -98,6 +103,128 @@ describe('вьюер без фреймворка', () => {
 
     await view.update({ legacy: false });
     expect(view.element.classList.contains('rte-legacy')).toBe(false);
+  });
+});
+
+describe('возможности во вьюере', () => {
+  const chemistryHtml = '<p><span data-chemistry="true" data-chemistry-code="A-B">C</span></p>';
+
+  it('пропускает разметку возможности через санитайзер по её правилам', async () => {
+    const feature: ContentFeature = {
+      id: 'chemistry',
+      sanitize: { attributes: ['data-chemistry', 'data-chemistry-code'] },
+    };
+
+    const view = await mountViewer(chemistryHtml, { features: [feature] });
+    const node = view.element.querySelector('[data-chemistry]');
+
+    expect(node?.getAttribute('data-chemistry-code')).toBe('A-B');
+
+    view.destroy();
+    viewer = undefined;
+
+    const plain = await mountViewer(chemistryHtml);
+
+    expect(plain.element.querySelector('[data-chemistry]')).toBeNull();
+  });
+
+  it('оживляет узлы после каждой отрисовки и снимает перед следующей и при уничтожении', async () => {
+    const dispose = vi.fn();
+    const hydrate = vi.fn((root: HTMLElement) => {
+      root.querySelectorAll('[data-chemistry]').forEach((node) => {
+        node.appendChild(document.createElement('svg'));
+      });
+
+      return dispose;
+    });
+
+    const feature: ContentFeature = {
+      id: 'chemistry',
+      sanitize: { attributes: ['data-chemistry', 'data-chemistry-code'] },
+      hydrate,
+    };
+
+    const view = await mountViewer(chemistryHtml, { features: [feature], formulaScale: 1.5 });
+
+    expect(hydrate).toHaveBeenCalledTimes(1);
+    expect(hydrate.mock.calls[0][0]).toBe(view.element);
+    expect(hydrate.mock.calls[0][1]).toEqual({ formulaScale: 1.5 });
+    expect(view.element.querySelector('[data-chemistry] svg')).not.toBeNull();
+    expect(dispose).not.toHaveBeenCalled();
+
+    await view.update({ html: chemistryHtml });
+
+    // Старая отрисовка снята до того, как легла новая разметка.
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(hydrate).toHaveBeenCalledTimes(2);
+
+    view.destroy();
+    viewer = undefined;
+    expect(dispose).toHaveBeenCalledTimes(2);
+  });
+
+  it('update ждёт асинхронный гидратор, onRendered приходит после него', async () => {
+    const order: string[] = [];
+
+    const feature: ContentFeature = {
+      id: 'slow',
+      hydrate: async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 5);
+        });
+
+        order.push('hydrated');
+      },
+    };
+
+    const view = await mountViewer('<p>x</p>', {
+      features: [feature],
+      onRendered: () => order.push('rendered'),
+    });
+
+    // Первую отрисовку вьюер не ждёт — дожидаемся её сами, прежде чем мерить update.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+
+    order.length = 0;
+    await view.update({ html: '<p>y</p>' });
+
+    expect(order).toEqual(['hydrated', 'rendered']);
+  });
+
+  it('результат гидратора, пережившего свою отрисовку, снимается сразу', async () => {
+    const disposers: Array<ReturnType<typeof vi.fn>> = [];
+    let release: (() => void) | undefined;
+
+    const feature: ContentFeature = {
+      id: 'slow',
+      hydrate: () =>
+        new Promise<() => void>((resolve) => {
+          const dispose = vi.fn();
+
+          disposers.push(dispose);
+          release = () => resolve(dispose);
+        }),
+    };
+
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    viewer = createRichContent({ element: host, html: '<p>a</p>', features: [feature] });
+
+    const first = release!;
+
+    // Вторая отрисовка началась, пока первый гидратор ещё не ответил.
+    const second = viewer.update({ html: '<p>b</p>' });
+
+    first();
+    await Promise.resolve();
+    release!();
+    await second;
+
+    expect(disposers).toHaveLength(2);
+    expect(disposers[0]).toHaveBeenCalledTimes(1);
+    expect(disposers[1]).not.toHaveBeenCalled();
   });
 });
 

@@ -14,5 +14,8 @@ export {
   type RichContent,
   type RichContentOptions,
   type RichContentUpdate,
+  type ContentFeature,
+  type ContentHydrateContext,
+  type SanitizerRules,
   type EditorTheme,
 } from '@rich-editor/core/viewer';

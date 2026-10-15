@@ -89,8 +89,9 @@ app.use(RichEditorPlugin);              // регистрирует RichEditor �
 
 ### `RichContent` и `RteIcon`
 
-`RichContent` — пропы `html`, `formulaScale`, `legacy`, `theme`, событие
-`rendered`, exposed `renderPendingFormulas()` ([06](06-viewer.md)).
+`RichContent` — пропы `html`, `formulaScale`, `legacy`, `theme`, `features`
+(читается один раз), событие `rendered`, exposed `renderPendingFormulas()`
+([06](06-viewer.md)).
 `RteIcon` — `name: string` (имя из `ICONS`), `size?: number` (20): иконка
 редактора для своего интерфейса.
 
