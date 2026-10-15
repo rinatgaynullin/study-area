@@ -7,6 +7,17 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/drawings`: the drawing dialog gains constructor tabs. The
+  plane-geometry constructor (`planimetryEditorFactory`) draws points,
+  segments, circles, angles, tick marks and labels with snapping to segments,
+  circles and the grid, drags points, edits properties, splits a segment by a
+  point placed on it and keeps unknown scene fields. Shared groundwork for the
+  other tabs: `SketchCanvas` (scene layer through the common renderer plus an
+  overlay, world coordinates, zoom to cursor, panning), `HistoryStack`
+  (snapshot before a change, so one undo restores the previous state),
+  `ToolBar`, curve fitting and stroke recognition. `SceneEditor` /
+  `SceneEditorFactory` contracts, `createDrawingsFeature({ editors, scans })`;
+  the JSON tab stays as a fallback and shows the constructor's scene.
 - `@rich-editor/ocr`: the PinQueen OCR text format in both directions.
   `ocrTextToHtml(text, { subject, metadata })` turns Markdown + LaTeX with
   `TIKZ`/`DATA` markers, `\chemfig{}`, `\ce{}`, `$…$`/`$$…$$`, tables and

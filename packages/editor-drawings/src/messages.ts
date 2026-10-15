@@ -1,7 +1,8 @@
 import type { Messages } from '@rich-editor/core';
+import { BUILDER_MESSAGES } from './builders/messages';
 
-/** Подписи возможности по языкам. Редактор берёт их сам через `EditorFeature.messages`. */
-export const DRAWINGS_MESSAGES: Record<string, Messages> = {
+/** Подписи диалога и карточек; подписи конструкторов — в `builders/messages.ts`. */
+const BASE_MESSAGES: Record<string, Messages> = {
   ru: {
     drawings_insert_geometry: 'Чертёж',
     drawings_insert_physics: 'Физическая схема',
@@ -79,3 +80,8 @@ export const DRAWINGS_MESSAGES: Record<string, Messages> = {
     drawings_template_thermo: 'p(V) diagram',
   },
 };
+
+/** Подписи возможности по языкам. Редактор берёт их сам через `EditorFeature.messages`. */
+export const DRAWINGS_MESSAGES: Record<string, Messages> = Object.fromEntries(
+  Object.keys(BASE_MESSAGES).map((locale) => [locale, { ...BASE_MESSAGES[locale], ...BUILDER_MESSAGES[locale] }]),
+);

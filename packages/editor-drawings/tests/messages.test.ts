@@ -8,7 +8,21 @@ import { DRAWING_TEMPLATES } from '../src/templates';
 const SOURCE_ROOT = resolve(process.cwd(), 'packages/editor-drawings/src');
 
 /** Ключи, которые код собирает из префикса и переменной. */
-const DYNAMIC_PREFIXES = ['drawings_title_', 'drawings_insert_', 'drawings_aria_', 'drawings_scene_'];
+const DYNAMIC_PREFIXES = [
+  'drawings_title_',
+  'drawings_insert_',
+  'drawings_aria_',
+  'drawings_scene_',
+  'drawings_hint_',
+  'drawings_selected_',
+  'drawings_position_',
+  'drawings_angle_',
+  'drawings_style_',
+  'drawings_tab_',
+  'drawings_tool_',
+  'drawings_prop_',
+  'drawings_template_',
+];
 
 const sourceFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {

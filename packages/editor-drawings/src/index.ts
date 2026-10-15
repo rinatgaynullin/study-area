@@ -1,6 +1,7 @@
 export { createDrawingsFeature, type DrawingsFeatureOptions } from './drawings-feature';
 export { GeometryNode, PhysicsNode, createDrawingNode, type DrawingOptions } from './drawing-node';
-export { createDrawingDialog, type DrawingDialogOptions } from './drawing-dialog';
+export { DEFAULT_SCENE_EDITORS, createDrawingDialog, type DrawingDialogOptions } from './drawing-dialog';
+export * from './builders';
 export { DRAWINGS_MESSAGES } from './messages';
 export { DRAWING_TEMPLATES, type DrawingTemplate } from './templates';
 export {

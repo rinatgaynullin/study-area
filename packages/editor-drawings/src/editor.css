@@ -106,3 +106,62 @@
 .rte-drawing-dialog__status--error {
   color: var(--rte-color-danger, #f23e3e);
 }
+
+/* Вкладки конструкторов и JSON. */
+.rte-drawing-dialog__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--rte-color-border, #dedce3);
+}
+
+.rte-drawing-dialog__tab {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  cursor: pointer;
+}
+
+.rte-drawing-dialog__tab:hover {
+  color: var(--rte-color-primary-hover, #f56600);
+}
+
+.rte-drawing-dialog__tab:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: -2px;
+}
+
+.rte-drawing-dialog__tab--active {
+  border-bottom-color: var(--rte-color-primary, #ff892e);
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-drawing-dialog__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.rte-drawing-dialog__scans {
+  display: grid;
+  gap: 8px;
+  max-width: 220px;
+  max-height: 480px;
+  overflow: auto;
+}
+
+.rte-drawing-dialog__scans[hidden] {
+  display: none;
+}
+
+.rte-drawing-dialog__scan {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+}

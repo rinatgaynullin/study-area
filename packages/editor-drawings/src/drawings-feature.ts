@@ -1,6 +1,7 @@
 // Стили диалога едут вместе с возможностью, как у ядра; стили карточки
 // приезжают через документную часть.
 import './editor.css';
+import './builders/builders.css';
 import {
   ICONS,
   type DialogComponent,
@@ -12,6 +13,7 @@ import {
   type ToolbarItemDescriptor,
 } from '@rich-editor/core';
 import type { Editor } from '@tiptap/core';
+import type { SceneEditorFactory } from './builders/types';
 import { createDrawingDialog } from './drawing-dialog';
 import { GeometryNode, PhysicsNode } from './drawing-node';
 import { DRAWINGS_SANITIZER_RULES, hydrateDrawings } from './drawings-content';
@@ -34,6 +36,10 @@ ICONS.physics =
 export interface DrawingsFeatureOptions {
   /** Пункты тулбара не нужны — например, чертежи вставляет только импорт. */
   toolbarItems?: boolean;
+  /** Конструкторы во вкладках диалога; по умолчанию — все встроенные. */
+  editors?: SceneEditorFactory[];
+  /** Сканы работы ученика для панели рядом с полотном: адреса картинок. */
+  scans?: () => string[];
 }
 
 /**
@@ -111,6 +117,8 @@ class DrawingsFeature implements EditorFeature {
       onRemove: (pos) => {
         editor.chain().focus().deleteDrawingAt(pos).run();
       },
+      editors: this.options.editors,
+      scans: this.options.scans,
     });
 
     return [this.dialog];
