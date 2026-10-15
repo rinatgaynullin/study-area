@@ -10,6 +10,9 @@ import {
 } from '@rich-editor/vue';
 // Вьюер из отдельного входа: он не тянет редактор и TipTap.
 import { RichContent } from '@rich-editor/vue/viewer';
+// Структурные формулы: возможность для редактора и её документная часть для вьюера.
+import { createChemistryFeature } from '@rich-editor/chemistry';
+import { chemistryContent } from '@rich-editor/chemistry/viewer';
 import enMessages from './locales/en.json';
 import { HTML_SAMPLES, type HtmlSample } from './samples';
 
@@ -37,6 +40,10 @@ const editorRef = shallowRef<InstanceType<typeof RichEditor> | null>(null);
 const messages = computed<Record<string, Messages>>(() => ({
   en: enMessages as Messages,
 }));
+
+/** Возможности поверх встроенных; читаются один раз при создании редактора. */
+const features = [createChemistryFeature()];
+const contentFeatures = [chemistryContent];
 
 const limits = {
   maxAudioDurationSec: 120,
@@ -256,6 +263,7 @@ async function reloadSample(): Promise<void> {
         :editable="editable"
         :legacy="isLegacyEnabled"
         :toolbar="toolbarPreset"
+        :features="features"
         :theme="theme"
         :upload-image="adapters.uploadImage"
         :upload-audio="adapters.uploadAudio"
@@ -307,6 +315,7 @@ async function reloadSample(): Promise<void> {
         class="demo__preview"
         :html="html"
         :legacy="isLegacyEnabled"
+        :features="contentFeatures"
       />
       <pre v-else-if="outputTab === 'source'" class="demo__source">{{ html }}</pre>
 
@@ -318,6 +327,7 @@ async function reloadSample(): Promise<void> {
         class="demo__preview demo__preview--raw"
         :html="draftHtml || html"
         :legacy="isLegacyEnabled"
+        :features="contentFeatures"
       />
 
       <div v-else class="demo__input">

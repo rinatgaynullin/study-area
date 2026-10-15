@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core';
 import { collectSanitizerRules } from '../content-feature';
 import { RichEditorCore } from '../rich-editor-core';
 import { mergeSanitizerRules } from '../security/sanitize';
-import { DEFAULT_LOCALE } from '../i18n';
+import { DEFAULT_LOCALE, mergeMessages } from '../i18n';
 import { IMAGE_ACCEPT, TEXT_FILE_ACCEPT } from '../media/upload';
 import type {
   EditorLimits,
@@ -247,6 +247,9 @@ class RichEditorUiController implements RichEditorUi {
 
   private readonly features: EditorFeature[];
 
+  /** Подписи возможностей одной таблицей; таблицы хоста ложатся поверх. */
+  private readonly featureMessages: Record<string, Messages> | undefined;
+
   /** Пункты возможностей, запрошенные один раз: дескрипторы не пересоздаются. */
   private readonly featureItems: FeatureItems[];
 
@@ -303,11 +306,13 @@ class RichEditorUiController implements RichEditorUi {
     });
 
     this.features = options.features ?? [];
+    this.featureMessages = mergeMessages(...this.features.map((feature) => feature.messages));
     this.locale = options.locale ?? DEFAULT_LOCALE;
 
     this.core = new RichEditorCore({
       ...options,
       element: host,
+      messages: mergeMessages(this.featureMessages, options.messages),
       // Разметка возможностей проходит санитайзер вместе с правилами хоста.
       sanitize: mergeSanitizerRules(options.sanitize, collectSanitizerRules(this.features)),
       extensions: this.buildExtensions,
@@ -378,6 +383,9 @@ class RichEditorUiController implements RichEditorUi {
 
   setOptions(next: RichEditorLiveOptions): void {
     const { theme, minHeight, statusLine, linkStyles, ...coreOptions } = next;
+
+    // Новые таблицы хоста не должны вытеснить подписи возможностей.
+    if ('messages' in next) coreOptions.messages = mergeMessages(this.featureMessages, next.messages);
 
     if (next.locale !== undefined) this.locale = next.locale;
 

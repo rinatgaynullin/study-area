@@ -298,6 +298,28 @@ describe('возможности поверх встроенных', () => {
     expect(document.querySelector('.rte-modal')).toBeNull();
   });
 
+  it('подписи возможности берутся из её таблиц, таблицы хоста главнее', () => {
+    const feature: EditorFeature = {
+      id: 'shout',
+      messages: { ru: { shout_label: 'Крикнуть' }, en: { shout_label: 'Shout' } },
+      toolbarItems: () => [{ id: 'shout', icon: 'bold', labelKey: 'shout_label', kind: 'button' }],
+    };
+
+    const editor = mountEditor({ features: [feature] });
+
+    expect(toolbarButton('Крикнуть')).toBeInstanceOf(HTMLButtonElement);
+
+    editor.setLocale('en');
+    expect(toolbarButton('Shout')).toBeInstanceOf(HTMLButtonElement);
+
+    // Таблица хоста переопределяет подпись возможности, остальные её ключи остаются.
+    editor.setOptions({ locale: 'ru', messages: { ru: { shout_label: 'Громко' } } });
+    expect(toolbarButton('Громко')).toBeInstanceOf(HTMLButtonElement);
+
+    editor.setMessages(undefined);
+    expect(toolbarButton('Крикнуть')).toBeInstanceOf(HTMLButtonElement);
+  });
+
   it('разметка возможности проходит санитайзер оболочки по её правилам', () => {
     const feature: EditorFeature = {
       id: 'probe',

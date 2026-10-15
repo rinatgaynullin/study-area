@@ -141,6 +141,7 @@ interface ToolbarItemDescriptor {
   renderPanel?(context: EditorUiContext, close: () => void): HTMLElement;
 }
 interface EditorFeature extends ContentFeature {
+  messages?: Record<string, Messages>;                                   // 09-i18n.md
   extensions?(options: FeatureBuildOptions): unknown[];
   toolbarItems?(): ToolbarItemDescriptor[]; dialogs?(context: EditorUiContext): UiComponent[];
 }
@@ -183,11 +184,22 @@ interface MenuItemOptions {
 const createMenuItem: (options: MenuItemOptions) => HTMLButtonElement;
 const createMenuSeparator: () => HTMLElement;
 
+// Помощники разметки на голом DOM — те же, которыми собраны встроенные диалоги.
+const el: <K extends keyof HTMLElementTagNameMap>(tag: K, options?: {
+  class?: string; text?: string; html?: string;
+  attrs?: Record<string, string | number | boolean | null | undefined>; children?: Array<Node | null | undefined>;
+}) => HTMLElementTagNameMap[K];
+const icon: (name: string, size?: number) => SVGElement;
+type Unsubscribe = () => void;
+const on: (target: HTMLElement | Document | Window, type: string, listener: (event: Event) => void,
+  options?: AddEventListenerOptions) => Unsubscribe;
+const createDisposer: () => { add: (off: Unsubscribe) => void; dispose: () => void };
+
 const ICONS: Record<string, string>; type IconName = keyof typeof ICONS;
 // bold italic underline strike heading paragraph subscript superscript bulletList orderedList blockquote
 // code codeBlock horizontalRule link unlink table alignLeft alignCenter alignRight alignJustify textColor
 // highlight clearFormat undo redo image audio file formulaMath formulaChem more chevronDown close check
-// openLink trash play pause stop record noColor
+// openLink trash play pause stop record noColor; возможности дописывают свои: chemistry
 ```
 
 ### Формулы
@@ -342,6 +354,52 @@ Subpath-экспорты: `@rich-editor/vue/viewer` (`RichContent` и реэкс
 Остальное (`EditorFeature`, `prepareIncomingHtml`, санитайзер, узлы,
 `UploadPipeline`, `VoiceRecorder`, `createI18n`, шаблоны, палитры)
 импортируется из `@rich-editor/core` — он зависимость Vue-пакета.
+
+## `@rich-editor/chemistry`
+
+```ts
+// 16-chemistry.md. Вход `.` — возможность для редактора.
+const createChemistryFeature: (options?: ChemistryFeatureOptions) => EditorFeature;
+interface ChemistryFeatureOptions { toolbarItem?: boolean }
+const ChemistryNode: Node<ChemistryOptions>;                               // TipTap-узел `chemistry`
+interface ChemistryOptions { t: Translate | null; onEdit: ((payload: ChemistryPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
+const createChemistryDialog: (context: EditorUiContext, options: ChemistryDialogOptions) => DialogComponent<ChemistryPayload | null>;
+interface ChemistryDialogOptions { onSave(payload: ChemistryPayload): void; onRemove(pos: number): void }
+const CHEMISTRY_MESSAGES: Record<string, Messages>;
+const CHEMISTRY_TEMPLATES: ChemistryTemplate[];
+interface ChemistryTemplate { id: string; labelKey: string; code: string }
+const CHEMISTRY_NODE_NAME = 'chemistry';
+type ChemistryType = 'chemfig';
+interface ChemistryPayload { code: string; type: ChemistryType; pos: number | null }
+// Команды TipTap: insertChemistry({ code, type? }), updateChemistry({ pos, code }), deleteChemistryAt(pos)
+
+// Вход `./viewer` — документная часть и рендер, без TipTap (входит и в `.`).
+const chemistryContent: ContentFeature;
+const CHEMISTRY_SANITIZER_RULES: SanitizerRules;                           // три атрибута data-chemistry*
+const CHEMISTRY_NODE_SELECTOR = '[data-chemistry-code]';
+const hydrateChemistry: (root: HTMLElement, context: ContentHydrateContext) => void;
+const paintChemistryNode: (element: HTMLElement, code: string, options: PaintChemistryOptions) => void;
+interface PaintChemistryOptions { scale: number; accessibleName?: string }
+
+const parseChemfig: (code: string) => ChemStructure;                       // бросает ChemfigSyntaxError
+const tryParseChemfig: (code: string) => ChemStructure | null;
+const unwrapChemfig: (code: string) => string;
+class ChemfigSyntaxError extends Error { readonly position: number }
+const renderChemistrySvg: (structure: ChemStructure, options?: ChemistrySvgOptions) => string;
+const chemfigToSvg: (code: string, options?: ChemistrySvgOptions) => string | null;
+interface ChemistrySvgOptions { scale?: number }
+const formatChemLabel: (label: string) => string;
+const layoutChemTree: (root: ChemAtom, x: number, y: number, options: TreeLayoutOptions) => ChemTreeLayout;
+
+type ChemBondType = '-' | '=' | '~';
+interface ChemAtom { label: string; bonds: ChemBond[] }
+interface ChemBond { type: ChemBondType; angle: number | null; branch: boolean; target: ChemAtom }
+interface ChemChain { kind: 'chain'; root: ChemAtom; startAngle: number }
+interface ChemRing { kind: 'ring'; size: number; aromatic: boolean; bonds: ChemBondType[]; vertices: Array<ChemAtom | null> }
+type ChemStructure = ChemChain | ChemRing;
+```
+
+Стили: `@rich-editor/chemistry/styles.css` — узел и диалог одним файлом.
 
 ## `@rich-editor/standalone`
 

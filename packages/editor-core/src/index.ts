@@ -45,6 +45,8 @@ export {
 export { SIMPLE_TOOLBAR_ITEMS } from './ui/toolbar-items';
 export { DEFAULT_LINK_STYLES, type LinkStyle } from './ui/link-styles';
 export { createModal, MODAL_CLOSE_EVENT, type Modal, type ModalOptions } from './ui/modal';
+// Помощники разметки на голом DOM — те же, которыми собраны встроенные диалоги.
+export { createDisposer, el, icon, on, type Unsubscribe } from './ui/dom';
 export {
   createPopover,
   type Popover,
@@ -95,7 +97,15 @@ export {
   type UploadResult,
 } from './types';
 
-export { createI18n, DEFAULT_LOCALE, en, ru, type I18n, type I18nOptions } from './i18n';
+export {
+  createI18n,
+  DEFAULT_LOCALE,
+  en,
+  mergeMessages,
+  ru,
+  type I18n,
+  type I18nOptions,
+} from './i18n';
 export { MATHLIVE_STRINGS, mathliveRu, type MathliveStrings } from './i18n/mathlive';
 
 export {
