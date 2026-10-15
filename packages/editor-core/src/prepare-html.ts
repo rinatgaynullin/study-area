@@ -1,10 +1,12 @@
 import { inlineMathMLToFormulaNodes } from './formula/inline-mathml-to-formula-nodes';
 import { upgradeLegacyHtml } from './legacy/upgrade-legacy-html';
-import { sanitizeHtml } from './security/sanitize';
+import { sanitizeHtml, type SanitizerRules } from './security/sanitize';
 
 export interface PrepareIncomingHtmlOptions {
   /** Разбирать разметку старого редактора (Froala + Wiris). */
   legacy?: boolean;
+  /** Теги и атрибуты возможностей и хоста поверх контракта документа. */
+  sanitize?: SanitizerRules;
 }
 
 /**
@@ -21,5 +23,5 @@ export const prepareIncomingHtml = (
   // дальше формула проходит общий путь `<math>` вместе с остальными.
   const upgraded = options.legacy ? upgradeLegacyHtml(html) : html;
 
-  return sanitizeHtml(inlineMathMLToFormulaNodes(upgraded));
+  return sanitizeHtml(inlineMathMLToFormulaNodes(upgraded), options.sanitize);
 };

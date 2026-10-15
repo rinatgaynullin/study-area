@@ -298,6 +298,25 @@ describe('возможности поверх встроенных', () => {
     expect(document.querySelector('.rte-modal')).toBeNull();
   });
 
+  it('разметка возможности проходит санитайзер оболочки по её правилам', () => {
+    const feature: EditorFeature = {
+      id: 'probe',
+      sanitize: { attributes: ['data-probe'] },
+    };
+
+    const editor = mountEditor({ features: [feature], sanitize: { attributes: ['data-host'] } });
+
+    // Узлов возможности в схеме нет — смотрим на вставку через transformPastedHTML.
+    const prepared = editor.core.editor.view.props.transformPastedHTML?.(
+      '<p><span data-probe="1" data-host="2" data-other="3">x</span></p>',
+      editor.core.editor.view,
+    );
+
+    expect(prepared).toContain('data-probe="1"');
+    expect(prepared).toContain('data-host="2"');
+    expect(prepared).not.toContain('data-other');
+  });
+
   it('ставит пункт возможности туда, где его перечислил хост', () => {
     const feature: EditorFeature = {
       id: 'shout',

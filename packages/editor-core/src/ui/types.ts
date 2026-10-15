@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core';
+import type { ContentFeature } from '../content-feature';
 import type { EditorLimits, FormulaPayload, Translate } from '../types';
 import type { UploadPipeline } from '../media/upload';
 
@@ -85,9 +86,11 @@ export interface ToolbarItemDescriptor {
  * были размазаны по списку расширений, таблице команд, пресетам тулбара и
  * набору иконок, как это было раньше. Тогда набор возможностей можно собрать
  * под задачу, а не выбирать из трёх зашитых пресетов.
+ *
+ * Документная часть — правила санитайзера и гидрация во вьюере — приходит из
+ * `ContentFeature`: один объект возможности годится и редактору, и вьюеру.
  */
-export interface EditorFeature {
-  id: string;
+export interface EditorFeature extends ContentFeature {
   /** Расширения TipTap, которые добавляет возможность. */
   extensions?(options: FeatureBuildOptions): unknown[];
   /** Пункты, которые возможность предлагает тулбару. */

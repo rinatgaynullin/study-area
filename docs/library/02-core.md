@@ -33,6 +33,7 @@
 | `uploadImage`, `uploadAudio`, `uploadFile` | `UploadAdapter` | — | Адаптеры загрузки; без них файл остаётся `blob:` URL |
 | `formulaScale` | `number` | `1` | Масштаб формул относительно текста |
 | `extensions` | `unknown[]` или функция `({ t }) => unknown[]` | — | Дополнительные расширения TipTap; функция получает переводчик |
+| `sanitize` | `SanitizerRules` | — | Теги и атрибуты узлов из `extensions` поверх контракта документа ([11](11-security.md#правила-возможностей)); возможности объявляют свои сами |
 | `legacy` | `boolean` | `false` | Разбор разметки Froala + Wiris; меняет схему, читается один раз |
 | `onChange` | `(html: string) => void` | — | Каждое изменение документа; `html` — результат `getHTML()` |
 | `onSelectionUpdate`, `onTransaction` | `() => void` | — | Смена выделения; любая транзакция |
@@ -152,7 +153,7 @@ const core = new RichEditorCore({
   через возможности (`features`, [03](03-vanilla-ui.md)) и `extensions`.
 - `setHTML()` не вызывает `onChange` — после программной подстановки
   документа модель хоста не обновится сама.
-- `legacy`, `extensions` и `formulaScale` читаются один раз: для смены
+- `legacy`, `extensions`, `sanitize` и `formulaScale` читаются один раз: для смены
   пересоздайте редактор. Подсказка, имя для читалки и адаптеры меняются через
   `setOptions()`.
 - `insertRecording()` без `uploadAudio` кладёт `blob:` напрямую, минуя проверку

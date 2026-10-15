@@ -1,7 +1,7 @@
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
-import { latexToMathML, RichContent } from '../src';
+import { latexToMathML, RichContent, type ContentFeature } from '../src';
 
 let wrapper: VueWrapper | undefined;
 
@@ -122,6 +122,26 @@ describe('read-only rendering', () => {
 
     expect(w.find('audio.rte-audio__native').exists()).toBe(true);
     expect(w.find('audio').attributes('controls')).toBeDefined();
+  });
+
+  it('пробрасывает features: правила санитайзера и гидрацию узлов', async () => {
+    const hydrate = vi.fn((root: HTMLElement) => {
+      root.querySelector('[data-chemistry]')?.setAttribute('data-hydrated', 'yes');
+    });
+
+    const feature: ContentFeature = {
+      id: 'chemistry',
+      sanitize: { attributes: ['data-chemistry'] },
+      hydrate,
+    };
+
+    const w = await mountContent('<p><span data-chemistry="true">C</span></p>', {
+      features: [feature],
+    });
+
+    expect(w.find('[data-chemistry]').exists()).toBe(true);
+    expect(w.find('[data-hydrated="yes"]').exists()).toBe(true);
+    expect(hydrate).toHaveBeenCalledTimes(1);
   });
 
   it('keeps attachments downloadable', async () => {

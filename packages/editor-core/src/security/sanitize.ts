@@ -2,6 +2,18 @@ import createDOMPurify from 'dompurify';
 
 type Purifier = ReturnType<typeof createDOMPurify>;
 
+/**
+ * Что возможность добавляет к контракту документа: теги и атрибуты своих
+ * узлов. Без них санитайзер срезал бы её разметку на входе — и в редакторе,
+ * и во вьюере. Запрещённые теги (`script`, `iframe` и остальные из
+ * `FORBID_TAGS`) добавить нельзя: запрет у DOMPurify главнее разрешения.
+ */
+export interface SanitizerRules {
+  tags?: readonly string[];
+  /** В том числе `data-*`: по умолчанию проходят только перечисленные. */
+  attributes?: readonly string[];
+}
+
 let htmlPurifier: Purifier | null = null;
 let mathmlPurifier: Purifier | null = null;
 let svgPurifier: Purifier | null = null;
@@ -429,16 +441,43 @@ const getSvgPurifier = (): Purifier => {
 };
 
 /**
+ * Складывает правила хоста и возможностей в один объект. Пустой результат —
+ * `undefined`, чтобы вызывающий код не отличал «правил нет» от «правила
+ * пустые».
+ */
+export const mergeSanitizerRules = (
+  ...rules: Array<SanitizerRules | undefined>
+): SanitizerRules | undefined => {
+  const tags = new Set<string>();
+  const attributes = new Set<string>();
+
+  rules.forEach((rule) => {
+    rule?.tags?.forEach((tag) => tags.add(tag));
+    rule?.attributes?.forEach((attribute) => attributes.add(attribute));
+  });
+
+  if (tags.size === 0 && attributes.size === 0) return undefined;
+
+  return { tags: [...tags], attributes: [...attributes] };
+};
+
+const withExtra = (base: readonly string[], extra: readonly string[] | undefined): string[] =>
+  extra && extra.length > 0 ? [...base, ...extra] : [...base];
+
+/**
  * Sanitizes document HTML on `setHTML` and on paste. Everything outside the
  * editor's own schema allowlist is dropped, including `<script>`, event
  * handlers and non-navigable URL schemes.
+ *
+ * `rules` расширяют allowlist тегами и атрибутами возможностей; запреты
+ * (`FORBID_TAGS`, схемы URL, `style`) действуют и на них.
  */
-export const sanitizeHtml = (html: string): string => {
+export const sanitizeHtml = (html: string, rules?: SanitizerRules): string => {
   if (!html) return '';
 
   return getHtmlPurifier().sanitize(html, {
-    ALLOWED_TAGS: HTML_TAGS,
-    ALLOWED_ATTR: HTML_ATTRS,
+    ALLOWED_TAGS: withExtra(HTML_TAGS, rules?.tags),
+    ALLOWED_ATTR: withExtra(HTML_ATTRS, rules?.attributes),
     ALLOWED_URI_REGEXP,
     ALLOW_DATA_ATTR: false,
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'link', 'meta'],

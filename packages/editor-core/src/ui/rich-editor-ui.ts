@@ -1,5 +1,7 @@
 import { Extension } from '@tiptap/core';
+import { collectSanitizerRules } from '../content-feature';
 import { RichEditorCore } from '../rich-editor-core';
+import { mergeSanitizerRules } from '../security/sanitize';
 import { DEFAULT_LOCALE } from '../i18n';
 import { IMAGE_ACCEPT, TEXT_FILE_ACCEPT } from '../media/upload';
 import type {
@@ -97,8 +99,8 @@ const createUiShortcuts = (handlers: { focusToolbar(): void; editLink(): void })
 
 /**
  * Опции, которые меняются у живого редактора через `setOptions`. Всё
- * остальное (`toolbar`, `toolbarItems`, `features`, `extensions`, `legacy`,
- * `formulaScale`, `collapseBelow`, палитры, `mathliveFontsDirectory`)
+ * остальное (`toolbar`, `toolbarItems`, `features`, `extensions`, `sanitize`,
+ * `legacy`, `formulaScale`, `collapseBelow`, палитры, `mathliveFontsDirectory`)
  * читается один раз при создании.
  */
 export type RichEditorLiveOptions = RichEditorCoreLiveOptions
@@ -306,6 +308,8 @@ class RichEditorUiController implements RichEditorUi {
     this.core = new RichEditorCore({
       ...options,
       element: host,
+      // Разметка возможностей проходит санитайзер вместе с правилами хоста.
+      sanitize: mergeSanitizerRules(options.sanitize, collectSanitizerRules(this.features)),
       extensions: this.buildExtensions,
       onError: this.reportError,
       onUpload: this.onUpload,

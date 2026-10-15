@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { RichEditorCore, prepareIncomingHtml, sanitizeHtml, sanitizeSvg } from '../src';
+import {
+  RichEditorCore,
+  mergeSanitizerRules,
+  prepareIncomingHtml,
+  sanitizeHtml,
+  sanitizeSvg,
+} from '../src';
 
 describe('HTML sanitization', () => {
   it('removes script tags and their contents', () => {
@@ -113,6 +119,80 @@ describe('HTML sanitization', () => {
   });
 });
 
+describe('правила возможностей поверх контракта документа', () => {
+  // `<marker>` только внутри `<svg>`: вне его парсер кладёт тег в HTML-пространство
+  // имён, и DOMPurify отбрасывает его как чужой независимо от allowlist.
+  const sample =
+    '<p><span data-chemistry="true" data-chemistry-code="A-B" data-unknown="x">C</span>'
+    + '<svg><marker id="m"></marker></svg></p>';
+
+  it('без правил вырезает незнакомые атрибуты и теги', () => {
+    const output = sanitizeHtml(sample);
+
+    expect(output).not.toContain('data-chemistry');
+    expect(output).not.toContain('<marker');
+    expect(output).toContain('C');
+  });
+
+  it('пропускает перечисленные теги и атрибуты — и только их', () => {
+    const output = sanitizeHtml(sample, {
+      tags: ['marker'],
+      attributes: ['data-chemistry', 'data-chemistry-code'],
+    });
+
+    expect(output).toContain('data-chemistry="true"');
+    expect(output).toContain('data-chemistry-code="A-B"');
+    expect(output).toContain('<marker');
+    expect(output).not.toContain('data-unknown');
+  });
+
+  it('правила действуют на один вызов и не остаются в санитайзере', () => {
+    sanitizeHtml(sample, { attributes: ['data-chemistry'] });
+
+    expect(sanitizeHtml(sample)).not.toContain('data-chemistry');
+  });
+
+  it('запрещённые теги правилами не открыть', () => {
+    const output = sanitizeHtml('<p>x</p><script>alert(1)</script><iframe src="https://a.test"></iframe>', {
+      tags: ['script', 'iframe'],
+    });
+
+    expect(output).not.toContain('alert');
+    expect(output).not.toContain('<iframe');
+  });
+
+  it('на разрешённые правилами элементы действуют те же проверки URL и стилей', () => {
+    const output = sanitizeHtml(
+      // eslint-disable-next-line no-script-url -- проверяем опасную схему намеренно
+      '<p><span data-geometry="1" style="color: red; background: url(x)"><a href="javascript:alert(1)">a</a></span></p>',
+      { attributes: ['data-geometry'] },
+    );
+
+    expect(output).toContain('data-geometry="1"');
+    expect(output).not.toContain('javascript:');
+    expect(output).not.toContain('url(');
+    expect(output).toContain('color: red');
+  });
+
+  it('mergeSanitizerRules объединяет правила без повторов, пустые даёт как undefined', () => {
+    expect(mergeSanitizerRules(undefined, {}, { tags: [] })).toBeUndefined();
+
+    expect(
+      mergeSanitizerRules(
+        { tags: ['marker'], attributes: ['data-a'] },
+        undefined,
+        { tags: ['marker', 'pattern'], attributes: ['data-a', 'data-b'] },
+      ),
+    ).toEqual({ tags: ['marker', 'pattern'], attributes: ['data-a', 'data-b'] });
+  });
+
+  it('prepareIncomingHtml передаёт правила санитайзеру', () => {
+    expect(prepareIncomingHtml(sample, { sanitize: { attributes: ['data-chemistry'] } })).toContain(
+      'data-chemistry="true"',
+    );
+  });
+});
+
 describe('SVG sanitization', () => {
   it('removes scripts and external references from SVG', () => {
     const output = sanitizeSvg(
@@ -171,5 +251,29 @@ describe('sanitization through the editor', () => {
 
     expect(editor.getHTML()).toContain('hello');
     expect(editor.getHTML()).not.toContain('onclick');
+  });
+
+  it('опция sanitize ядра пропускает разметку расширений хоста на всех путях входа', () => {
+    element = document.createElement('div');
+    document.body.appendChild(element);
+
+    core = new RichEditorCore({
+      element,
+      content: '<p><span data-host-node="1">a</span></p>',
+      sanitize: { attributes: ['data-host-node'] },
+    });
+
+    // Без узла в схеме TipTap оставит только текст — проверяем сам санитайзер.
+    expect(prepareIncomingHtml('<p><span data-host-node="1">a</span></p>')).not.toContain(
+      'data-host-node',
+    );
+
+    expect(
+      prepareIncomingHtml('<p><span data-host-node="1">a</span></p>', {
+        sanitize: { attributes: ['data-host-node'] },
+      }),
+    ).toContain('data-host-node="1"');
+
+    expect(core.getHTML()).toContain('a');
   });
 });
