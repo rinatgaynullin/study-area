@@ -406,12 +406,30 @@ type ChemStructure = ChemChain | ChemRing;
 ```ts
 // 17-drawings.md. Вход `.` — возможность для редактора.
 const createDrawingsFeature: (options?: DrawingsFeatureOptions) => EditorFeature;
-interface DrawingsFeatureOptions { toolbarItems?: boolean }
+interface DrawingsFeatureOptions { toolbarItems?: boolean; editors?: SceneEditorFactory[]; scans?: () => string[] }
 const GeometryNode: Node<DrawingOptions>; const PhysicsNode: Node<DrawingOptions>;   // узлы `geometry`, `physics`
 const createDrawingNode: (kind: DrawingKind) => Node<DrawingOptions>;
 interface DrawingOptions { t: Translate | null; onEdit: ((payload: DrawingPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
 const createDrawingDialog: (context: EditorUiContext, options: DrawingDialogOptions) => DialogComponent<DrawingPayload | null>;
-interface DrawingDialogOptions { onSave(payload: DrawingPayload): void; onRemove(pos: number): void }
+interface DrawingDialogOptions {
+  onSave(payload: DrawingPayload): void; onRemove(pos: number): void; editors?: SceneEditorFactory[]; scans?: () => string[];
+}
+const DEFAULT_SCENE_EDITORS: SceneEditorFactory[];                       // встроенные вкладки конструкторов
+// Конструкторы (17-drawings.md, «Конструкторы»)
+interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScene(): RawScene; onChange(listener: () => void): Unsubscribe; focus(): void }
+interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
+interface SceneEditorContext { t: Translate; scans?: string[] }
+type RawScene = Record<string, unknown>;
+const planimetryEditorFactory: SceneEditorFactory;
+class SketchCanvas { constructor(options: SketchCanvasOptions); readonly element: HTMLElement; readonly viewport: Viewport; setScene(svg: string): void;
+  setOverlay(markup: string): void; toSvg(point: Vec2): SvgPoint; toWorld(point: SvgPoint): Vec2; zoomAt(point: SvgPoint, factor: number): void;
+  zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void; focus(): void; destroy(): void; readonly hitRadius: number }
+class HistoryStack<T> { constructor(limit?: number); record(current: T): void; undo(current: T): T | null; redo(current: T): T | null; clear(): void }
+class ToolBar<TId extends string> { constructor(options: ToolBarOptions<TId>); setActive(id: TId | null): void; setEnabled(id: TId, enabled: boolean): void }
+const fitLine: (points: Vec2[]) => LineFit | null; const fitCircle: (points: Vec2[]) => CircleFit | null;
+const fitParabola: (points: Vec2[]) => ParabolaFit | null; const recognizeStroke: (points: Vec2[]) => RecognizedShape;
+const distance, distanceToSegment, projectOnSegment, nearestOnCircle, snapToGrid, angleBetween, angleDegrees, roundPoint, roundTo;
+const BUILDER_MESSAGES: Record<string, Messages>;
 interface DrawingPayload { kind: DrawingKind; data: string; tikz: string; pos: number | null }
 const DRAWINGS_MESSAGES: Record<string, Messages>;
 const DRAWING_TEMPLATES: DrawingTemplate[];

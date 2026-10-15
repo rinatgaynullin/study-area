@@ -184,6 +184,8 @@ describe('возможность целиком: кнопки, диалог, п�
 
     const dialog = openDialog();
 
+    // JSON правится на своей вкладке; конструктор нечитаемое не примет.
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
     typeJson(dialog, '{"vertices": ');
 
     const status = dialog.querySelector('.rte-drawing-dialog__status');
