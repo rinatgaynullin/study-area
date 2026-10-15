@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CHEMISTRY_SANITIZER_RULES } from '@rich-editor/chemistry/viewer';
+import { DRAWINGS_SANITIZER_RULES } from '@rich-editor/drawings/viewer';
 import {
   ALLOWED_URI_SCHEMES,
   HTML_ATTRS,
@@ -37,6 +38,7 @@ describe('контракт санитайзера', () => {
     ['ALLOWED_URI_SCHEMES', ALLOWED_URI_SCHEMES],
     // Правила возможностей сервер тоже повторяет: иначе он вырежет их узлы.
     ['CHEMISTRY_ATTRS', [...(CHEMISTRY_SANITIZER_RULES.attributes ?? [])]],
+    ['DRAWINGS_ATTRS', [...(DRAWINGS_SANITIZER_RULES.attributes ?? [])]],
   ])('python-копия %s совпадает с исходником', (name, expected) => {
     expect(new Set(pythonList(source, name))).toEqual(new Set(expected));
   });

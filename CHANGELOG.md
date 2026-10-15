@@ -7,6 +7,21 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/drawings`: geometry and physics drawings as an editor feature.
+  Block nodes `geometry` and `physics` keep the PinQueen JSON scene in
+  `data-geometry-data` / `data-physics-data` and TikZ in `data-tikz-code`
+  (both `span` and `div` are read; the scene string is stored as it came).
+  Own lenient JSON parser (no `eval`), scene normalization for dirty LLM output
+  (edge aliases, `circle(s)`, `markings`, element synonyms, grouped elements,
+  legacy thermo graphs, 3D→2D downgrade, edge splitting through vertices; no
+  hard-coded `incline` replacement), SVG renderers for 2D/3D/plots and all 29
+  physics element types with `currentColor` strokes, theme-aware halos and
+  `autoFit`, TikZ export (circuitikz keys, smooth isotherms, the element types
+  the original dropped), pgfplots parsing. Dialog with kind switch, scene
+  templates, live preview and generated TikZ; two toolbar buttons; ru/en
+  messages; `./viewer` entry with `drawingsContent` and
+  `createDrawingsContent({ locale })`. The Django allowlist gains
+  `DRAWINGS_ATTRS`, checked by the contract test.
 - `@rich-editor/chemistry`: structural formulas as an editor feature. The
   atomic inline node `chemistry` keeps chemfig code in `data-chemistry-code`
   (PinQueen-compatible, `span` and `div` are read); the SVG is rendered from

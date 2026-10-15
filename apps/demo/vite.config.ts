@@ -36,6 +36,14 @@ export default defineConfig({
         replacement: fromRoot('../../packages/editor-vue/src/styles/viewer.css'),
       },
       {
+        find: '@rich-editor/drawings/viewer',
+        replacement: fromRoot('../../packages/editor-drawings/src/viewer.ts'),
+      },
+      {
+        find: '@rich-editor/drawings',
+        replacement: fromRoot('../../packages/editor-drawings/src/index.ts'),
+      },
+      {
         find: '@rich-editor/chemistry/viewer',
         replacement: fromRoot('../../packages/editor-chemistry/src/viewer.ts'),
       },

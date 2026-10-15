@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "dist/types",
+    "rootDir": "src",
+    "paths": {
+      "@rich-editor/core/viewer": ["../editor-core/dist/types/viewer.d.ts"],
+      "@rich-editor/core": ["../editor-core/dist/types/index.d.ts"]
+    }
+  },
+  "exclude": ["**/*.test.ts"]
+}

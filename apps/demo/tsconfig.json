@@ -3,6 +3,8 @@
   "compilerOptions": {
     "types": ["vite/client", "node"],
     "paths": {
+      "@rich-editor/drawings/viewer": ["../../packages/editor-drawings/src/viewer.ts"],
+      "@rich-editor/drawings": ["../../packages/editor-drawings/src/index.ts"],
       "@rich-editor/chemistry/viewer": ["../../packages/editor-chemistry/src/viewer.ts"],
       "@rich-editor/chemistry": ["../../packages/editor-chemistry/src/index.ts"],
       "@rich-editor/core/viewer": ["../../packages/editor-core/src/viewer.ts"],

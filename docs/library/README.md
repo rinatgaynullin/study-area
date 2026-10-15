@@ -23,9 +23,10 @@
 | 11 | [11-security.md](11-security.md) | Что вырезает санитайзер на клиенте и сервере, что остаётся на хосте |
 | 12 | [12-development.md](12-development.md) | Команды сборки и тестов, слои тестов, соглашения |
 | 13 | [13-recipes.md](13-recipes.md) | Короткие рабочие примеры на типовые сценарии |
-| 14 | [14-api-reference.md](14-api-reference.md) | Сигнатуры всех экспортов `@rich-editor/core`, `@rich-editor/vue`, `@rich-editor/chemistry`, standalone, Django |
+| 14 | [14-api-reference.md](14-api-reference.md) | Сигнатуры всех экспортов `@rich-editor/core`, `@rich-editor/vue`, `@rich-editor/chemistry`, `@rich-editor/drawings`, standalone, Django |
 | 15 | [15-limitations-and-status.md](15-limitations-and-status.md) | Ограничения, неочевидное поведение, расхождения кода с документами |
 | 16 | [16-chemistry.md](16-chemistry.md) | `@rich-editor/chemistry`: структурные формулы chemfig — узел, диалог, рендер в SVG, вход для вьюера |
+| 17 | [17-drawings.md](17-drawings.md) | `@rich-editor/drawings`: чертежи геометрии и физики из JSON-сцен PinQueen — узлы, диалог, SVG, TikZ |
 
 ## С чего начать
 
