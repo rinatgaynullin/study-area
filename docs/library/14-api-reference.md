@@ -465,6 +465,26 @@ interface PhysicsHighlight { id: string }
 
 Стили: `@rich-editor/drawings/styles.css` — карточка и диалог одним файлом.
 
+## `@rich-editor/ocr`
+
+```ts
+// 18-ocr.md
+const ocrTextToHtml: (text: string, options?: OcrToHtmlOptions) => Promise<string>;
+interface OcrToHtmlOptions { subject?: OcrSubject; metadata?: OcrMetadata; wrapBareLatex?: boolean }
+type OcrSubject = 'math' | 'physics' | 'chemistry' | string;
+interface OcrMetadata {
+  ocr_and_tikz_data?: string; raw_ocr_and_tikz_data?: string;
+  ocr_and_tikz_data_plots?: Array<{ tikz_code?: string; data?: unknown }>; plots?: Array<{ tikz_code?: string; data?: unknown }>;
+  ocr_and_tikz_data_tikz_code?: string; ocr_and_tikz_data_data?: string;
+}
+const htmlToOcrText: (html: string, options?: HtmlToOcrOptions) => Promise<string>;
+interface HtmlToOcrOptions { physicsSvg?: boolean }                     // блок SVG у физики, по умолчанию да
+const ceToLatex: (reaction: string) => string;
+// Шаги конвейера: markdownToHtml, inlineMarkdownToHtml, normalizeLatexText, closeOpenEnvironments,
+// stripDollarsInsideEnvironments, fixMarkdownTableLines, pipesToVmatrix, wrapBareLatex, replaceCeBlocks,
+// TIKZ_BLOCK, DATA_BLOCK, SVG_BLOCK, extractBlocks, wrapBlock
+```
+
 ## `@rich-editor/standalone`
 
 `./editor` (`dist/editor.js`): всё из `@rich-editor/core`, плюс

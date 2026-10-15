@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue';
 import {
   RichEditor,
   latexToMathML,
@@ -16,6 +16,8 @@ import { chemistryContent } from '@rich-editor/chemistry/viewer';
 // Чертежи: геометрия и физические схемы из JSON-сцен PinQueen.
 import { createDrawingsFeature } from '@rich-editor/drawings';
 import { drawingsContent } from '@rich-editor/drawings/viewer';
+// Текст распознавания PinQueen: в документ и обратно.
+import { htmlToOcrText, ocrTextToHtml } from '@rich-editor/ocr';
 import enMessages from './locales/en.json';
 import { HTML_SAMPLES, type HtmlSample } from './samples';
 
@@ -31,7 +33,12 @@ const isLegacyEnabled = ref(false);
 const toolbarPreset = ref<'full' | 'standard' | 'minimal'>('full');
 /** Тема редактора — проп; страница демо красится под неё своим классом. */
 const theme = ref<'light' | 'dark' | 'auto'>('light');
-const outputTab = ref<'preview' | 'source' | 'input' | 'raw'>('preview');
+const outputTab = ref<'preview' | 'source' | 'input' | 'raw' | 'ocr'>('preview');
+/** Поле ввода содержит текст распознавания, а не HTML. */
+const draftIsOcr = ref(false);
+const ocrSubject = ref<'math' | 'physics' | 'chemistry'>('math');
+/** Документ, записанный обратно в текст для бэкенда. */
+const ocrText = ref('');
 const log = ref<string[]>([]);
 
 const draftHtml = ref('');
@@ -142,7 +149,9 @@ async function onReady(core: { whenFormulasReady(): Promise<void>; getHTML(): st
  * and schema parsing both run on the way in.
  */
 async function applyDraft(): Promise<void> {
-  const input = draftHtml.value;
+  const input = draftIsOcr.value
+    ? await ocrTextToHtml(draftHtml.value, { subject: ocrSubject.value })
+    : draftHtml.value;
   html.value = input;
 
   await nextTick();
@@ -161,8 +170,18 @@ async function applyDraft(): Promise<void> {
 function useSample(sample: HtmlSample): void {
   draftHtml.value = sample.html;
   draftHint.value = sample.hint;
+  draftIsOcr.value = sample.ocr === true;
   appliedReport.value = '';
 }
+
+// Текст для бэкенда пересчитывается с каждым изменением документа.
+watch(
+  [html, outputTab],
+  async ([value, tab]) => {
+    if (tab === 'ocr') ocrText.value = await htmlToOcrText(value);
+  },
+  { immediate: true },
+);
 
 function takeCurrentHtml(): void {
   draftHtml.value = html.value;
@@ -307,6 +326,13 @@ async function reloadSample(): Promise<void> {
         >
           Вьюер без редактора
         </button>
+        <button
+          type="button"
+          :class="{ 'demo__tab--active': outputTab === 'ocr' }"
+          @click="outputTab = 'ocr'"
+        >
+          Текст для бэкенда
+        </button>
       </div>
 
       <!-- Read-only viewer: no toolbar, no ProseMirror, no MathLive. Formulas
@@ -321,6 +347,10 @@ async function reloadSample(): Promise<void> {
         :features="contentFeatures"
       />
       <pre v-else-if="outputTab === 'source'" class="demo__source">{{ html }}</pre>
+
+      <!-- Документ, записанный обратно в формат распознавания PinQueen:
+           так он уходит в автосохранение и на проверку. -->
+      <pre v-else-if="outputTab === 'ocr'" class="demo__source">{{ ocrText }}</pre>
 
       <!-- Исходный HTML прямо во вьюере, минуя схему редактора. Это тот путь,
            которым продакшен показывает legacy-контент: классы доживают до DOM,
@@ -352,6 +382,19 @@ async function reloadSample(): Promise<void> {
         </div>
 
         <p v-if="draftHint" class="demo__input-hint">{{ draftHint }}</p>
+
+        <label class="demo__input-mode">
+          <input v-model="draftIsOcr" type="checkbox" />
+          Текст распознавания PinQueen (Markdown + LaTeX + маркеры), а не HTML
+        </label>
+        <label v-if="draftIsOcr" class="demo__input-mode">
+          Предмет
+          <select v-model="ocrSubject">
+            <option value="math">Математика</option>
+            <option value="physics">Физика</option>
+            <option value="chemistry">Химия</option>
+          </select>
+        </label>
 
         <textarea
           v-model="draftHtml"

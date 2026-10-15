@@ -266,3 +266,11 @@ body {
   background: #232229;
   color: #ebebf0;
 }
+
+.demo__input-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}

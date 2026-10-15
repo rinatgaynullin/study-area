@@ -7,6 +7,8 @@ export interface HtmlSample {
   label: string;
   hint: string;
   html: string;
+  /** Это не HTML, а текст распознавания PinQueen: перед применением идёт через `ocrTextToHtml`. */
+  ocr?: boolean;
 }
 
 /** Пустой GIF: в образцах важна разметка вокруг картинки, а не она сама. */
@@ -14,6 +16,33 @@ const PIXEL =
   'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
 export const HTML_SAMPLES: HtmlSample[] = [
+  {
+    id: 'ocr',
+    label: 'Текст распознавания PinQueen',
+    hint: 'Markdown + LaTeX с маркерами TIKZ/DATA и \\chemfig: так отвечает бэкенд после нейросети. Применяется через ocrTextToHtml.',
+    ocr: true,
+    html: `# Решение
+
+а) Рассмотрим $\\triangle DSA$: $(3\\sqrt{17})^2 = 3^2 + 12^2$
+$$\\begin{cases} x+y=1 \\\\ x-y=3 \\end{cases}$$
+| x | 1 | 2 |
+|---|---|---|
+| y | 3 | 4 |
+
+* первый пункт
+* второй **важный** пункт
+1. раз
+2. два
+
+\\chemfig{CH_3-CH_2-CH_3} $\\xrightarrow{t, \\text{кат.}}$ \\ce{2H2 + O2 -> 2H2O}
+<<<TIKZ_START>>>
+\\begin{tikzpicture}\\end{tikzpicture}
+<<<TIKZ_END>>>
+<<<DATA_START>>>
+{"type":"2d","vertices":{"A":[0,0],"B":[4,0],"C":[0,3]},"edges":[["A","B"],["B","C"],["C","A"]],"angles":[{"points":["B","A","C"],"style":"right"}]}
+<<<DATA_END>>>
+Ответ: ~~12~~ 15.`,
+  },
   {
     id: 'chemistry',
     label: 'Структурные формулы PinQueen',
