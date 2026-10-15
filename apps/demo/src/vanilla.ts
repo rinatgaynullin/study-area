@@ -9,6 +9,8 @@
 import { createRichEditor } from '@rich-editor/core';
 // Вьюер берётся из отдельного входа: страница только для чтения не тянет TipTap.
 import { createRichContent } from '@rich-editor/core/viewer';
+import { createChemistryFeature } from '@rich-editor/chemistry';
+import { chemistryContent } from '@rich-editor/chemistry/viewer';
 import './styles.css';
 
 const host = document.querySelector<HTMLElement>('#editor');
@@ -17,12 +19,15 @@ if (!host || !viewerHost) throw new Error('Не найдены контейне�
 
 // Вьюер получает документ редактора при каждом изменении — как это делал бы
 // хост, показывающий сохранённый ответ рядом с полем ввода.
-const viewer = createRichContent({ element: viewerHost });
+const viewer = createRichContent({ element: viewerHost, features: [chemistryContent] });
 
 const editor = createRichEditor({
   element: host,
-  content: '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>',
+  content:
+    '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>'
+    + '<p>Структурная формула: <span data-chemistry-code="CH_3-CH_2-OH" data-chemistry-type="chemfig"></span></p>',
   minHeight: '280px',
+  features: [createChemistryFeature()],
   onChange: (html) => void viewer.update({ html }),
 });
 void viewer.update({ html: editor.core.getHTML() });

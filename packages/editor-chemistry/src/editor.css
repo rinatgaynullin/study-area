@@ -1,0 +1,105 @@
+/* Диалог структурной формулы. Кнопки, поля и модалка — классы ядра. */
+
+.rte-chemistry-dialog {
+  display: grid;
+  gap: 14px;
+}
+
+.rte-chemistry-dialog__code {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  height: auto;
+  padding: 8px 12px;
+  resize: vertical;
+  font-family: var(--rte-font-mono, ui-monospace, monospace);
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  line-height: 1.4;
+}
+
+.rte-chemistry-dialog__hint {
+  margin: 6px 0 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-chemistry-dialog__section-title {
+  margin: 0 0 8px;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-chemistry-dialog__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rte-chemistry-dialog__template {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 56px;
+  padding: 4px 8px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.rte-chemistry-dialog__template:hover {
+  border-color: var(--rte-color-border-hover, #afadb8);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+}
+
+.rte-chemistry-dialog__template:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+.rte-chemistry-dialog__template svg {
+  display: block;
+  max-height: 44px;
+  max-width: 96px;
+  width: auto;
+  height: auto;
+}
+
+.rte-chemistry-dialog__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px dashed var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  overflow: auto;
+}
+
+.rte-chemistry-dialog__preview svg {
+  max-height: 220px;
+  width: auto;
+  height: auto;
+}
+
+/* Подложка подписи в превью и миниатюрах — под их фон, а не под фон документа. */
+.rte-chemistry-dialog__preview .rte-chemistry__label-bg,
+.rte-chemistry-dialog__template:hover .rte-chemistry__label-bg {
+  fill: var(--rte-color-subtle-bg, #f5f5f7);
+}
+
+.rte-chemistry-dialog__status {
+  margin: 8px 0 0;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-chemistry-dialog__status--error {
+  color: var(--rte-color-danger, #f23e3e);
+}

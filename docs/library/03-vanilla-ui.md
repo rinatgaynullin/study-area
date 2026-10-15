@@ -113,6 +113,7 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 | `extensions(options)` | расширения TipTap | При создании; `options` — `{ t, legacy, placeholder, formulaScale, onFormulaEdit }` |
 | `toolbarItems()` | `ToolbarItemDescriptor[]` | При создании, один раз |
 | `dialogs(context)` | `UiComponent[]` | При создании и при каждой смене языка — диалог собирается из контекста |
+| `messages` | `Record<string, Messages>` — поле | Подписи возможности по языкам; ложатся под `messages` хоста ([09](09-i18n.md#подписи-возможностей)) |
 | `sanitize` | `SanitizerRules` — поле, не метод | Теги и атрибуты узлов возможности; без них санитайзер срежет их на входе ([11](11-security.md#правила-возможностей)) |
 | `hydrate(root, context)` | функция снятия или ничего, можно `Promise` | Только во вьюере, после каждой отрисовки ([06](06-viewer.md#возможности-во-вьюере-contentfeature)) |
 
@@ -133,6 +134,7 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 | `createPopover(options?)` | Панель у `DOMRect`: `open(anchor)`, `close(reason?)`, `reposition()`; не забирает фокус |
 | `createDropdown({ label, iconName?, text?, renderPanel })` | Кнопка с меню; `renderPanel` вызывается при каждом открытии |
 | `createMenuItem(options)`, `createMenuSeparator()` | Пункт меню с ролью `menuitem` / `menuitemradio` / `menuitemcheckbox` и разделитель |
+| `el(tag, { class?, text?, html?, attrs?, children? })`, `icon(name, size?)`, `on(target, type, listener)`, `createDisposer()` | Помощники разметки на голом DOM, которыми собраны встроенные диалоги |
 
 ### Клавиатура
 

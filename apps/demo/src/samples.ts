@@ -15,6 +15,16 @@ const PIXEL =
 
 export const HTML_SAMPLES: HtmlSample[] = [
   {
+    id: 'chemistry',
+    label: 'Структурные формулы PinQueen',
+    hint: 'Узлы с кодом chemfig в data-chemistry-code — и span, и div — становятся структурами; SVG рисуется по коду.',
+    html: `<h3>Структурные формулы</h3>
+<p>Бензол <span data-chemistry-code="[:30]**6(------)" data-chemistry-type="chemfig" class="chemistry-node"></span> и этанол <span data-chemistry-code="CH_3-CH_2-OH" data-chemistry-type="chemfig" class="chemistry-node"></span>.</p>
+<p>Уксусная кислота: <div data-chemistry-code="CH_3-C(=[1]O)-[7]OH" data-chemistry-type="chemfig"></div></p>
+<p>Фенол <span data-chemistry-code="**6(---(-OH)---)" data-chemistry-type="chemfig"></span>, метан <span data-chemistry-code="H-C(-[2]H)(-[6]H)-H" data-chemistry-type="chemfig"></span>.</p>
+<p>Код вне подмножества сохраняется как есть: <span data-chemistry-code="A-B>C" data-chemistry-type="chemfig"></span></p>`,
+  },
+  {
     id: 'mathml',
     label: 'MathML из другого редактора',
     hint: 'Сырые <math> превращаются в редактируемые формулы, а не в «битый» текст.',

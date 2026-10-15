@@ -7,6 +7,20 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/chemistry`: structural formulas as an editor feature. The
+  atomic inline node `chemistry` keeps chemfig code in `data-chemistry-code`
+  (PinQueen-compatible, `span` and `div` are read); the SVG is rendered from
+  the code on display and never stored. Own parser and renderer for a chemfig
+  subset — chains with angles, bonds `- = ~`, branches, rings `*n(…)` /
+  `**n(…)` with substituents and vertex labels, subscripts — with
+  `currentColor` strokes and a theme-aware label background. Dialog with
+  templates and live preview, toolbar button, ru/en messages. Code outside the
+  subset is kept and shown as text. The `./viewer` entry ships only the
+  `ContentFeature` (`chemistryContent`) and the renderer; the build guards it.
+  The Django allowlist gains `CHEMISTRY_ATTRS`, checked by the contract test.
+- `EditorFeature.messages`: a feature ships its own translation tables, merged
+  under the host's `messages` (`mergeMessages()` is exported). The DOM helpers
+  `el`, `icon`, `on` and `createDisposer` are exported for feature dialogs.
 - Extension points for document features (groundwork for chemistry and
   drawings): `SanitizerRules` — a feature or a host declares the tags and
   attributes of its nodes, `sanitizeHtml(html, rules?)` and

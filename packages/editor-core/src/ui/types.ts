@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core';
 import type { ContentFeature } from '../content-feature';
-import type { EditorLimits, FormulaPayload, Translate } from '../types';
+import type { EditorLimits, FormulaPayload, Messages, Translate } from '../types';
 import type { UploadPipeline } from '../media/upload';
 
 /**
@@ -91,6 +91,11 @@ export interface ToolbarItemDescriptor {
  * `ContentFeature`: один объект возможности годится и редактору, и вьюеру.
  */
 export interface EditorFeature extends ContentFeature {
+  /**
+   * Подписи возможности по языкам. Ложатся под таблицы хоста: `messages`
+   * редактора их переопределяют, а без них возможность говорит сама за себя.
+   */
+  messages?: Record<string, Messages>;
   /** Расширения TipTap, которые добавляет возможность. */
   extensions?(options: FeatureBuildOptions): unknown[];
   /** Пункты, которые возможность предлагает тулбару. */
