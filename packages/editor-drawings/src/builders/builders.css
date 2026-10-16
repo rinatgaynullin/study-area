@@ -153,6 +153,11 @@
 
 .rte-builder__remove {
   justify-self: start;
+  height: auto;
+  min-height: var(--rte-button-height, 36px);
+  padding: 6px 10px;
+  white-space: normal;
+  text-align: left;
 }
 
 .rte-builder__hint {

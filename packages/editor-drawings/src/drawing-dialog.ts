@@ -10,7 +10,10 @@ import {
   type Translate,
   type Unsubscribe,
 } from '@rich-editor/core';
+import { physicsEditorFactory } from './builders/physics-editor';
 import { planimetryEditorFactory } from './builders/planimetry-editor';
+import { plotsEditorFactory } from './builders/plots-editor';
+import { stereometryEditorFactory } from './builders/stereometry-editor';
 import type { RawScene, SceneEditor, SceneEditorFactory } from './builders/types';
 import { readScene, renderDrawingPreview } from './paint-drawing';
 import { parseSceneJson, stringifyScene } from './scene/json';
@@ -29,7 +32,12 @@ export interface DrawingDialogOptions {
 }
 
 /** Встроенные конструкторы: вкладки диалога по видам сцен. */
-export const DEFAULT_SCENE_EDITORS: SceneEditorFactory[] = [planimetryEditorFactory];
+export const DEFAULT_SCENE_EDITORS: SceneEditorFactory[] = [
+  planimetryEditorFactory,
+  stereometryEditorFactory,
+  plotsEditorFactory,
+  physicsEditorFactory,
+];
 
 /** Счётчик для уникальных id: подсказки, группы радио и вкладки привязаны к полям. */
 let drawingDialogCount = 0;

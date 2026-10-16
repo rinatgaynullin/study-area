@@ -167,6 +167,7 @@ class PlanimetryEditor implements SceneEditor {
     });
 
     this.setTool('select');
+    this.renderProperties();
     this.render();
   }
 

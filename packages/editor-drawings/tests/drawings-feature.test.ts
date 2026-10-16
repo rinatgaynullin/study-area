@@ -171,6 +171,8 @@ describe('возможность целиком: кнопки, диалог, п�
     expect(dialog.querySelector('button[data-template="block-force"]')).not.toBeNull();
     expect(dialog.querySelector('button[data-template="triangle"]')).toBeNull();
 
+    // Сцена набирается на вкладке JSON: конструктор физики — соседняя вкладка.
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
     typeJson(dialog, BLOCK);
     dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
 

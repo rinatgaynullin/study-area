@@ -2,6 +2,9 @@
 // приезжают через документную часть.
 import './editor.css';
 import './builders/builders.css';
+import './builders/stereometry-editor.css';
+import './builders/plots-editor.css';
+import './builders/physics-editor.css';
 import {
   ICONS,
   type DialogComponent,

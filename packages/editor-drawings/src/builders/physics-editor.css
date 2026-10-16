@@ -1,0 +1,55 @@
+/* Конструктор физических схем: вкладки разделов, палитра, деления осей. */
+
+.rte-builder__sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rte-builder__section {
+  border-radius: var(--rte-radius, 8px) var(--rte-radius, 8px) 0 0;
+}
+
+.rte-builder__section--active {
+  border-color: var(--rte-color-primary, #ff892e);
+  background: var(--rte-color-primary-soft, #fff1e0);
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-builder__palette-item {
+  height: 30px;
+  padding: 0 8px;
+}
+
+.rte-builder__palette-item .rte-builder__tool-glyph {
+  min-width: 18px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.rte-builder__check {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--rte-color-primary, #ff892e);
+}
+
+.rte-builder__ticks {
+  display: grid;
+  gap: 4px;
+}
+
+.rte-builder__tick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+  gap: 4px;
+  align-items: center;
+}
+
+.rte-builder__tick .rte-input {
+  min-width: 0;
+}
+
+.rte-builder__tick-remove {
+  height: 32px;
+}

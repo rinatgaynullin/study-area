@@ -51,7 +51,7 @@ $$\\begin{cases} x+y=1 \\\\ x-y=3 \\end{cases}$$
 <p>Бензол <span data-chemistry-code="[:30]**6(------)" data-chemistry-type="chemfig" class="chemistry-node"></span> и этанол <span data-chemistry-code="CH_3-CH_2-OH" data-chemistry-type="chemfig" class="chemistry-node"></span>.</p>
 <p>Уксусная кислота: <div data-chemistry-code="CH_3-C(=[1]O)-[7]OH" data-chemistry-type="chemfig"></div></p>
 <p>Фенол <span data-chemistry-code="**6(---(-OH)---)" data-chemistry-type="chemfig"></span>, метан <span data-chemistry-code="H-C(-[2]H)(-[6]H)-H" data-chemistry-type="chemfig"></span>.</p>
-<p>Код вне подмножества сохраняется как есть: <span data-chemistry-code="A-B>C" data-chemistry-type="chemfig"></span></p>`,
+<p>Код вне подмножества сохраняется как есть: <span data-chemistry-code="A-(B" data-chemistry-type="chemfig"></span></p>`,
   },
   {
     id: 'drawings',
