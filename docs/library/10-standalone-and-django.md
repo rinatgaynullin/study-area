@@ -20,8 +20,8 @@
 
 | Файл | Что даёт |
 | --- | --- |
-| `editor.js` | Всё API `@rich-editor/core` плюс `MATHLIVE_FONTS_DIRECTORY`; `createRichEditor` сам берёт шрифты из соседнего `fonts/` |
-| `viewer.js` | Только вьюер: `createRichContent`, `applyTheme`, `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml` |
+| `editor.js` | Всё API `@rich-editor/core`, `@rich-editor/chemistry`, `@rich-editor/drawings` и `@rich-editor/ocr` плюс `MATHLIVE_FONTS_DIRECTORY`; `createRichEditor` сам берёт шрифты из соседнего `fonts/` и включает структурные формулы и чертежи (`defaultFeatures()`; `features: []` — только текст) |
+| `viewer.js` | Только вьюер: `createRichContent` с документными частями химии и чертежей (`defaultContentFeatures()`), `applyTheme`, `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`, рендеры химии и чертежей |
 | `chunks/` | Ленивые чанки: MathLive и MathJax грузятся при первой формуле |
 | `styles.css`, `legacy.css` | Стили редактора и вьюера (compat-слой уже внутри); `legacy.css` остаётся для совместимости |
 | `fonts/` | Шрифты MathLive |
