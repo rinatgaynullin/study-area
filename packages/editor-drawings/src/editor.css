@@ -1,0 +1,167 @@
+/* Диалог чертежа. Кнопки, поля и модалка — классы ядра. */
+
+.rte-drawing-dialog {
+  display: grid;
+  gap: 14px;
+}
+
+.rte-drawing-dialog__kinds {
+  display: flex;
+  gap: 16px;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+}
+
+.rte-drawing-dialog__kinds label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.rte-drawing-dialog__code {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 120px;
+  height: auto;
+  padding: 8px 12px;
+  resize: vertical;
+  font-family: var(--rte-font-mono, ui-monospace, monospace);
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.rte-drawing-dialog__code--tikz {
+  min-height: 72px;
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-drawing-dialog__hint {
+  margin: 6px 0 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-drawing-dialog__section-title {
+  margin: 0 0 8px;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-drawing-dialog__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rte-drawing-dialog__template {
+  padding: 6px 10px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-pill, 999px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  cursor: pointer;
+}
+
+.rte-drawing-dialog__template:hover {
+  border-color: var(--rte-color-border-hover, #afadb8);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+}
+
+.rte-drawing-dialog__template:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+.rte-drawing-dialog__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px dashed var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  overflow: auto;
+}
+
+.rte-drawing-dialog__preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.rte-drawing-dialog__preview .rte-drawing__halo {
+  fill: var(--rte-color-subtle-bg, #f5f5f7);
+  stroke: var(--rte-color-subtle-bg, #f5f5f7);
+}
+
+.rte-drawing-dialog__status {
+  margin: 8px 0 0;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-drawing-dialog__status--error {
+  color: var(--rte-color-danger, #f23e3e);
+}
+
+/* Вкладки конструкторов и JSON. */
+.rte-drawing-dialog__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--rte-color-border, #dedce3);
+}
+
+.rte-drawing-dialog__tab {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  cursor: pointer;
+}
+
+.rte-drawing-dialog__tab:hover {
+  color: var(--rte-color-primary-hover, #f56600);
+}
+
+.rte-drawing-dialog__tab:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: -2px;
+}
+
+.rte-drawing-dialog__tab--active {
+  border-bottom-color: var(--rte-color-primary, #ff892e);
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-drawing-dialog__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.rte-drawing-dialog__scans {
+  display: grid;
+  gap: 8px;
+  max-width: 220px;
+  max-height: 480px;
+  overflow: auto;
+}
+
+.rte-drawing-dialog__scans[hidden] {
+  display: none;
+}
+
+.rte-drawing-dialog__scan {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+}

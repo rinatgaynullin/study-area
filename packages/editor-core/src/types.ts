@@ -1,3 +1,4 @@
+import type { SanitizerRules } from './security/sanitize';
 
 /** Kind of asset an upload adapter is being asked to handle. */
 export type UploadKind = 'image' | 'audio' | 'file';
@@ -123,6 +124,12 @@ export interface RichEditorCoreOptions {
    * редактором, раньше отдать его некому.
    */
   extensions?: unknown[] | ((context: { t: Translate }) => unknown[]);
+  /**
+   * Теги и атрибуты узлов из `extensions` поверх контракта документа: иначе
+   * санитайзер срежет их на входе. Возможности (`features` оболочки)
+   * объявляют свои правила сами. Читается один раз.
+   */
+  sanitize?: SanitizerRules;
   /**
    * Включает разбор разметки старого редактора (Froala + Wiris). Выключено по
    * умолчанию: хостам без legacy-данных незачем платить разбором документа на

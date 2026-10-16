@@ -26,3 +26,7 @@ npm-debug.log*
 __pycache__/
 .pytest_cache/
 *.egg-info/
+
+# Локальная конфигурация предпросмотра Claude Code
+.claude/launch.json
+playwright.local.config.ts

@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 const core = (path: string) => resolve(import.meta.dirname, '../editor-core', path);
+const pkg = (name: string, path: string) => resolve(import.meta.dirname, `../editor-${name}`, path);
 
 /**
  * Автономная сборка: все зависимости внутри.
@@ -23,6 +24,13 @@ export default defineConfig({
       // Шрифты кладёт copy-assets.mjs в dist/fonts, а MathLive берёт их по
       // fontsDirectory; fonts.css из ядра здесь только дублировал бы файлы.
       { find: 'mathlive/fonts.css', replacement: resolve(import.meta.dirname, 'src/empty.css') },
+      // Возможности PinQueen едут внутри сборки, как и ядро: по исходникам,
+      // чтобы вьюер не получил их редакторскую часть.
+      { find: '@rich-editor/chemistry/viewer', replacement: pkg('chemistry', 'src/viewer.ts') },
+      { find: '@rich-editor/chemistry', replacement: pkg('chemistry', 'src/index.ts') },
+      { find: '@rich-editor/drawings/viewer', replacement: pkg('drawings', 'src/viewer.ts') },
+      { find: '@rich-editor/drawings', replacement: pkg('drawings', 'src/index.ts') },
+      { find: '@rich-editor/ocr', replacement: pkg('ocr', 'src/index.ts') },
       // Подпути раньше корня: alias сопоставляется по префиксу в порядке списка.
       { find: '@rich-editor/core/viewer.css', replacement: core('src/content.css') },
       { find: '@rich-editor/core/viewer', replacement: core('src/viewer.ts') },

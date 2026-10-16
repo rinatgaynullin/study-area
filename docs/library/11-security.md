@@ -20,7 +20,7 @@ allowlist тегов, атрибутов и схем URL. Те же списки
 
 | Функция | Вход | Что вырезает |
 | --- | --- | --- |
-| `sanitizeHtml(html)` | HTML документа | Всё вне `HTML_TAGS`/`HTML_ATTRS`; `script style iframe object embed form input link meta`; обработчики `on*`; неразрешённые `data-*` |
+| `sanitizeHtml(html, rules?)` | HTML документа | Всё вне `HTML_TAGS`/`HTML_ATTRS` и `rules`; `script style iframe object embed form input link meta`; обработчики `on*`; неразрешённые `data-*` |
 | `sanitizeMathML(mathml)` | Значение `data-mathml` | Всё вне `MATHML_TAGS`/`MATHML_ATTRS`; `annotation-xml` (mXSS), `mglyph`, `script`, любые `href`; `''`, если это не `<math>` |
 | `sanitizeSvg(svg)` | Вывод MathJax | `script`, `foreignObject`, `a`, `image`; `use` только с локальным `#id` |
 
@@ -37,9 +37,25 @@ allowlist тегов, атрибутов и схем URL. Те же списки
 `MATHML_TAGS`, `MATHML_ATTRS`, `SVG_EXTRA_ATTRS`, `ALLOWED_URI_SCHEMES`
 (`http https mailto tel ftp blob data`). Серверная копия —
 `rich_editor/sanitize.py`; тест `sanitize-contract.test.ts` падает при
-расхождении. Публичного API «добавить тег» нет: новая разметка либо
-укладывается в allowlist (`div`, `span`, `class`, разрешённые `data-*`), либо
-меняется в обоих файлах.
+расхождении.
+
+### Правила возможностей
+
+Узлы возможностей (химия, чертежи) несут свои `data-*` и, возможно, SVG-теги
+вне базового списка. Возможность объявляет их полем `sanitize: SanitizerRules`
+(`{ tags?, attributes? }`); то же поле есть у `RichEditorCoreOptions` для
+узлов из `extensions`. Редактор и вьюер складывают правила через
+`mergeSanitizerRules` и передают в `prepareIncomingHtml(html, { sanitize })`
+на каждом пути входа: начальный документ, `setHTML`, вставка, вьюер.
+
+Правила только расширяют allowlist. Запреты остаются: `FORBID_TAGS` главнее
+разрешения, схемы URL в `href`/`src`, фильтр `style` и `rel` на `_blank`
+действуют и на узлы возможностей. Непереченные `data-*` вырезаются по-прежнему.
+Серверный санитайзер этих правил не видит: хост, подключивший возможность,
+дописывает её теги и атрибуты в свою копию allowlist, иначе сервер вырежет
+узлы при сохранении. Для пакетов монорепы копии уже есть в
+`rich_editor/sanitize.py` (`CHEMISTRY_ATTRS`), и тест контракта сверяет их с
+правилами пакетов.
 
 Отличия сервера: `data:` в `href` проходит (nh3 применяет схемы ко всем
 атрибутам); `style` фильтруется позитивным списком `STYLE_PROPERTIES` —
@@ -51,6 +67,8 @@ allowlist тегов, атрибутов и схем URL. Те же списки
 import { sanitizeHtml, HTML_TAGS, normalizeMathML } from '@rich-editor/core';
 
 const clean = sanitizeHtml(untrustedHtml);          // то же, что делает редактор на входе
+// С узлами возможности: те же правила, что получает редактор.
+const withChemistry = sanitizeHtml(untrustedHtml, { attributes: ['data-chemistry-code'] });
 const mathml = normalizeMathML(untrustedMathml);    // '' — непригодно
 const allowed = HTML_TAGS.includes('iframe');       // false
 ```

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "dist/types",
+    "rootDir": "src",
+    "paths": {
+      "@rich-editor/core/viewer": ["../editor-core/dist/types/viewer.d.ts"],
+      "@rich-editor/core": ["../editor-core/dist/types/index.d.ts"],
+      "@rich-editor/chemistry/viewer": ["../editor-chemistry/dist/types/viewer.d.ts"],
+      "@rich-editor/chemistry": ["../editor-chemistry/dist/types/index.d.ts"],
+      "@rich-editor/drawings/viewer": ["../editor-drawings/dist/types/viewer.d.ts"],
+      "@rich-editor/drawings": ["../editor-drawings/dist/types/index.d.ts"]
+    }
+  },
+  "exclude": ["**/*.test.ts"]
+}

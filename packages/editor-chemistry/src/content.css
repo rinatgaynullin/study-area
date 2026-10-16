@@ -1,0 +1,51 @@
+/*
+ * Узел структурной формулы: в документе редактора и во вьюере.
+ * Токены темы — из ядра (`--rte-*`); без него работают запасные значения.
+ */
+
+.rte-chemistry {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 2px;
+  border-radius: var(--rte-radius-sm, 4px);
+  line-height: 1;
+  user-select: none;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.rte-chemistry__render {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.rte-chemistry__render svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Подложка подписи закрывает линию связи под текстом; цвет — фон документа. */
+.rte-chemistry__label-bg {
+  fill: var(--rte-color-bg, #fff);
+}
+
+/* Код, который рендер не понял: показывается как есть и помечен. */
+.rte-chemistry--invalid .rte-chemistry__render {
+  font-family: var(--rte-font-mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  color: var(--rte-color-danger, #f23e3e);
+  border-bottom: 1px dashed currentColor;
+}
+
+/* В редакторе узел кликабелен и выделяется, как формула. */
+.ProseMirror .rte-chemistry {
+  cursor: pointer;
+}
+
+.rte-chemistry--selected,
+.rte-chemistry.ProseMirror-selectednode {
+  background: var(--rte-color-formula-hover, #fff1e0);
+  box-shadow: 0 0 0 2px var(--rte-color-primary, #ff892e);
+}

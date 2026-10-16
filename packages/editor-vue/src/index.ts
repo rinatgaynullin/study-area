@@ -45,6 +45,9 @@ export {
   type DialogComponent,
   type EditorUiContext,
   type UiComponent,
+  type ContentFeature,
+  type ContentHydrateContext,
+  type SanitizerRules,
 } from '@rich-editor/core';
 
 /** @deprecated Переименована в `ToolbarGroupConfig`. */

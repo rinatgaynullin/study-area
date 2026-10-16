@@ -1,0 +1,179 @@
+/* Конструкторы чертежей: полотно, инструменты, панель свойств. */
+
+.rte-builder {
+  display: grid;
+  gap: 10px;
+}
+
+.rte-builder__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rte-builder__tools,
+.rte-builder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rte-builder__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.rte-builder__tool:hover:not(:disabled) {
+  border-color: var(--rte-color-border-hover, #afadb8);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+}
+
+.rte-builder__tool:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+.rte-builder__tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rte-builder__tool--active {
+  border-color: var(--rte-color-primary, #ff892e);
+  background: var(--rte-color-primary-soft, #fff1e0);
+}
+
+.rte-builder__tool--action {
+  min-width: 32px;
+  padding: 0 8px;
+}
+
+.rte-builder__tool-glyph {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.rte-builder__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 12px;
+  align-items: start;
+}
+
+.rte-sketch {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--rte-sketch-ratio, 4 / 3);
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-bg, #fff);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+
+.rte-sketch:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+.rte-sketch__layer,
+.rte-sketch__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rte-sketch__layer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--rte-color-text, #221f2e);
+}
+
+.rte-sketch__overlay {
+  pointer-events: none;
+}
+
+.rte-builder__props {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+  font-size: var(--rte-ui-font-size-sm, 14px);
+}
+
+.rte-builder__props-title {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-builder__props-empty {
+  margin: 0;
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-builder__prop {
+  display: grid;
+  gap: 4px;
+}
+
+.rte-builder__prop-label {
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-builder__prop .rte-input,
+.rte-builder__select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 8px;
+}
+
+.rte-builder__remove {
+  justify-self: start;
+  height: auto;
+  min-height: var(--rte-button-height, 36px);
+  padding: 6px 10px;
+  white-space: normal;
+  text-align: left;
+}
+
+.rte-builder__hint {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-builder__palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+@media (max-width: 720px) {
+  .rte-builder__body {
+    grid-template-columns: 1fr;
+  }
+}

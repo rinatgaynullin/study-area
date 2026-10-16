@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "paths": {
+      "@rich-editor/core/viewer": ["../editor-core/src/viewer.ts"],
+      "@rich-editor/core": ["../editor-core/src/index.ts"],
+      "@rich-editor/chemistry/viewer": ["../editor-chemistry/src/viewer.ts"],
+      "@rich-editor/chemistry": ["../editor-chemistry/src/index.ts"],
+      "@rich-editor/drawings/viewer": ["../editor-drawings/src/viewer.ts"],
+      "@rich-editor/drawings": ["../editor-drawings/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+}

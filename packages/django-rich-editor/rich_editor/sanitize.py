@@ -70,10 +70,17 @@ STYLE_PROPERTIES = [
     'padding', 'display', 'float', 'line-height', 'white-space',
 ]
 
+# Узлы подключаемых возможностей: копии их `SanitizerRules`. Атрибуты инертны
+# (данные для рендера), поэтому разрешены всегда, даже если хост возможность не
+# подключил. `@rich-editor/chemistry` — `CHEMISTRY_SANITIZER_RULES`.
+CHEMISTRY_ATTRS = ['data-chemistry', 'data-chemistry-code', 'data-chemistry-type']
+# `@rich-editor/drawings` — `DRAWINGS_SANITIZER_RULES`.
+DRAWINGS_ATTRS = ['data-geometry', 'data-geometry-data', 'data-physics', 'data-physics-data', 'data-tikz-code']
+
 # Раскрытая MathML в документе (старая разметка Wiris до апгрейда) тоже
 # должна пройти, поэтому HTML- и MathML-списки объединяются.
 ALL_TAGS = frozenset(HTML_TAGS) | frozenset(MATHML_TAGS)
-ALL_ATTRS = frozenset(HTML_ATTRS) | frozenset(MATHML_ATTRS)
+ALL_ATTRS = frozenset(HTML_ATTRS) | frozenset(MATHML_ATTRS) | frozenset(CHEMISTRY_ATTRS) | frozenset(DRAWINGS_ATTRS)
 
 
 def _attributes(tags: Iterable[str], attrs: Iterable[str]) -> dict[str, set[str]]:

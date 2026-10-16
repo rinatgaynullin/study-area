@@ -11,8 +11,13 @@ export default defineConfig({
     alias: {
       '@rich-editor/core/viewer': resolveFromRoot('packages/editor-core/src/viewer.ts'),
       '@rich-editor/vue/viewer': resolveFromRoot('packages/editor-vue/src/viewer.ts'),
+      '@rich-editor/chemistry/viewer': resolveFromRoot('packages/editor-chemistry/src/viewer.ts'),
+      '@rich-editor/drawings/viewer': resolveFromRoot('packages/editor-drawings/src/viewer.ts'),
       '@rich-editor/core': resolveFromRoot('packages/editor-core/src/index.ts'),
       '@rich-editor/vue': resolveFromRoot('packages/editor-vue/src/index.ts'),
+      '@rich-editor/chemistry': resolveFromRoot('packages/editor-chemistry/src/index.ts'),
+      '@rich-editor/drawings': resolveFromRoot('packages/editor-drawings/src/index.ts'),
+      '@rich-editor/ocr': resolveFromRoot('packages/editor-ocr/src/index.ts'),
     },
   },
   test: {

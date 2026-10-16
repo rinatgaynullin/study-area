@@ -40,6 +40,7 @@ interface RichEditorCoreOptions {
   locale?: string; messages?: Record<string, Messages>; limits?: Partial<EditorLimits>;
   uploadImage?: UploadAdapter; uploadAudio?: UploadAdapter; uploadFile?: UploadAdapter;
   formulaScale?: number; extensions?: unknown[] | ((context: { t: Translate }) => unknown[]); legacy?: boolean;
+  sanitize?: SanitizerRules;                                             // 11-security.md
   onChange?: (html: string) => void; onSelectionUpdate?: () => void;
   onTransaction?: () => void; onFocus?: () => void; onBlur?: () => void;
   onUpload?: (event: UploadEvent) => void; onFormulaEdit?: (payload: FormulaPayload) => void;
@@ -48,7 +49,7 @@ interface RichEditorCoreOptions {
 type RichEditorCoreLiveOptions = Pick<RichEditorCoreOptions,
   'editable' | 'locale' | 'messages' | 'limits' | 'placeholder' | 'ariaLabel' | 'uploadImage' | 'uploadAudio' | 'uploadFile'>;
 
-interface PrepareIncomingHtmlOptions { legacy?: boolean }
+interface PrepareIncomingHtmlOptions { legacy?: boolean; sanitize?: SanitizerRules }
 const prepareIncomingHtml: (html: string, options?: PrepareIncomingHtmlOptions) => string;
 const upgradeLegacyHtml: (html: string) => string;
 const decodeWirisMathml: (raw: string) => string;
@@ -60,7 +61,9 @@ const decodeWirisMathml: (raw: string) => string;
 const HTML_TAGS: string[]; const HTML_ATTRS: string[];                // 11-security.md
 const MATHML_TAGS: string[]; const MATHML_ATTRS: string[];
 const SVG_EXTRA_ATTRS: string[]; const ALLOWED_URI_SCHEMES: string[];
-const sanitizeHtml: (html: string) => string;
+interface SanitizerRules { tags?: readonly string[]; attributes?: readonly string[]; }
+const mergeSanitizerRules: (...rules: Array<SanitizerRules | undefined>) => SanitizerRules | undefined;
+const sanitizeHtml: (html: string, rules?: SanitizerRules) => string;
 const sanitizeMathML: (mathml: string) => string;                      // '' если не <math>
 const sanitizeSvg: (svg: string) => string;
 const resetSanitizers: () => void;                                     // тестовый шов
@@ -89,8 +92,14 @@ type RichEditorLiveOptions = RichEditorCoreLiveOptions
 const createRichContent: (options: RichContentOptions) => RichContent;    // 06-viewer.md
 interface RichContentOptions {
   element: HTMLElement; html?: string; formulaScale?: number; legacy?: boolean; theme?: EditorTheme;
-  onRendered?(): void;
+  features?: ContentFeature[]; onRendered?(): void;
 }
+interface ContentFeature {                                               // документная часть возможности
+  id: string; sanitize?: SanitizerRules;
+  hydrate?(root: HTMLElement, context: ContentHydrateContext): ContentHydrateResult | Promise<ContentHydrateResult>;
+}
+interface ContentHydrateContext { formulaScale: number; }
+type ContentHydrateDispose = () => void; type ContentHydrateResult = ContentHydrateDispose | void;
 type RichContentUpdate = Partial<Pick<RichContentOptions, 'html' | 'formulaScale' | 'legacy' | 'theme'>>;
 interface RichContent {
   readonly element: HTMLElement; update(next: RichContentUpdate): Promise<void>;
@@ -131,8 +140,9 @@ interface ToolbarItemDescriptor {
   isActive?(editor: Editor): boolean; isDisabled?(editor: Editor): boolean;
   renderPanel?(context: EditorUiContext, close: () => void): HTMLElement;
 }
-interface EditorFeature {
-  id: string; extensions?(options: FeatureBuildOptions): unknown[];
+interface EditorFeature extends ContentFeature {
+  messages?: Record<string, Messages>;                                   // 09-i18n.md
+  extensions?(options: FeatureBuildOptions): unknown[];
   toolbarItems?(): ToolbarItemDescriptor[]; dialogs?(context: EditorUiContext): UiComponent[];
 }
 interface FeatureBuildOptions {
@@ -174,11 +184,22 @@ interface MenuItemOptions {
 const createMenuItem: (options: MenuItemOptions) => HTMLButtonElement;
 const createMenuSeparator: () => HTMLElement;
 
+// Помощники разметки на голом DOM — те же, которыми собраны встроенные диалоги.
+const el: <K extends keyof HTMLElementTagNameMap>(tag: K, options?: {
+  class?: string; text?: string; html?: string;
+  attrs?: Record<string, string | number | boolean | null | undefined>; children?: Array<Node | null | undefined>;
+}) => HTMLElementTagNameMap[K];
+const icon: (name: string, size?: number) => SVGElement;
+type Unsubscribe = () => void;
+const on: (target: HTMLElement | Document | Window, type: string, listener: (event: Event) => void,
+  options?: AddEventListenerOptions) => Unsubscribe;
+const createDisposer: () => { add: (off: Unsubscribe) => void; dispose: () => void };
+
 const ICONS: Record<string, string>; type IconName = keyof typeof ICONS;
 // bold italic underline strike heading paragraph subscript superscript bulletList orderedList blockquote
 // code codeBlock horizontalRule link unlink table alignLeft alignCenter alignRight alignJustify textColor
 // highlight clearFormat undo redo image audio file formulaMath formulaChem more chevronDown close check
-// openLink trash play pause stop record noColor
+// openLink trash play pause stop record noColor; возможности дописывают свои: chemistry, geometry, physics
 ```
 
 ### Формулы
@@ -298,8 +319,9 @@ export type { Editor } from '@tiptap/core';
 
 Subpath-экспорты: `@rich-editor/core/viewer` (вьюер без редактора: `createRichContent`, `applyTheme`,
 `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`, `decodeWirisMathml`, `sanitizeHtml`,
-`sanitizeMathML`, `sanitizeSvg`, `renderMathML`, `whenFormulasReady`, `normalizeMathML`,
-`extractFormulaType`, `isMathMLEmpty` и их типы), `@rich-editor/core/styles.css`,
+`sanitizeMathML`, `sanitizeSvg`, `mergeSanitizerRules`, `renderMathML`, `whenFormulasReady`,
+`normalizeMathML`, `extractFormulaType`, `isMathMLEmpty` и их типы, включая `ContentFeature`,
+`ContentHydrateContext`, `SanitizerRules`), `@rich-editor/core/styles.css`,
 `@rich-editor/core/viewer.css`, `@rich-editor/core/legacy.css`.
 
 ## `@rich-editor/vue`
@@ -320,6 +342,7 @@ export type {
   Dropdown, LinkStyle, MathliveStrings, Modal, Popover, RichEditorUi, RichEditorUiOptions, RichEditorLiveOptions,
   RichContent as RichContentViewer, RichContentOptions, EditorTheme, Toolbar, ToolbarConfig, ToolbarGroupConfig,
   ToolbarItemDescriptor, ToolbarPreset, DialogComponent, EditorUiContext, UiComponent, IconName,
+  ContentFeature, ContentHydrateContext, SanitizerRules,
   EditorLimits, FormulaPayload, FormulaType, Messages, UploadAdapter, UploadContext, UploadEvent, UploadKind, UploadResult,
 };
 export type ToolbarItemId = string;
@@ -332,13 +355,168 @@ Subpath-экспорты: `@rich-editor/vue/viewer` (`RichContent` и реэкс
 `UploadPipeline`, `VoiceRecorder`, `createI18n`, шаблоны, палитры)
 импортируется из `@rich-editor/core` — он зависимость Vue-пакета.
 
+## `@rich-editor/chemistry`
+
+```ts
+// 16-chemistry.md. Вход `.` — возможность для редактора.
+const createChemistryFeature: (options?: ChemistryFeatureOptions) => EditorFeature;
+interface ChemistryFeatureOptions { toolbarItem?: boolean }
+const ChemistryNode: Node<ChemistryOptions>;                               // TipTap-узел `chemistry`
+interface ChemistryOptions { t: Translate | null; onEdit: ((payload: ChemistryPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
+const createChemistryDialog: (context: EditorUiContext, options: ChemistryDialogOptions) => DialogComponent<ChemistryPayload | null>;
+interface ChemistryDialogOptions { onSave(payload: ChemistryPayload): void; onRemove(pos: number): void }
+const CHEMISTRY_MESSAGES: Record<string, Messages>;
+const CHEMISTRY_TEMPLATES: ChemistryTemplate[];
+interface ChemistryTemplate { id: string; labelKey: string; code: string }
+const CHEMISTRY_NODE_NAME = 'chemistry';
+type ChemistryType = 'chemfig';
+interface ChemistryPayload { code: string; type: ChemistryType; pos: number | null }
+// Команды TipTap: insertChemistry({ code, type? }), updateChemistry({ pos, code }), deleteChemistryAt(pos)
+
+// Вход `./viewer` — документная часть и рендер, без TipTap (входит и в `.`).
+const chemistryContent: ContentFeature;
+const CHEMISTRY_SANITIZER_RULES: SanitizerRules;                           // три атрибута data-chemistry*
+const CHEMISTRY_NODE_SELECTOR = '[data-chemistry-code]';
+const hydrateChemistry: (root: HTMLElement, context: ContentHydrateContext) => void;
+const paintChemistryNode: (element: HTMLElement, code: string, options: PaintChemistryOptions) => void;
+interface PaintChemistryOptions { scale: number; accessibleName?: string }
+
+const parseChemfig: (code: string) => ChemStructure;                       // бросает ChemfigSyntaxError
+const tryParseChemfig: (code: string) => ChemStructure | null;
+const unwrapChemfig: (code: string) => string;
+class ChemfigSyntaxError extends Error { readonly position: number }
+const renderChemistrySvg: (structure: ChemStructure, options?: ChemistrySvgOptions) => string;
+const chemfigToSvg: (code: string, options?: ChemistrySvgOptions) => string | null;
+interface ChemistrySvgOptions { scale?: number }
+const formatChemLabel: (label: string) => string;
+const layoutChemTree: (root: ChemAtom, x: number, y: number, options: TreeLayoutOptions) => ChemTreeLayout;
+
+type ChemBondType = '-' | '=' | '~';
+interface ChemAtom { label: string; bonds: ChemBond[] }
+interface ChemBond { type: ChemBondType; angle: number | null; branch: boolean; target: ChemAtom }
+interface ChemChain { kind: 'chain'; root: ChemAtom; startAngle: number }
+interface ChemRing { kind: 'ring'; size: number; aromatic: boolean; bonds: ChemBondType[]; vertices: Array<ChemAtom | null> }
+type ChemStructure = ChemChain | ChemRing;
+```
+
+Стили: `@rich-editor/chemistry/styles.css` — узел и диалог одним файлом.
+
+## `@rich-editor/drawings`
+
+```ts
+// 17-drawings.md. Вход `.` — возможность для редактора.
+const createDrawingsFeature: (options?: DrawingsFeatureOptions) => EditorFeature;
+interface DrawingsFeatureOptions { toolbarItems?: boolean; editors?: SceneEditorFactory[]; scans?: () => string[] }
+const GeometryNode: Node<DrawingOptions>; const PhysicsNode: Node<DrawingOptions>;   // узлы `geometry`, `physics`
+const createDrawingNode: (kind: DrawingKind) => Node<DrawingOptions>;
+interface DrawingOptions { t: Translate | null; onEdit: ((payload: DrawingPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
+const createDrawingDialog: (context: EditorUiContext, options: DrawingDialogOptions) => DialogComponent<DrawingPayload | null>;
+interface DrawingDialogOptions {
+  onSave(payload: DrawingPayload): void; onRemove(pos: number): void; editors?: SceneEditorFactory[]; scans?: () => string[];
+}
+const DEFAULT_SCENE_EDITORS: SceneEditorFactory[];                       // встроенные вкладки конструкторов
+// Конструкторы (17-drawings.md, «Конструкторы»)
+interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScene(): RawScene; onChange(listener: () => void): Unsubscribe; focus(): void }
+interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
+interface SceneEditorContext { t: Translate; scans?: string[] }
+type RawScene = Record<string, unknown>;
+const planimetryEditorFactory: SceneEditorFactory; const stereometryEditorFactory: SceneEditorFactory;
+const plotsEditorFactory: SceneEditorFactory; const physicsEditorFactory: SceneEditorFactory;
+const STEREOMETRY_MESSAGES, PLOTS_MESSAGES, PHYSICS_BUILDER_MESSAGES: Record<string, Messages>;
+const projectVertex: (point: Point, angleY: number, angleZ: number, viewport: Viewport) => SvgPoint;
+const unprojectToGround: (plane: Vec2, angleY: number, angleZ: number) => Vec2;   // экран → плоскость z = 0
+class SketchCanvas { constructor(options: SketchCanvasOptions); readonly element: HTMLElement; readonly viewport: Viewport; setScene(svg: string): void;
+  setOverlay(markup: string): void; toSvg(point: Vec2): SvgPoint; toWorld(point: SvgPoint): Vec2; zoomAt(point: SvgPoint, factor: number): void;
+  zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void; focus(): void; destroy(): void; readonly hitRadius: number }
+class HistoryStack<T> { constructor(limit?: number); record(current: T): void; undo(current: T): T | null; redo(current: T): T | null; clear(): void }
+class ToolBar<TId extends string> { constructor(options: ToolBarOptions<TId>); setActive(id: TId | null): void; setEnabled(id: TId, enabled: boolean): void }
+const fitLine: (points: Vec2[]) => LineFit | null; const fitCircle: (points: Vec2[]) => CircleFit | null;
+const fitParabola: (points: Vec2[]) => ParabolaFit | null; const recognizeStroke: (points: Vec2[]) => RecognizedShape;
+const distance, distanceToSegment, projectOnSegment, nearestOnCircle, snapToGrid, angleBetween, angleDegrees, roundPoint, roundTo;
+const BUILDER_MESSAGES: Record<string, Messages>;
+interface DrawingPayload { kind: DrawingKind; data: string; tikz: string; pos: number | null }
+const DRAWINGS_MESSAGES: Record<string, Messages>;
+const DRAWING_TEMPLATES: DrawingTemplate[];
+const DRAWINGS_FEATURE_ID = 'drawings'; const GEOMETRY_NODE_NAME = 'geometry'; const PHYSICS_NODE_NAME = 'physics';
+// Команды TipTap: insertGeometry({ data, tikz? }), updateGeometry({ pos, data, tikz? }), insertPhysics(…), updatePhysics(…), deleteDrawingAt(pos)
+const geometryToTikz: (scene: GeometryScene) => string;
+const physicsToTikz: (scene: PhysicsScene) => string;
+
+// Вход `./viewer` — документная часть, нормализация и рендер, без TipTap (входит и в `.`).
+const drawingsContent: ContentFeature;
+const createDrawingsContent: (options?: { locale?: string }) => ContentFeature;
+const DRAWINGS_SANITIZER_RULES: SanitizerRules;                            // пять атрибутов data-geometry*, data-physics*, data-tikz-code
+const hydrateDrawings: (root: HTMLElement, context: ContentHydrateContext, locale?: string) => void;
+const paintDrawingNode: (element: HTMLElement, kind: DrawingKind, data: string, options: PaintDrawingOptions) => void;
+const readScene: (kind: DrawingKind, data: string) => GeometryScene | PhysicsScene | null;
+const renderDrawingPreview: (kind: DrawingKind, scene: GeometryScene | PhysicsScene, scale?: number) => string | null;
+const sceneTitleKey: (kind: DrawingKind, scene: GeometryScene | PhysicsScene) => string;
+
+const parseSceneJson: (text: string) => unknown | null;                   // терпимый разбор, без eval
+const stringifyScene: (scene: unknown) => string;
+const normalizeGeometryScene: (raw: unknown) => GeometryScene;
+const normalizePhysicsScene: (raw: unknown) => PhysicsScene;
+const detectDrawingKind: (raw: unknown, subjectHint?: DrawingKind) => DrawingKind;
+const hasDrawableContent: (scene: GeometryScene | PhysicsScene) => boolean;
+const splitEdgesThroughVertices: (scene: GeometryScene) => boolean;
+
+const renderGeometrySvg: (scene: GeometryScene, options?: GeometryRenderOptions) => string;
+interface GeometryRenderOptions { width?: number; height?: number; highlight?: GeometryHighlight | null; autoFit?: boolean }
+const renderPhysicsSvg: (scene: PhysicsScene, options?: PhysicsRenderOptions) => string;
+interface PhysicsRenderOptions { width?: number; height?: number; highlight?: PhysicsHighlight | null; autoFit?: boolean }
+const parsePgfplotsTikz: (tikz: string) => Record<string, unknown> | null;
+const worldToSvg: (point: Point, scale: number, cx: number, cy: number) => SvgPoint;
+const svgToWorld: (point: SvgPoint, scale: number, cx: number, cy: number) => Vec2;
+const rotatePoint3d: (point: Point, angleY: number, angleZ: number) => Vec3;
+const projectOblique: (point: Vec3, scale: number, cx: number, cy: number) => SvgPoint;
+const fitViewport: (points: Vec2[], options: FitOptions) => Viewport;
+const latexToSvgTspans: (latex: string) => string;                        // экранированная разметка <tspan>
+const latexToPlainText: (latex: string) => string;
+
+type DrawingKind = 'geometry' | 'physics';
+interface GeometryScene { type: '2d' | '3d' | 'plot_2d'; vertices: Record<string, Point>; edges: GeometryEdge[]; angles: GeometryAngle[];
+  labels: Record<string, string>; textLabels: GeometryTextLabel[]; sections: GeometrySection[]; cylinders: GeometryCylinder[]; plots: Plot[];
+  angleY: number; angleZ: number; scale?: number; offsetX: number; offsetY: number; showGrid: boolean; showAxes: boolean; showAxesTicks: boolean;
+  axes: { xLabel: string; yLabel: string } }
+interface PhysicsScene { type: 'physics'; scale?: number; offsetX: number; offsetY: number; showGrid: boolean; elements: PhysicsElement[] }
+interface PhysicsElement { id: string; type: PhysicsElementType; label?: string; color?: string; dashed?: boolean; points?: Vec2[]; center?: Vec2; coords?: Vec2; … }
+type GeometryHighlight = { type: 'edge'; from; to } | { type: 'vertex' | 'vertex_draft'; id } | { type: 'angle'; id } | { type: 'section'; vertices }
+  | { type: 'plot' | 'circle_plot'; id } | { type: 'angle_draft'; points };
+interface PhysicsHighlight { id: string }
+```
+
+Стили: `@rich-editor/drawings/styles.css` — карточка и диалог одним файлом.
+
+## `@rich-editor/ocr`
+
+```ts
+// 18-ocr.md
+const ocrTextToHtml: (text: string, options?: OcrToHtmlOptions) => Promise<string>;
+interface OcrToHtmlOptions { subject?: OcrSubject; metadata?: OcrMetadata; wrapBareLatex?: boolean }
+type OcrSubject = 'math' | 'physics' | 'chemistry' | string;
+interface OcrMetadata {
+  ocr_and_tikz_data?: string; raw_ocr_and_tikz_data?: string;
+  ocr_and_tikz_data_plots?: Array<{ tikz_code?: string; data?: unknown }>; plots?: Array<{ tikz_code?: string; data?: unknown }>;
+  ocr_and_tikz_data_tikz_code?: string; ocr_and_tikz_data_data?: string;
+}
+const htmlToOcrText: (html: string, options?: HtmlToOcrOptions) => Promise<string>;
+interface HtmlToOcrOptions { physicsSvg?: boolean }                     // блок SVG у физики, по умолчанию да
+const ceToLatex: (reaction: string) => string;
+// Шаги конвейера: markdownToHtml, inlineMarkdownToHtml, normalizeLatexText, closeOpenEnvironments,
+// stripDollarsInsideEnvironments, fixMarkdownTableLines, pipesToVmatrix, wrapBareLatex, replaceCeBlocks,
+// TIKZ_BLOCK, DATA_BLOCK, SVG_BLOCK, extractBlocks, wrapBlock
+```
+
 ## `@rich-editor/standalone`
 
-`./editor` (`dist/editor.js`): всё из `@rich-editor/core`, плюс
-`MATHLIVE_FONTS_DIRECTORY: string` и `createRichEditor` с умолчанием
-`mathliveFontsDirectory`. `./viewer` (`dist/viewer.js`): `createRichContent`,
-`applyTheme`, `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`
-и типы вьюера. Плюс `./styles.css`, `./legacy.css`.
+`./editor` (`dist/editor.js`): всё из `@rich-editor/core`, `@rich-editor/chemistry`,
+`@rich-editor/drawings` и `@rich-editor/ocr`, плюс `MATHLIVE_FONTS_DIRECTORY: string`,
+`defaultFeatures(): EditorFeature[]` и `createRichEditor` с умолчаниями
+`mathliveFontsDirectory` и `features: defaultFeatures()`. `./viewer`
+(`dist/viewer.js`): `createRichContent` с умолчанием `features: defaultContentFeatures()`,
+`applyTheme`, `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`, всё из
+`@rich-editor/chemistry/viewer` и `@rich-editor/drawings/viewer`, типы вьюера. Плюс
+`./styles.css`, `./legacy.css`.
 
 ## `django-rich-editor`
 

@@ -3,7 +3,12 @@
 // который по соглашению содержит только реэкспорты.
 import '../styles/viewer.css';
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
-import { createRichContent, type EditorTheme, type RichContent } from '@rich-editor/core/viewer';
+import {
+  createRichContent,
+  type ContentFeature,
+  type EditorTheme,
+  type RichContent,
+} from '@rich-editor/core/viewer';
 
 /**
  * Обёртка над ванильным вьюером `createRichContent`.
@@ -22,6 +27,11 @@ const props = withDefaults(
     legacy?: boolean;
     /** Тема: светлая, тёмная или как в системе. */
     theme?: EditorTheme;
+    /**
+     * Возможности, чьи узлы есть в документе: правила санитайзера и гидрация.
+     * Читаются один раз при монтировании, как `features` у редактора.
+     */
+    features?: ContentFeature[];
   }>(),
   { html: '', formulaScale: 1, legacy: false, theme: 'light' },
 );
@@ -40,6 +50,7 @@ onMounted(() => {
     formulaScale: props.formulaScale,
     legacy: props.legacy,
     theme: props.theme,
+    features: props.features,
     onRendered: () => emit('rendered'),
   });
 });

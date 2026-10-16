@@ -7,6 +7,94 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/drawings`: constructor tabs for solid geometry, plots and
+  physics. Solid geometry (`stereometryEditorFactory`): templates for
+  pyramids, a prism, a parallelepiped and a cylinder, rotation with the right
+  mouse button, points on edges (splitting them) or on the ground plane by
+  inverse projection, segments, sections, angles by clicks or by typing
+  «SOH», vertex and edge properties. Plots
+  (`plotsEditorFactory`): templates for a parabola, hyperbola, line, circle and
+  `√x`, points, a pencil that recognises a stroke as a line, circle or
+  parabola, polygon shading, labels, per-plot properties and axis labels,
+  copy and paste. Physics (`physicsEditorFactory`): palettes for mechanics,
+  thermodynamics, electricity and optics with all 29 element types, dragging
+  of elements and their points with size handles, snapping to other elements'
+  points, segments and the grid, duplicate with `Ctrl+click` / `Ctrl+C`,
+  typed property panels including axis ticks; switching a section keeps the
+  scene.
+- `@rich-editor/standalone` and `django-rich-editor` ship the PinQueen
+  capabilities: `editor.js` exports `@rich-editor/chemistry`,
+  `@rich-editor/drawings` and `@rich-editor/ocr`, `createRichEditor` enables
+  structural formulas and drawings by default (`defaultFeatures()`,
+  `features: []` opts out), `viewer.js` hydrates chemistry and drawing nodes
+  (`defaultContentFeatures()`); the smoke test covers both; the Django widget
+  and viewer get them through the synced static build.
+- `@rich-editor/drawings`: the drawing dialog gains constructor tabs. The
+  plane-geometry constructor (`planimetryEditorFactory`) draws points,
+  segments, circles, angles, tick marks and labels with snapping to segments,
+  circles and the grid, drags points, edits properties, splits a segment by a
+  point placed on it and keeps unknown scene fields. Shared groundwork for the
+  other tabs: `SketchCanvas` (scene layer through the common renderer plus an
+  overlay, world coordinates, zoom to cursor, panning), `HistoryStack`
+  (snapshot before a change, so one undo restores the previous state),
+  `ToolBar`, curve fitting and stroke recognition. `SceneEditor` /
+  `SceneEditorFactory` contracts, `createDrawingsFeature({ editors, scans })`;
+  the JSON tab stays as a fallback and shows the constructor's scene.
+- `@rich-editor/ocr`: the PinQueen OCR text format in both directions.
+  `ocrTextToHtml(text, { subject, metadata })` turns Markdown + LaTeX with
+  `TIKZ`/`DATA` markers, `\chemfig{}`, `\ce{}`, `$…$`/`$$…$$`, tables and
+  lists into the editor's HTML contract (MathML formulas with a LaTeX
+  annotation, chemistry and drawing nodes), reads PinQueen's own HTML export,
+  places drawings from the status metadata onto `$GEOMETRY_n$` placeholders
+  and escapes text. `htmlToOcrText(html)` writes the text back: headings,
+  marks, numbered and nested lists, tables, `$…$`, display formulas as
+  `$$…$$`, `\chemfig{}`, `TIKZ` + `DATA` blocks and an `SVG` block for physics.
+  The losses of the original are fixed: ordered-list numbering, strike-through,
+  the physics TikZ and the chemistry type survive the round trip; the drawing
+  kind comes from the scene before the subject.
+- `@rich-editor/drawings`: geometry and physics drawings as an editor feature.
+  Block nodes `geometry` and `physics` keep the PinQueen JSON scene in
+  `data-geometry-data` / `data-physics-data` and TikZ in `data-tikz-code`
+  (both `span` and `div` are read; the scene string is stored as it came).
+  Own lenient JSON parser (no `eval`), scene normalization for dirty LLM output
+  (edge aliases, `circle(s)`, `markings`, element synonyms, grouped elements,
+  legacy thermo graphs, 3D→2D downgrade, edge splitting through vertices; no
+  hard-coded `incline` replacement), SVG renderers for 2D/3D/plots and all 29
+  physics element types with `currentColor` strokes, theme-aware halos and
+  `autoFit`, TikZ export (circuitikz keys, smooth isotherms, the element types
+  the original dropped), pgfplots parsing. Dialog with kind switch, scene
+  templates, live preview and generated TikZ; two toolbar buttons; ru/en
+  messages; `./viewer` entry with `drawingsContent` and
+  `createDrawingsContent({ locale })`. The Django allowlist gains
+  `DRAWINGS_ATTRS`, checked by the contract test.
+- `@rich-editor/chemistry`: structural formulas as an editor feature. The
+  atomic inline node `chemistry` keeps chemfig code in `data-chemistry-code`
+  (PinQueen-compatible, `span` and `div` are read); the SVG is rendered from
+  the code on display and never stored. Own parser and renderer for a chemfig
+  subset — chains with angles, bonds `- = ~`, branches, rings `*n(…)` /
+  `**n(…)` with substituents and vertex labels, subscripts — with
+  `currentColor` strokes and a theme-aware label background. Dialog with
+  templates and live preview, toolbar button, ru/en messages. Code outside the
+  subset is kept and shown as text. The `./viewer` entry ships only the
+  `ContentFeature` (`chemistryContent`) and the renderer; the build guards it.
+  The Django allowlist gains `CHEMISTRY_ATTRS`, checked by the contract test.
+- `EditorFeature.messages`: a feature ships its own translation tables, merged
+  under the host's `messages` (`mergeMessages()` is exported). The DOM helpers
+  `el`, `icon`, `on` and `createDisposer` are exported for feature dialogs.
+- Extension points for document features (groundwork for chemistry and
+  drawings): `SanitizerRules` — a feature or a host declares the tags and
+  attributes of its nodes, `sanitizeHtml(html, rules?)` and
+  `prepareIncomingHtml(html, { sanitize })` honour them on every input path
+  (initial content, `setHTML`, paste, viewer) while `FORBID_TAGS`, URL and
+  style checks still apply; `mergeSanitizerRules()`; `RichEditorCoreOptions.sanitize`
+  for raw `extensions`. `ContentFeature` — the document side of a feature
+  (`id`, `sanitize`, `hydrate(root, { formulaScale })`) that the viewer takes
+  via `RichContentOptions.features` and `<RichContent :features>`: hydrators run
+  after every paint, their disposers run before the next paint and on
+  `destroy()`, async hydrators are awaited by `update()` and `onRendered`.
+  `EditorFeature` now extends `ContentFeature`, so one object serves both the
+  editor and the viewer. The viewer is a class under the hood
+  (`createRichContent` is unchanged).
 - Styles need no manual imports: the editor imports `mathlive/fonts.css` itself
   (kept external in the library build, so the host bundler emits the font
   files), and the Froala compat layer is part of `styles.css` and `viewer.css`

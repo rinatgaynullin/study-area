@@ -1,0 +1,53 @@
+import type { Messages } from '@rich-editor/core';
+
+/** Подписи возможности по языкам. Редактор берёт их сам через `EditorFeature.messages`. */
+export const CHEMISTRY_MESSAGES: Record<string, Messages> = {
+  ru: {
+    chemistry_insert: 'Структурная формула',
+    chemistry_title_insert: 'Структурная формула',
+    chemistry_title_edit: 'Изменить структурную формулу',
+    chemistry_code_label: 'Код chemfig',
+    chemistry_code_hint:
+      'Цепочки с углами [:30], связи - = ~, ветви в скобках, кольца *6(…) и **6(…), индексы CH_3',
+    chemistry_templates: 'Шаблоны',
+    chemistry_preview: 'Предпросмотр',
+    chemistry_empty: 'Введите код структуры',
+    chemistry_invalid: 'Не удалось разобрать код: будет показан как текст',
+    chemistry_apply_insert: 'Вставить',
+    chemistry_apply_save: 'Сохранить',
+    chemistry_remove: 'Удалить структуру',
+    chemistry_aria_label: 'Структурная формула',
+    chemistry_template_benzene: 'Бензол',
+    chemistry_template_cyclohexane: 'Циклогексан',
+    chemistry_template_cyclopentane: 'Циклопентан',
+    chemistry_template_ethanol: 'Этанол',
+    chemistry_template_acetic_acid: 'Уксусная кислота',
+    chemistry_template_propene: 'Пропен',
+    chemistry_template_methane: 'Метан',
+    chemistry_template_phenol: 'Фенол',
+  },
+  en: {
+    chemistry_insert: 'Structural formula',
+    chemistry_title_insert: 'Structural formula',
+    chemistry_title_edit: 'Edit structural formula',
+    chemistry_code_label: 'chemfig code',
+    chemistry_code_hint:
+      'Chains with angles [:30], bonds - = ~, branches in parentheses, rings *6(…) and **6(…), subscripts CH_3',
+    chemistry_templates: 'Templates',
+    chemistry_preview: 'Preview',
+    chemistry_empty: 'Enter the structure code',
+    chemistry_invalid: 'The code could not be parsed and will be shown as text',
+    chemistry_apply_insert: 'Insert',
+    chemistry_apply_save: 'Save',
+    chemistry_remove: 'Remove structure',
+    chemistry_aria_label: 'Structural formula',
+    chemistry_template_benzene: 'Benzene',
+    chemistry_template_cyclohexane: 'Cyclohexane',
+    chemistry_template_cyclopentane: 'Cyclopentane',
+    chemistry_template_ethanol: 'Ethanol',
+    chemistry_template_acetic_acid: 'Acetic acid',
+    chemistry_template_propene: 'Propene',
+    chemistry_template_methane: 'Methane',
+    chemistry_template_phenol: 'Phenol',
+  },
+};

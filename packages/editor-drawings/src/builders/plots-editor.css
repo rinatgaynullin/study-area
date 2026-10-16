@@ -1,0 +1,23 @@
+/* Конструктор графиков: палитра шаблонов и составные поля панели свойств. */
+
+.rte-plots__palette .rte-plots__template {
+  height: 28px;
+  padding: 0 8px;
+}
+
+/* Флажок в строку с подписью, а не подпись над ним, как у остальных полей. */
+.rte-builder__prop.rte-plots__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rte-builder__prop.rte-plots__check input {
+  margin: 0;
+}
+
+.rte-plots__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}

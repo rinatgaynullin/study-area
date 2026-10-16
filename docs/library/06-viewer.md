@@ -27,25 +27,45 @@
 | `formulaScale` | `number` | `1` | Масштаб формул; при значении, отличном от 1, все формулы перерисовываются |
 | `legacy` | `boolean` | `false` | Разметка Froala + Wiris; compat-стили уже в `styles.css` и `viewer.css` |
 | `theme` | `EditorTheme` | `'light'` | `'light'`, `'dark'`, `'auto'`; или класс `rte-theme-dark` на предке |
-| `onRendered` | `() => void` | — | Все ожидавшие формулы отрисованы (после каждого `update`) |
+| `features` | `ContentFeature[]` | — | Возможности, чьи узлы есть в документе: их атрибуты проходят санитайзер, узлы оживляются после отрисовки; читаются один раз |
+| `onRendered` | `() => void` | — | Документ отрисован: формулы дорисованы, узлы возможностей оживлены (после каждого `update`) |
 
 ### Результат `RichContent`
 
 | Член | Что делает |
 | --- | --- |
 | `element` | Тот же элемент |
-| `update({ html?, formulaScale?, legacy?, theme? })` | Меняет переданные поля, перерисовывает документ, дорисовывает формулы; `Promise<void>` |
+| `update({ html?, formulaScale?, legacy?, theme? })` | Меняет переданные поля, перерисовывает документ, заново оживляет узлы возможностей и дорисовывает формулы; `Promise<void>` |
 | `renderPendingFormulas()` | Дорисовывает формулы без SVG (или все, если масштаб не 1); `Promise<void>` |
-| `destroy()` | Очищает элемент, снимает классы и слежение за темой |
+| `destroy()` | Снимает гидрацию возможностей, очищает элемент, снимает классы и слежение за темой |
 
 Первую отрисовку вьюер не ждёт: он готов сразу, формулы дорисуются
 асинхронно. Клик по формуле ничего не открывает.
 
+### Возможности во вьюере: `ContentFeature`
+
+Узлы возможностей — химические структуры, чертежи — хранятся в документе
+своей разметкой и без редактора должны и пройти санитайзер, и отрисоваться.
+За это отвечает документная часть возможности:
+
+| Поле | Что делает |
+| --- | --- |
+| `id` | Имя возможности |
+| `sanitize` | `{ tags?, attributes? }` — что пропускать поверх контракта документа ([11](11-security.md#правила-возможностей)) |
+| `hydrate(root, { formulaScale })` | Вызывается после каждой отрисовки с корнем вьюера: дорисовать SVG, повесить обработчики. Возвращённая функция снимает их перед следующей отрисовкой и в `destroy()`; можно вернуть `Promise` — `update()` и `onRendered` его дождутся |
+
+`EditorFeature` расширяет этот тип, поэтому редактору и вьюеру можно отдать
+один и тот же объект. Возможность с собственным рендером обычно экспортирует
+лёгкий вход (например, `@rich-editor/chemistry/viewer`) только с этой частью,
+чтобы вьюер не тянул TipTap и диалоги. Гидратор, ответивший после того, как
+документ сменился, снимается сразу: его узлов уже нет.
+
 ### Vue: `RichContent`
 
 Пропы `html`, `formulaScale`, `legacy`, `theme` с теми же умолчаниями; все
-реактивны. Событие `rendered`; exposed-метод `renderPendingFormulas()`. Под
-SSR рендерится пустая оболочка с классами, наполняется на клиенте.
+реактивны. Проп `features` читается один раз при монтировании. Событие
+`rendered`; exposed-метод `renderPendingFormulas()`. Под SSR рендерится пустая
+оболочка с классами, наполняется на клиенте.
 
 ### Standalone и Django
 
@@ -59,14 +79,24 @@ SSR рендерится пустая оболочка с классами, на
 
 ```ts
 // Отдельный вход: без TipTap, MathLive и стилей тулбара.
-import { createRichContent } from '@rich-editor/core/viewer';
+import { createRichContent, type ContentFeature } from '@rich-editor/core/viewer';
 import '@rich-editor/core/viewer.css';
+
+const chemistryContent: ContentFeature = {
+  id: 'chemistry',
+  sanitize: { attributes: ['data-chemistry', 'data-chemistry-code'] },
+  hydrate: (root) => {
+    root.querySelectorAll<HTMLElement>('[data-chemistry]').forEach(drawStructure);
+  },
+};
 
 const viewer = createRichContent({
   element: document.querySelector('#answer')!,
   html,
   theme: 'auto',
-  onRendered: () => console.log('формулы готовы'),
+  // Лёгкий вход возможности: правила санитайзера и гидратор, без редактора.
+  features: [chemistryContent],
+  onRendered: () => console.log('формулы и структуры готовы'),
 });
 
 await viewer.update({ html: nextHtml });
@@ -89,12 +119,12 @@ import '@rich-editor/vue/viewer.css';
 
 | Импорт | Что даёт |
 | --- | --- |
-| `@rich-editor/core/viewer`, `@rich-editor/core/viewer.css` | `createRichContent`, тема, `prepareIncomingHtml`, санитайзер, рендер формул; стили документа и токены темы без интерфейса редактора |
+| `@rich-editor/core/viewer`, `@rich-editor/core/viewer.css` | `createRichContent`, `ContentFeature`, тема, `prepareIncomingHtml`, санитайзер, рендер формул; стили документа и токены темы без интерфейса редактора |
 | `@rich-editor/vue/viewer`, `@rich-editor/vue/viewer.css` | `<RichContent />` плюс то же, что выше |
 | `@rich-editor/core`, `@rich-editor/vue` | Полный пакет: редактор и вьюер вместе, `styles.css` на оба |
 
 Сборка ядра проверяет, что граф импортов входа `./viewer` не содержит TipTap,
-ProseMirror и MathLive (`packages/editor-core/scripts/check-viewer.mjs`).
+ProseMirror и MathLive (`packages/editor-core/scripts/check-dist.mjs`).
 
 ## Ограничения
 

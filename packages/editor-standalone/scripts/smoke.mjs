@@ -43,11 +43,13 @@ const PAGE = `<!doctype html>
 
       window.editor = createRichEditor({
         element: document.querySelector('#editor'),
-        content: '<p>Собран без бандлера.</p>',
+        content: '<p>Собран без бандлера. <span data-chemistry-code="CH_3-OH"></span></p>',
       });
       createRichContent({
         element: document.querySelector('#viewer'),
-        html: '<p>Дробь: <span data-formula="true" data-mathml="${FORMULA_MATHML.replace(/"/g, '&quot;')}"></span></p>',
+        html: '<p>Дробь: <span data-formula="true" data-mathml="${FORMULA_MATHML.replace(/"/g, '&quot;')}"></span></p>'
+          + '<p>Бензол: <span data-chemistry-code="**6(------)"></span></p>'
+          + '<div data-geometry-data=\\'{"type":"2d","vertices":{"A":[0,0],"B":[4,0],"C":[0,3]},"edges":[["A","B"],["B","C"],["C","A"]]}\\'></div>',
         onRendered: () => {
           window.viewerRendered = true;
         },
@@ -134,6 +136,17 @@ try {
 
   const chunks = [...requested].filter((path) => path.startsWith('/dist/chunks/'));
   check('чанки грузятся из dist/chunks', chunks.length > 0, `${chunks.length} чанков`);
+
+  // Возможности PinQueen включены по умолчанию: кнопки в тулбаре, узлы в
+  // документе и во вьюере рисуются по своим данным.
+  const chemistryButton = await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').count();
+  const drawingButton = await page.locator('.rte-toolbar button[aria-label="Чертёж"]').count();
+  check('кнопки химии и чертежа в тулбаре', chemistryButton === 1 && drawingButton === 1);
+  const editorChemistry = await page.locator('#editor .rte-content .rte-chemistry svg').count();
+  check('структура в редакторе нарисована', editorChemistry === 1, `svg: ${editorChemistry}`);
+  const viewerChemistry = await page.locator('#viewer .rte-chemistry svg').count();
+  const viewerDrawing = await page.locator('#viewer .rte-drawing svg').count();
+  check('вьюер дорисовал структуру и чертёж', viewerChemistry === 1 && viewerDrawing === 1, `svg: ${viewerChemistry}/${viewerDrawing}`);
 } catch (error) {
   problems.push(`smoke: ${error instanceof Error ? error.message : String(error)}`);
 } finally {

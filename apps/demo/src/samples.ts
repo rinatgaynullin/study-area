@@ -7,6 +7,8 @@ export interface HtmlSample {
   label: string;
   hint: string;
   html: string;
+  /** Это не HTML, а текст распознавания PinQueen: перед применением идёт через `ocrTextToHtml`. */
+  ocr?: boolean;
 }
 
 /** Пустой GIF: в образцах важна разметка вокруг картинки, а не она сама. */
@@ -14,6 +16,56 @@ const PIXEL =
   'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
 export const HTML_SAMPLES: HtmlSample[] = [
+  {
+    id: 'ocr',
+    label: 'Текст распознавания PinQueen',
+    hint: 'Markdown + LaTeX с маркерами TIKZ/DATA и \\chemfig: так отвечает бэкенд после нейросети. Применяется через ocrTextToHtml.',
+    ocr: true,
+    html: `# Решение
+
+а) Рассмотрим $\\triangle DSA$: $(3\\sqrt{17})^2 = 3^2 + 12^2$
+$$\\begin{cases} x+y=1 \\\\ x-y=3 \\end{cases}$$
+| x | 1 | 2 |
+|---|---|---|
+| y | 3 | 4 |
+
+* первый пункт
+* второй **важный** пункт
+1. раз
+2. два
+
+\\chemfig{CH_3-CH_2-CH_3} $\\xrightarrow{t, \\text{кат.}}$ \\ce{2H2 + O2 -> 2H2O}
+<<<TIKZ_START>>>
+\\begin{tikzpicture}\\end{tikzpicture}
+<<<TIKZ_END>>>
+<<<DATA_START>>>
+{"type":"2d","vertices":{"A":[0,0],"B":[4,0],"C":[0,3]},"edges":[["A","B"],["B","C"],["C","A"]],"angles":[{"points":["B","A","C"],"style":"right"}]}
+<<<DATA_END>>>
+Ответ: ~~12~~ 15.`,
+  },
+  {
+    id: 'chemistry',
+    label: 'Структурные формулы PinQueen',
+    hint: 'Узлы с кодом chemfig в data-chemistry-code — и span, и div — становятся структурами; SVG рисуется по коду.',
+    html: `<h3>Структурные формулы</h3>
+<p>Бензол <span data-chemistry-code="[:30]**6(------)" data-chemistry-type="chemfig" class="chemistry-node"></span> и этанол <span data-chemistry-code="CH_3-CH_2-OH" data-chemistry-type="chemfig" class="chemistry-node"></span>.</p>
+<p>Уксусная кислота: <div data-chemistry-code="CH_3-C(=[1]O)-[7]OH" data-chemistry-type="chemfig"></div></p>
+<p>Фенол <span data-chemistry-code="**6(---(-OH)---)" data-chemistry-type="chemfig"></span>, метан <span data-chemistry-code="H-C(-[2]H)(-[6]H)-H" data-chemistry-type="chemfig"></span>.</p>
+<p>Код вне подмножества сохраняется как есть: <span data-chemistry-code="A-(B" data-chemistry-type="chemfig"></span></p>`,
+  },
+  {
+    id: 'drawings',
+    label: 'Чертежи PinQueen',
+    hint: 'JSON-сцены в data-geometry-data и data-physics-data становятся карточками с SVG; TikZ в data-tikz-code сохраняется.',
+    html: `<h3>Чертежи</h3>
+<p>Прямоугольный треугольник:</p>
+<div data-geometry-data='{"type":"2d","vertices":{"A":[0,0],"B":[4,0],"C":[0,3]},"edges":[["A","B"],["B","C"],["C","A"]],"angles":[{"points":["B","A","C"],"style":"right"}],"labels":{"A":"below left","B":"below right","C":"above"}}' data-tikz-code="\\begin{tikzpicture}\\end{tikzpicture}"></div>
+<p>Пирамида (формат PinQueen: span внутри абзаца):</p>
+<p><span data-geometry-data='{"type":"3d","vertices":{"S":[1.5,1.5,3.5],"A":[0,0,0],"B":[3,0,0],"C":[3,3,0],"D":[0,3,0]},"edges":[{"from":"A","to":"B"},{"from":"B","to":"C"},{"from":"C","to":"D"},{"from":"D","to":"A","style":"dashed"},{"from":"S","to":"A"},{"from":"S","to":"B"},{"from":"S","to":"C"},{"from":"S","to":"D","style":"dashed"}],"angleY":15,"angleZ":-30}'></span></p>
+<p>Брусок с силой:</p>
+<div data-physics-data='{"elements":[{"id":"floor","type":"surface","points":[[-5,0],[5,0]],"hatching":"bottom"},{"id":"m","type":"block","subtype":"rectangle","center":[0,0.5],"width":1.6,"height":1},{"id":"F","type":"vector","vectorType":"force","points":[[0.8,0.5],[3,0.5]],"label":"\\vec{F}"}]}'></div>
+<p>Битый JSON сохраняется как есть: <span data-geometry-data="{vertices: ">не разобрано</span></p>`,
+  },
   {
     id: 'mathml',
     label: 'MathML из другого редактора',
