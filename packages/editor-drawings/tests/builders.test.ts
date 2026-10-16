@@ -301,7 +301,7 @@ describe('диалог с конструктором', () => {
     const dialog = openDialog();
     const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[role="tab"]')].map((tab) => tab.textContent);
 
-    expect(tabs).toEqual(['Планиметрия', 'JSON']);
+    expect(tabs).toEqual(['Планиметрия', 'Стереометрия', 'Графики', 'JSON']);
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Планиметрия');
     expect(dialog.querySelector('.rte-builder--planimetry')).not.toBeNull();
 
@@ -339,15 +339,15 @@ describe('диалог с конструктором', () => {
     expect(sceneLines(dialog).length).toBe(1);
   });
 
-  it('физическая схема без конструктора открывается на JSON; 3D-сцена тоже', () => {
+  it('физическая схема открывается на своём конструкторе; 3D-сцена — на стереометрии', () => {
     const editor = mountEditor();
 
     toolbarButton('Физическая схема').click();
 
     let dialog = openDialog();
 
-    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('JSON');
-    expect(dialog.querySelector<HTMLElement>('.rte-drawing-dialog__tabs')?.hidden).toBe(true);
+    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Механика');
+    expect(dialog.querySelector('.rte-builder__palette')).not.toBeNull();
     dialog.querySelector<HTMLButtonElement>('.rte-button')?.click();
 
     editor.core.setHTML('<div data-geometry-data=\'{"type":"3d","vertices":{"S":[0,0,2],"A":[0,0,0]},"edges":[["S","A"]]}\'></div>');
@@ -355,7 +355,7 @@ describe('диалог с конструктором', () => {
       .querySelector<HTMLElement>('.rte-content .rte-drawing')
       ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     dialog = openDialog();
-    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('JSON');
+    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Стереометрия');
   });
 
   it('сканы ученика показываются рядом с полотном', () => {

@@ -1,0 +1,34 @@
+/* Конструктор стереометрии: ряд координат, переключатели и заметки в панели свойств. */
+
+.rte-stereo__coords {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.rte-stereo__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  cursor: pointer;
+}
+
+.rte-stereo__check input {
+  margin: 0;
+}
+
+.rte-stereo__note {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-stereo__note--error {
+  color: var(--rte-color-danger, #dc2626);
+}
+
+.rte-stereo__angle-input {
+  text-transform: uppercase;
+  font-family: var(--rte-mono-font, ui-monospace, monospace);
+}

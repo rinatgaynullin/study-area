@@ -1,5 +1,8 @@
 import type { Messages } from '@rich-editor/core';
 import { BUILDER_MESSAGES } from './builders/messages';
+import { PHYSICS_BUILDER_MESSAGES } from './builders/physics-messages';
+import { PLOTS_MESSAGES } from './builders/plots-messages';
+import { STEREOMETRY_MESSAGES } from './builders/stereometry-messages';
 
 /** Подписи диалога и карточек; подписи конструкторов — в `builders/messages.ts`. */
 const BASE_MESSAGES: Record<string, Messages> = {
@@ -83,5 +86,14 @@ const BASE_MESSAGES: Record<string, Messages> = {
 
 /** Подписи возможности по языкам. Редактор берёт их сам через `EditorFeature.messages`. */
 export const DRAWINGS_MESSAGES: Record<string, Messages> = Object.fromEntries(
-  Object.keys(BASE_MESSAGES).map((locale) => [locale, { ...BASE_MESSAGES[locale], ...BUILDER_MESSAGES[locale] }]),
+  Object.keys(BASE_MESSAGES).map((locale) => [
+    locale,
+    {
+      ...BASE_MESSAGES[locale],
+      ...BUILDER_MESSAGES[locale],
+      ...STEREOMETRY_MESSAGES[locale],
+      ...PLOTS_MESSAGES[locale],
+      ...PHYSICS_BUILDER_MESSAGES[locale],
+    },
+  ]),
 );

@@ -7,6 +7,28 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/drawings`: constructor tabs for solid geometry, plots and
+  physics. Solid geometry (`stereometryEditorFactory`): templates for
+  pyramids, a prism, a parallelepiped and a cylinder, rotation with the right
+  mouse button, points on edges (splitting them) or on the ground plane by
+  inverse projection, segments, sections, angles by clicks or by typing
+  «SOH», vertex and edge properties. Plots
+  (`plotsEditorFactory`): templates for a parabola, hyperbola, line, circle and
+  `√x`, points, a pencil that recognises a stroke as a line, circle or
+  parabola, polygon shading, labels, per-plot properties and axis labels,
+  copy and paste. Physics (`physicsEditorFactory`): palettes for mechanics,
+  thermodynamics, electricity and optics with all 29 element types, dragging
+  of elements and their points with size handles, snapping to other elements'
+  points, segments and the grid, duplicate with `Ctrl+click` / `Ctrl+C`,
+  typed property panels including axis ticks; switching a section keeps the
+  scene.
+- `@rich-editor/standalone` and `django-rich-editor` ship the PinQueen
+  capabilities: `editor.js` exports `@rich-editor/chemistry`,
+  `@rich-editor/drawings` and `@rich-editor/ocr`, `createRichEditor` enables
+  structural formulas and drawings by default (`defaultFeatures()`,
+  `features: []` opts out), `viewer.js` hydrates chemistry and drawing nodes
+  (`defaultContentFeatures()`); the smoke test covers both; the Django widget
+  and viewer get them through the synced static build.
 - `@rich-editor/drawings`: the drawing dialog gains constructor tabs. The
   plane-geometry constructor (`planimetryEditorFactory`) draws points,
   segments, circles, angles, tick marks and labels with snapping to segments,

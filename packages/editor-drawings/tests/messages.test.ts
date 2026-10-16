@@ -22,6 +22,9 @@ const DYNAMIC_PREFIXES = [
   'drawings_tool_',
   'drawings_prop_',
   'drawings_template_',
+  'drawings_plots_',
+  'drawings_physics_',
+  'drawings_stereo_',
 ];
 
 const sourceFiles = (dir: string): string[] =>

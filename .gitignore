@@ -29,3 +29,4 @@ __pycache__/
 
 # Локальная конфигурация предпросмотра Claude Code
 .claude/launch.json
+playwright.local.config.ts

@@ -420,7 +420,11 @@ interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScen
 interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
 interface SceneEditorContext { t: Translate; scans?: string[] }
 type RawScene = Record<string, unknown>;
-const planimetryEditorFactory: SceneEditorFactory;
+const planimetryEditorFactory: SceneEditorFactory; const stereometryEditorFactory: SceneEditorFactory;
+const plotsEditorFactory: SceneEditorFactory; const physicsEditorFactory: SceneEditorFactory;
+const STEREOMETRY_MESSAGES, PLOTS_MESSAGES, PHYSICS_BUILDER_MESSAGES: Record<string, Messages>;
+const projectVertex: (point: Point, angleY: number, angleZ: number, viewport: Viewport) => SvgPoint;
+const unprojectToGround: (plane: Vec2, angleY: number, angleZ: number) => Vec2;   // экран → плоскость z = 0
 class SketchCanvas { constructor(options: SketchCanvasOptions); readonly element: HTMLElement; readonly viewport: Viewport; setScene(svg: string): void;
   setOverlay(markup: string): void; toSvg(point: Vec2): SvgPoint; toWorld(point: SvgPoint): Vec2; zoomAt(point: SvgPoint, factor: number): void;
   zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void; focus(): void; destroy(): void; readonly hitRadius: number }
@@ -505,11 +509,14 @@ const ceToLatex: (reaction: string) => string;
 
 ## `@rich-editor/standalone`
 
-`./editor` (`dist/editor.js`): всё из `@rich-editor/core`, плюс
-`MATHLIVE_FONTS_DIRECTORY: string` и `createRichEditor` с умолчанием
-`mathliveFontsDirectory`. `./viewer` (`dist/viewer.js`): `createRichContent`,
-`applyTheme`, `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`
-и типы вьюера. Плюс `./styles.css`, `./legacy.css`.
+`./editor` (`dist/editor.js`): всё из `@rich-editor/core`, `@rich-editor/chemistry`,
+`@rich-editor/drawings` и `@rich-editor/ocr`, плюс `MATHLIVE_FONTS_DIRECTORY: string`,
+`defaultFeatures(): EditorFeature[]` и `createRichEditor` с умолчаниями
+`mathliveFontsDirectory` и `features: defaultFeatures()`. `./viewer`
+(`dist/viewer.js`): `createRichContent` с умолчанием `features: defaultContentFeatures()`,
+`applyTheme`, `DARK_THEME_CLASS`, `prepareIncomingHtml`, `upgradeLegacyHtml`, всё из
+`@rich-editor/chemistry/viewer` и `@rich-editor/drawings/viewer`, типы вьюера. Плюс
+`./styles.css`, `./legacy.css`.
 
 ## `django-rich-editor`
 
