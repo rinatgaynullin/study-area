@@ -20,6 +20,9 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@rich-editor/core": "*"
+    "@rich-editor/chemistry": "*",
+    "@rich-editor/core": "*",
+    "@rich-editor/drawings": "*",
+    "@rich-editor/ocr": "*"
   }
 }
