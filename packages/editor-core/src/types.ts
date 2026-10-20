@@ -69,6 +69,7 @@ export type RichEditorErrorCode =
   | 'recorder-permission-denied'
   | 'recorder-failed'
   | 'file-read-failed'
+  | 'recognize-failed'
   | 'invalid-mathml';
 
 export class RichEditorError extends Error {

@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core';
 import type { ContentFeature } from '../content-feature';
-import type { EditorLimits, FormulaPayload, Messages, Translate } from '../types';
+import type { EditorLimits, FormulaPayload, Messages, RichEditorError, Translate } from '../types';
 import type { UploadPipeline } from '../media/upload';
 
 /**
@@ -24,6 +24,19 @@ export interface EditorUiContext {
   uploads: UploadPipeline;
   /** Открывает визуальный редактор формул. */
   editFormula(payload: FormulaPayload): void;
+  /**
+   * Вставляет HTML в позицию курсора или вместо документа. Разметка проходит
+   * тот же санитайзер, что `setHTML`: возможности не обходят контракт
+   * документа.
+   */
+  insertHtml(html: string, options?: { replace?: boolean }): boolean;
+  /** Ошибка возможности: в строку статуса на время и хосту через `onError`. */
+  reportError(error: RichEditorError): void;
+  /**
+   * Занятость возможности для строки статуса: текст виден, пока не передан
+   * `null`. Ключ разделяет возможности, чтобы одна не гасила другую.
+   */
+  setBusy(key: string, text: string | null): void;
 }
 
 /**

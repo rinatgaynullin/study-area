@@ -16,8 +16,8 @@ import { chemistryContent } from '@rich-editor/chemistry/viewer';
 // Чертежи: геометрия и физические схемы из JSON-сцен PinQueen.
 import { createDrawingsFeature } from '@rich-editor/drawings';
 import { drawingsContent } from '@rich-editor/drawings/viewer';
-// Текст распознавания PinQueen: в документ и обратно.
-import { htmlToOcrText, ocrTextToHtml } from '@rich-editor/ocr';
+// Текст распознавания PinQueen: в документ и обратно, кнопка «Распознать фото».
+import { createOcrFeature, htmlToOcrText, ocrTextToHtml, type RecognizeAdapter } from '@rich-editor/ocr';
 import enMessages from './locales/en.json';
 import { HTML_SAMPLES, type HtmlSample } from './samples';
 
@@ -51,8 +51,23 @@ const messages = computed<Record<string, Messages>>(() => ({
   en: enMessages as Messages,
 }));
 
+/**
+ * Заглушка бэкенда распознавания: ждёт, как настоящий запрос, и отдаёт текст
+ * образца «Текст распознавания PinQueen» — то, что вернула бы нейросеть.
+ * Настоящий адаптер отправляет снимки своему API и возвращает его ответ.
+ */
+const recognizePhotos: RecognizeAdapter = async (files, { signal }) => {
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  signal.throwIfAborted();
+  log.value.unshift(`Распознано снимков: ${files.length}`);
+
+  return { text: HTML_SAMPLES.find((sample) => sample.id === 'ocr')?.html ?? '' };
+};
+
+const ocrFeature = createOcrFeature({ recognize: recognizePhotos, subject: () => ocrSubject.value });
+
 /** Возможности поверх встроенных; читаются один раз при создании редактора. */
-const features = [createChemistryFeature(), createDrawingsFeature()];
+const features = [createChemistryFeature(), createDrawingsFeature({ scans: ocrFeature.scans }), ocrFeature];
 const contentFeatures = [chemistryContent, drawingsContent];
 
 const limits = {

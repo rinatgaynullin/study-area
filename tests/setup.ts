@@ -39,6 +39,20 @@ if (typeof document.elementFromPoint !== 'function') {
   });
 }
 
+// ProseMirror scrolls the selection into view after focus() and measures text
+// ranges; jsdom lays nothing out and has no Range geometry at all.
+if (typeof Range.prototype.getClientRects !== 'function') {
+  Object.defineProperty(Range.prototype, 'getClientRects', {
+    writable: true,
+    value: () => document.createElement('div').getClientRects(),
+  });
+
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    writable: true,
+    value: () => document.createElement('div').getBoundingClientRect(),
+  });
+}
+
 // jsdom implements neither playback nor metadata loading.
 Object.defineProperty(HTMLMediaElement.prototype, 'play', {
   writable: true,

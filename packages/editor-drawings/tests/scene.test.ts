@@ -24,6 +24,21 @@ describe('терпимый разбор JSON', () => {
     expect(parseSceneJson('{“type”: “2d”}')).toEqual({ type: '2d' });
     expect(parseSceneJson('{"k": NaN, "v": undefined}')).toEqual({ k: null, v: null });
   });
+  it('команды LaTeX, похожие на escape JSON, не превращаются в управляющие символы', () => {
+    // Модель пишет LaTeX в JSON без второго слеша: `\frac` иначе стал бы переводом страницы.
+    expect(
+      parseSceneJson('{"a":"\\frac{1}{2}","b":"\\theta","c":"\\nu_0","d":"\\rho","e":"\\beta","f":"\\underline{x}"}'),
+    ).toEqual({ a: '\\frac{1}{2}', b: '\\theta', c: '\\nu_0', d: '\\rho', e: '\\beta', f: '\\underline{x}' });
+    // Уже экранированное и обычные escape-последовательности не меняются.
+    expect(parseSceneJson('{"a":"\\\\frac{1}{2}","b":"строка\\nдальше","c":"\\u00e9","d":"\\"кавычки\\""}')).toEqual({
+      a: '\\frac{1}{2}',
+      b: 'строка\nдальше',
+      c: 'é',
+      d: '"кавычки"',
+    });
+    // Пробел `\,` и скобки `\{` LaTeX — тоже часть текста.
+    expect(parseSceneJson('{"a":"5\\,м","b":"\\{x\\}"}')).toEqual({ a: '5\\,м', b: '\\{x\\}' });
+  });
 
   it('не разбирает мусор и не исполняет код', () => {
     expect(parseSceneJson('')).toBeNull();

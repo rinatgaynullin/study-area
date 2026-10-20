@@ -117,4 +117,27 @@ test.describe('текст распознавания', () => {
     await expect(text).toContainText('1. раз');
     await expect(text).toContainText('~~12~~');
   });
+
+  test('кнопка «Распознать фото»: снимок уходит адаптеру, результат встаёт в документ, скан виден в конструкторе', async ({ page }) => {
+    await openDemo(page);
+
+    await page.locator(`${EDITOR} p`).first().click();
+    await expect(page.locator('.rte-toolbar button[aria-label="Распознать фото"]')).toBeVisible();
+
+    // Системный диалог выбора файла не открыть: снимок кладётся прямо в скрытое поле.
+    await page.locator('.rte-ocr-input').setInputFiles({
+      name: 'scan.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('89504e470d0a1a0a', 'hex'),
+    });
+    await expect(page.locator('.rte-status')).toHaveText('Распознаём фото…');
+
+    await expect(page.locator(`${EDITOR} h1`)).toHaveText('Решение');
+    await expect(page.locator(`${EDITOR} .rte-chemistry svg`)).toHaveCount(1);
+    await expect(page.locator(`${EDITOR} .rte-drawing svg`)).toHaveCount(1);
+    await expect(page.locator('.rte-status')).toHaveText('');
+
+    await page.locator('.rte-toolbar button[aria-label="Чертёж"]').click();
+    await expect(page.locator(`${OPEN_MODAL} .rte-drawing-dialog__scan`)).toHaveCount(1);
+  });
 });

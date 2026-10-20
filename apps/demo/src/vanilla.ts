@@ -13,6 +13,8 @@ import { createChemistryFeature } from '@rich-editor/chemistry';
 import { chemistryContent } from '@rich-editor/chemistry/viewer';
 import { createDrawingsFeature } from '@rich-editor/drawings';
 import { drawingsContent } from '@rich-editor/drawings/viewer';
+import { createOcrFeature } from '@rich-editor/ocr';
+import { HTML_SAMPLES } from './samples';
 import './styles.css';
 
 const host = document.querySelector<HTMLElement>('#editor');
@@ -23,11 +25,16 @@ if (!host || !viewerHost) throw new Error('Не найдены контейне�
 // хост, показывающий сохранённый ответ рядом с полем ввода.
 const viewer = createRichContent({ element: viewerHost, features: [chemistryContent, drawingsContent] });
 
+// Заглушка бэкенда распознавания: отдаёт текст образца вместо ответа нейросети.
+const ocrFeature = createOcrFeature({
+  recognize: async () => ({ text: HTML_SAMPLES.find((sample) => sample.id === 'ocr')?.html ?? '' }),
+});
+
 const editor = createRichEditor({
   element: host,
   content: '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>',
   minHeight: '280px',
-  features: [createChemistryFeature(), createDrawingsFeature()],
+  features: [createChemistryFeature(), createDrawingsFeature({ scans: ocrFeature.scans }), ocrFeature],
   onChange: (html) => void viewer.update({ html }),
 });
 void viewer.update({ html: editor.core.getHTML() });

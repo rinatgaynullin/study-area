@@ -26,6 +26,7 @@ class RichEditorCore {                                               // 02-core.
   updateFormulaAt(pos: number, mathml: string, type?: FormulaType): boolean;
   deleteFormulaAt(pos: number): boolean;
   insertImageFile(file: File, at?: number): Promise<boolean>;
+  insertHTML(html: string): boolean;                                   // в позицию курсора, через санитайзер
   insertImageUrl(result: UploadResult, at?: number): boolean;
   insertRecording(blob: Blob, meta: { duration: number; peaks?: string; name?: string }): Promise<boolean>;
   insertAudio(attributes: AudioAttributes): boolean;
@@ -128,6 +129,9 @@ const DEFAULT_TEXT_SWATCHES: string[]; const DEFAULT_HIGHLIGHT_SWATCHES: string[
 interface EditorUiContext {
   editor: Editor; t: Translate; limits: EditorLimits; uploads: UploadPipeline;
   editFormula(payload: FormulaPayload): void;
+  insertHtml(html: string, options?: { replace?: boolean }): boolean;   // через санитайзер
+  reportError(error: RichEditorError): void;                           // строка статуса + onError
+  setBusy(key: string, text: string | null): void;                     // строка статуса, пока null не снимет
 }
 interface UiComponent { readonly element: HTMLElement; destroy(): void }
 interface DialogComponent<TPayload = void> extends UiComponent {
@@ -299,7 +303,7 @@ interface FormulaPayload { mathml: string; type: FormulaType; pos: number | null
 interface AudioAttributes { src: string; name?: string | null; mime?: string | null; duration?: number | null; peaks?: string | null }
 interface AttachmentAttributes { href: string; name: string; size?: number | null; mime?: string | null }
 type RichEditorErrorCode = 'file-too-large' | 'unsupported-type' | 'upload-failed' | 'recorder-unsupported'
-  | 'recorder-permission-denied' | 'recorder-failed' | 'file-read-failed' | 'invalid-mathml';
+  | 'recorder-permission-denied' | 'recorder-failed' | 'file-read-failed' | 'recognize-failed' | 'invalid-mathml';
 class RichEditorError extends Error { readonly code: RichEditorErrorCode; constructor(code: RichEditorErrorCode, message: string, cause?: unknown) }
 
 const DEFAULT_LOCALE = 'ru';
@@ -502,6 +506,17 @@ interface OcrMetadata {
 const htmlToOcrText: (html: string, options?: HtmlToOcrOptions) => Promise<string>;
 interface HtmlToOcrOptions { physicsSvg?: boolean }                     // блок SVG у физики, по умолчанию да
 const ceToLatex: (reaction: string) => string;
+
+const createOcrFeature: (options: OcrFeatureOptions) => OcrFeature;    // кнопка «Распознать фото»
+interface OcrFeatureOptions {
+  recognize: RecognizeAdapter; subject?: OcrSubject | (() => OcrSubject | undefined);
+  maxFiles?: number; replace?: boolean; wrapBareLatex?: boolean; toolbarItem?: boolean;
+}
+type RecognizeAdapter = (files: File[], context: RecognizeContext) => Promise<RecognizeResult>;
+interface RecognizeContext { signal: AbortSignal; t: Translate; subject?: OcrSubject }
+interface RecognizeResult { text: string; subject?: OcrSubject; metadata?: OcrMetadata; scans?: string[] }
+interface OcrFeature extends EditorFeature { scans(): string[]; recognize(files: File[]): Promise<boolean> }
+const OCR_FEATURE_ID: 'ocr'; const OCR_TOOLBAR_ITEM_ID: 'ocr-recognize'; const OCR_MESSAGES: Record<string, Messages>;
 // Шаги конвейера: markdownToHtml, inlineMarkdownToHtml, normalizeLatexText, closeOpenEnvironments,
 // stripDollarsInsideEnvironments, fixMarkdownTableLines, pipesToVmatrix, wrapBareLatex, replaceCeBlocks,
 // TIKZ_BLOCK, DATA_BLOCK, SVG_BLOCK, extractBlocks, wrapBlock

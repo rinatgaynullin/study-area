@@ -179,6 +179,71 @@ describe('HTML документа → текст распознавания', ()
   });
 });
 
+/** Значение атрибута сцены, разобранное строгим `JSON.parse` — как на бэке. */
+const strictSceneOf = (html: string, attribute = 'data-physics-data'): unknown => {
+  const root = document.createElement('div');
+
+  root.innerHTML = html;
+
+  const value = root.querySelector(`[${attribute}]`)?.getAttribute(attribute);
+
+  if (value === undefined || value === null) throw new Error(`Нет узла с ${attribute}`);
+
+  return JSON.parse(value) as unknown;
+};
+
+describe('сцены и пустые строки в тексте распознавания', () => {
+  it('JSON сцены ложится в узел строгим и без потерь LaTeX в подписях', async () => {
+    const scene = {
+      type: 'physics',
+      elements: [
+        { id: 'F', type: 'vector', points: [[0, 0], [2, 0]], label: '\\vec{F}' },
+        { id: 'a', type: 'angle', center: [0, 0], points: [[1, 0], [0, 1]], label: '\\frac{\\pi}{2}' },
+        { id: 't', type: 'text_label', coords: [1, 1], text: '\\theta = \\nu t' },
+      ],
+    };
+    const html = await ocrTextToHtml(`Схема:\n<<<DATA_START>>>\n${JSON.stringify(scene)}\n<<<DATA_END>>>`, { subject: 'physics' });
+
+    expect(strictSceneOf(html)).toEqual(scene);
+  });
+
+  it('сцена с LaTeX без экранирования и хвостовыми запятыми тоже становится строгим JSON', async () => {
+    const html = await ocrTextToHtml(
+      '<<<DATA_START>>>\n{"type":"physics","elements":[{"id":"F","type":"vector","points":[[0,0],[2,0]],"label":"\\frac{F}{2}",},]}\n<<<DATA_END>>>',
+    );
+
+    expect(strictSceneOf(html)).toEqual({
+      type: 'physics',
+      elements: [{ id: 'F', type: 'vector', points: [[0, 0], [2, 0]], label: '\\frac{F}{2}' }],
+    });
+  });
+
+  it('TikZ из текста сохраняется без правок LaTeX', async () => {
+    const tikz = '\\begin{tikzpicture}\\node[align=center] {A\\\\B};\\end{tikzpicture}';
+    const html = await ocrTextToHtml(`<<<TIKZ_START>>>\n${tikz}\n<<<TIKZ_END>>>\n<<<DATA_START>>>\n${TRIANGLE}\n<<<DATA_END>>>`);
+    const root = document.createElement('div');
+
+    root.innerHTML = html;
+
+    expect(root.querySelector('[data-geometry-data]')?.getAttribute('data-tikz-code')).toBe(tikz);
+    expect(strictSceneOf(html, 'data-geometry-data')).toEqual(JSON.parse(TRIANGLE));
+  });
+
+  it('пустые строки разделяют блоки, но пустыми абзацами не становятся', async () => {
+    const html = await ocrTextToHtml('Первый\n\n\nВторой\n\n$$x^2$$\n\nТретий');
+
+    expect(html).toContain('<p>Первый</p><p>Второй</p>');
+    expect(html).not.toContain('<p></p>');
+  });
+
+  it('геометрия без TikZ пишется одним блоком DATA', async () => {
+    const text = await htmlToOcrText(`<div data-geometry="true" data-geometry-data='${TRIANGLE}'></div>`);
+
+    expect(text).not.toContain('TIKZ_START');
+    expect(text).toContain(`<<<DATA_START>>>\n${TRIANGLE}\n<<<DATA_END>>>`);
+  });
+});
+
 describe('круговое преобразование через редактор', () => {
   let ui: RichEditorUi | undefined;
   let host: HTMLElement | undefined;
@@ -208,6 +273,24 @@ describe('круговое преобразование через редакт�
     expect(text).toContain('\\chemfig{CH_3-CH_2-CH_3}');
     expect(text).toContain('1. раз\n2. два');
     expect(text).toContain('<<<TIKZ_START>>>');
+  });
+  it('документ не обрастает пустыми абзацами при повторных проходах', async () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    ui = createRichEditor({ element: host, features: [createChemistryFeature(), createDrawingsFeature()] });
+
+    const pass = async (html: string): Promise<string> => {
+      ui?.core.setHTML(await ocrTextToHtml(await htmlToOcrText(html)));
+
+      return (ui?.core.getHTML() ?? '').replace(/<svg[\s\S]*?<\/svg>/g, '');
+    };
+
+    ui.core.setHTML(await ocrTextToHtml(SAMPLE));
+
+    const twice = await pass(await pass(ui.core.getHTML()));
+
+    expect(await pass(twice)).toBe(twice);
+    expect(twice).not.toContain('<p></p>');
   });
 
   it('ядро без возможностей принимает формулы из текста', async () => {

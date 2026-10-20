@@ -1,6 +1,6 @@
 import { latexToMathML, type FormulaType } from '@rich-editor/core';
 import { unwrapChemfig } from '@rich-editor/chemistry/viewer';
-import { detectDrawingKind, parseSceneJson, type DrawingKind } from '@rich-editor/drawings/viewer';
+import { detectDrawingKind, parseSceneJson, stringifyScene, type DrawingKind } from '@rich-editor/drawings/viewer';
 import {
   ceToLatex,
   findBraced,
@@ -152,14 +152,15 @@ class OcrDocumentBuilder {
   }
 
   async build(): Promise<string> {
-    this.text = stripDollarsInsideEnvironments(fixMarkdownTableLines(this.text));
+    // Узлы и блоки с чужим синтаксисом — HTML, JSON-сцены, TikZ — снимаются до
+    // правок LaTeX и Markdown: после них `\\frac` в строке JSON стал бы `\frac`,
+    // то есть переводом страницы и «rac», а `\\` в TikZ пропал бы в конце строки.
+    this.text = this.text.replace(OCR_BOUNDARY, '').replace(SVG_BLOCK, '');
     this.protectHtmlNodes();
-    this.text = normalizeLatexText(this.text)
-      .replace(OCR_BOUNDARY, '')
-      .replace(SVG_BLOCK, '');
-    this.text = pipesToVmatrix(this.text);
     this.injectMetadataDrawings();
     this.extractDrawings();
+    this.text = stripDollarsInsideEnvironments(fixMarkdownTableLines(this.text));
+    this.text = pipesToVmatrix(normalizeLatexText(this.text));
 
     // Структуры — до оборачивания голого LaTeX: иначе `\chemfig{…}` ушёл бы в формулу.
     this.extractChemistry();
@@ -359,8 +360,16 @@ class OcrDocumentBuilder {
     return placeholder('CHEM', this.chemistry.length - 1);
   }
 
+  /**
+   * Сцена ложится в узел строгим JSON: её читает и строгий парсер на бэке.
+   * Терпимый разбор чинит запятые, кавычки и слеши; неизвестные поля
+   * сохраняются. Текст, который не разобрать, остаётся как есть — узел
+   * покажет ошибку, но данные не пропадут.
+   */
   private pushDrawing(entry: DrawingEntry): string {
-    this.drawings.push(entry);
+    const raw = parseSceneJson(entry.data);
+
+    this.drawings.push(raw === null ? entry : { ...entry, data: stringifyScene(raw) });
 
     return placeholder('DRAW', this.drawings.length - 1);
   }
