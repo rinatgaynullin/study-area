@@ -170,11 +170,10 @@ class MarkdownBlocks {
   }
 
   private pushBlock(line: string): void {
-    if (line === '') {
-      this.out.push('<p></p>');
-
-      return;
-    }
+    // Пустая строка разделяет блоки и сама абзацем не становится: иначе каждый
+    // проход «документ → текст → документ» добавлял бы пустые абзацы вокруг
+    // формул, таблиц и чертежей, которые писатель отделяет пустыми строками.
+    if (line === '') return;
 
     const heading = HEADING.exec(line);
 

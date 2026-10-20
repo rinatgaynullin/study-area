@@ -62,6 +62,7 @@
 | `updateFormulaAt(pos, mathml, type?)` | `boolean` | Меняет формулу по позиции |
 | `deleteFormulaAt(pos)` | `boolean` | Удаляет формулу |
 | `insertImageFile(file, at?)` | `Promise<boolean>` | Загрузка через адаптер `image` и вставка `<img>` |
+| `insertHTML(html)` | `boolean` | Вставка HTML в позицию курсора тем же путём подготовки, что `setHTML` |
 | `insertImageUrl(result, at?)` | `boolean` | Вставка уже загруженной картинки (`UploadResult`) |
 | `insertRecording(blob, meta)` | `Promise<boolean>` | Запись → файл `voice-<timestamp>.<ext>` через `uploadAudio` или `blob:` URL |
 | `insertAudio(attributes)` | `boolean` | Узел голосового сообщения (`AudioAttributes`) |

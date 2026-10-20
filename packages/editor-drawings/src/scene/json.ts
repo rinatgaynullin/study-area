@@ -22,6 +22,64 @@ const extractObject = (text: string): string => {
   return end > start ? text.slice(start, end + 1) : text.slice(start);
 };
 
+/**
+ * Команды LaTeX, которые начинаются с буквы escape-последовательности JSON:
+ * без второго слеша `\frac` читается как перевод страницы и «rac»,
+ * `\theta` — как табуляция и «heta», и разбор проходит без ошибки, но с
+ * испорченной подписью. Переводов строк и табуляций в строках сцен не бывает,
+ * поэтому слово из этого списка после слеша считается командой LaTeX.
+ */
+const LATEX_COMMANDS_LIKE_ESCAPES: ReadonlySet<string> = new Set([
+  'backslash', 'bar', 'beta', 'bf', 'big', 'bigl', 'bigr', 'binom', 'bmod', 'bot', 'boxed', 'bullet',
+  'forall', 'frac', 'frown',
+  'nabla', 'ne', 'nearrow', 'neg', 'neq', 'newline', 'ngeq', 'ni', 'nleq', 'not', 'notin', 'nu',
+  'rangle', 'rbrace', 'rceil', 'rfloor', 'rho', 'right', 'rightarrow', 'rightleftharpoons', 'rm',
+  'tan', 'tau', 'text', 'textbf', 'textit', 'textrm', 'tfrac', 'therefore', 'theta', 'tilde', 'times', 'to', 'top',
+  'triangle',
+  'underline', 'uparrow', 'upsilon',
+]);
+
+/** Символы, которые после слеша образуют допустимый escape JSON. */
+const JSON_ESCAPES = '"\\/bfnrtu';
+
+/**
+ * Удваивает слеш перед командой LaTeX внутри строк JSON до первой попытки
+ * разбора: иначе `\frac` молча станет управляющим символом. Уже экранированный
+ * `\\frac`, `\"`, `\n` перед обычным текстом и `\u00e9` остаются как есть.
+ */
+const escapeLatexCommands = (text: string): string => {
+  let result = '';
+  let inString = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (char === '"') inString = !inString;
+
+    if (!inString || char !== '\\') {
+      result += char;
+
+      continue;
+    }
+
+    const next = text[index + 1] ?? '';
+    const word = /^[a-zA-Z]+/.exec(text.slice(index + 1))?.[0] ?? '';
+
+    if (!JSON_ESCAPES.includes(next) || LATEX_COMMANDS_LIKE_ESCAPES.has(word)) {
+      // Недопустимый escape или команда LaTeX: слеш — часть текста.
+      result += '\\\\';
+
+      continue;
+    }
+
+    // Допустимый escape переписывается целиком, чтобы `\"` не закрыл строку.
+    result += char + next;
+    index += 1;
+  }
+
+  return result;
+};
+
 /** Правки по возрастанию грубости: каждая следующая применяется поверх предыдущих. */
 const REPAIRS: Array<(text: string) => string> = [
   // LaTeX в строках: `\vec{F}` — недопустимый escape для JSON, удваиваем слеш.
@@ -52,7 +110,7 @@ const tryParse = (text: string): unknown | undefined => {
 export const parseSceneJson = (text: string): unknown | null => {
   if (!text) return null;
 
-  let current = extractObject(text.trim().replace(FENCE, '').trim());
+  let current = escapeLatexCommands(extractObject(text.trim().replace(FENCE, '').trim()));
   const direct = tryParse(current);
 
   if (direct !== undefined) return direct;

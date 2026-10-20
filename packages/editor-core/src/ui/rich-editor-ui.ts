@@ -184,6 +184,8 @@ const withFeatureGroups = (
 const createUiContext = (
   core: RichEditorCore,
   editFormula: (payload: FormulaPayload) => void,
+  reportError: (error: RichEditorError) => void,
+  setBusy: (key: string, text: string | null) => void,
 ): EditorUiContext => ({
   editor: core.editor,
   t: (key, params) => core.t(key, params),
@@ -192,6 +194,15 @@ const createUiContext = (
   },
   uploads: core.uploads,
   editFormula,
+  insertHtml: (html, options) => {
+    if (!options?.replace) return core.insertHTML(html);
+
+    core.setHTML(html);
+
+    return true;
+  },
+  reportError,
+  setBusy,
 });
 
 /**
@@ -233,6 +244,9 @@ class RichEditorUiController implements RichEditorUi {
   private errorText = '';
 
   private errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Занятость возможностей для строки статуса, по ключам: ждём ответа распознавания и т. п. */
+  private readonly busyTexts = new Map<string, string>();
 
   /**
    * Скрытые поля выбора файлов: системный диалог нельзя открыть иначе.
@@ -322,7 +336,7 @@ class RichEditorUiController implements RichEditorUi {
       onFormulaEdit: this.onFormulaEdit,
     });
 
-    this.context = createUiContext(this.core, this.editFormula);
+    this.context = createUiContext(this.core, this.editFormula, this.reportError, this.setBusy);
 
     this.featureItems = this.features.map((feature) => ({
       feature,
@@ -575,7 +589,8 @@ class RichEditorUiController implements RichEditorUi {
     if (!this.hasStatusLine) return;
 
     const busy = [...this.uploading.entries()].find(([, count]) => count > 0)?.[0];
-    const text = this.errorText || (busy ? this.core.t(`upload_${busy}`) : '');
+    const featureBusy = this.busyTexts.values().next().value ?? '';
+    const text = this.errorText || (busy ? this.core.t(`upload_${busy}`) : '') || featureBusy;
 
     this.status.textContent = text;
     this.status.classList.toggle('rte-status--error', this.errorText !== '');
@@ -601,6 +616,14 @@ class RichEditorUiController implements RichEditorUi {
 
     this.refreshStatus();
     this.options.onError?.(error);
+  };
+
+  /** Возможность заняла строку статуса или освободила её. */
+  private readonly setBusy = (key: string, text: string | null): void => {
+    if (text === null) this.busyTexts.delete(key);
+    else this.busyTexts.set(key, text);
+
+    this.refreshStatus();
   };
 
   /** Открывает визуальный редактор формул: из документа, тулбара и расширений. */

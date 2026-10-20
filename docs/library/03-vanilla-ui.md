@@ -102,8 +102,10 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 | `renderPanel(context, close)` | `HTMLElement` | Содержимое панели; только для `'dropdown'` |
 
 `context` — `EditorUiContext`: `editor`, `t`, `limits`, `uploads`,
-`editFormula(payload)`. Пункт из `toolbarItems` появится, только если его id
-есть в конфигурации тулбара.
+`editFormula(payload)`, `insertHtml(html, { replace? })` через санитайзер,
+`reportError(error)` в строку статуса и хосту, `setBusy(key, text | null)` для
+строки статуса. Пункт из `toolbarItems` появится, только если его id есть в
+конфигурации тулбара.
 
 ### Возможность: `EditorFeature`
 

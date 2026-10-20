@@ -7,6 +7,19 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/ocr`: `createOcrFeature({ recognize })` — the «Recognize
+  photo» toolbar button. The host supplies an adapter like the upload ones:
+  it receives the chosen images and returns the backend's PinQueen text; the
+  editor validates the files (images only, the image size limit, at most
+  `maxFiles`), shows «Recognizing…» in the status line, converts the text
+  with `ocrTextToHtml` and inserts it at the cursor (or replaces the document
+  with `replace`). Failures reach `onError` as `recognize-failed`;
+  `scans()` hands the photos to `createDrawingsFeature({ scans })`.
+- `@rich-editor/core`: `RichEditorCore.insertHTML(html)` inserts through the
+  same preparation as `setHTML`; `EditorUiContext` gains `insertHtml`,
+  `reportError` and `setBusy`, so features insert content, report errors and
+  occupy the status line without reaching into the shell.
+
 - `@rich-editor/drawings`: constructor tabs for solid geometry, plots and
   physics. Solid geometry (`stereometryEditorFactory`): templates for
   pyramids, a prism, a parallelepiped and a cylinder, rotation with the right
@@ -234,6 +247,20 @@ The packages are not published yet; everything below lands in the first release.
   `error_audio_too_large`.
 
 ### Fixed
+
+- `@rich-editor/ocr`: scene JSON from recognition text keeps its LaTeX.
+  `DATA`, `TIKZ` and HTML nodes are now lifted out before the LaTeX and
+  Markdown passes, which turned `"\\frac"` in a scene label into `"\frac"`
+  (a form feed plus «rac» to `JSON.parse`) and dropped `\\` at line ends in
+  TikZ. The scene is stored in the node as strict JSON, so a strict parser on
+  the backend reads it. Blank lines separate blocks instead of becoming empty
+  paragraphs, so a document no longer gains empty paragraphs on every
+  text round trip; geometry without TikZ is written without an empty `TIKZ`
+  block.
+- `@rich-editor/drawings`: `parseSceneJson` keeps LaTeX commands that start
+  like a JSON escape (`\frac`, `\theta`, `\nu`, `\rho`, `\beta`…) when the
+  scene was written without a second backslash, instead of reading them as
+  control characters.
 
 - Modals on phones: the dialog is sized to the visible part of the window
   (`visualViewport`), so it no longer hides behind Safari's address bar or the

@@ -151,7 +151,8 @@ class OcrTextWriter {
     const tikz = node.getAttribute('data-tikz-code') ?? '';
 
     if (node.hasAttribute('data-geometry-data')) {
-      return wrapBlock('TIKZ', tikz) + wrapBlock('DATA', node.getAttribute('data-geometry-data') ?? '{}');
+      // Пустая пара маркеров — шум для модели; DATA без TIKZ читается так же.
+      return (tikz.trim() ? wrapBlock('TIKZ', tikz) : '') + wrapBlock('DATA', node.getAttribute('data-geometry-data') ?? '{}');
     }
 
     const data = node.getAttribute('data-physics-data') ?? '{}';

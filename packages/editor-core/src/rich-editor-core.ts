@@ -250,9 +250,17 @@ export class RichEditorCore {
   }
 
   /**
-   * Единственный путь входа контента: начальный документ, `setHTML` и
-   * вставка. Санитайзер знает разметку хоста и возможностей, legacy-разбор
-   * включён по опции.
+   * Вставляет HTML в позицию курсора. Тот же путь подготовки, что у
+   * `setHTML`: разметка возможностей и хоста не обходит санитайзер.
+   */
+  insertHTML(html: string): boolean {
+    return this.editor.chain().focus().insertContent(this.prepare(html)).run();
+  }
+
+  /**
+   * Единственный путь входа контента: начальный документ, `setHTML`,
+   * `insertHTML` и вставка. Санитайзер знает разметку хоста и возможностей,
+   * legacy-разбор включён по опции.
    */
   private prepare(html: string): string {
     return prepareIncomingHtml(html, {
