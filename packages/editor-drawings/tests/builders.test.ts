@@ -11,6 +11,9 @@ import {
   recognizeStroke,
   type SceneEditor,
 } from '../src';
+import { worldToSvg } from '../src/render/coords';
+import { resolveGeometryViewport } from '../src/render/geometry-svg';
+import { normalizeGeometryScene } from '../src/scene/normalize';
 
 /** jsdom не знает PointerEvent — полотно слушает именно его. */
 beforeAll(() => {
@@ -140,7 +143,7 @@ describe('конструктор планиметрии', () => {
     click(canvas, [1, 0]);
     click(canvas, [0, 1]);
     click(canvas, [-2, -2]);
-    expect(planimetry.getScene().angles).toEqual([{ points: ['A', 'B', 'O'], style: 'single' }]);
+    expect(planimetry.getScene().angles).toEqual([{ points: ['A', 'B', 'O'], style: 'single', label: '78,7°' }]);
     expect(changes).toBeGreaterThanOrEqual(6);
   });
 
@@ -279,6 +282,202 @@ describe('конструктор планиметрии', () => {
       expect(JSON.stringify(planimetry.getScene())).toBe(before);
       expect(prop(planimetry, 'length').value).toBe('4');
     });
+  });
+
+  // ------------------------------------------------------- величина угла
+
+  /** Треугольник A(0,0), B(4,0), C(0,3) кликами и угол по трём кликам; угол остаётся выделенным. */
+  const drawTriangleAngle = (planimetry: SceneEditor, points: Array<[number, number]>): void => {
+    selectTriangleEdge(planimetry, [2, 0]);
+    pickTool(planimetry, 'angle');
+    points.forEach((point) => click(canvasOf(planimetry), point));
+  };
+
+  /** Перетаскивание точки инструментом «Выбор»; `client` переводит мир в экран (по умолчанию — исходное окно). */
+  const dragVertex = (planimetry: SceneEditor, from: [number, number], to: [number, number], client = svgOf): void => {
+    const canvas = canvasOf(planimetry);
+    const send = (type: 'pointerdown' | 'pointermove' | 'pointerup', [clientX, clientY]: [number, number]): void => {
+      canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY, pointerId: 1 }));
+    };
+
+    pickTool(planimetry, 'select');
+    send('pointerdown', client(from));
+    send('pointermove', client(to));
+    send('pointerup', client(to));
+  };
+
+  /** Мир → экран после `load`: конструктор подгоняет окно просмотра под сцену. */
+  const fittedClient = (scene: Record<string, unknown>): ((point: [number, number]) => [number, number]) => {
+    const viewport = resolveGeometryViewport(normalizeGeometryScene(scene), { width: CX * 2, height: CY * 2, autoFit: true });
+
+    return (point) => {
+      const at = worldToSvg(point, viewport.scale, viewport.cx, viewport.cy);
+
+      return [at.x, at.y];
+    };
+  };
+
+  /** Клик внутри угла при вершине `vertex` (стороны правее и выше вершины) — выделяет угол. */
+  const selectAngleNear = (planimetry: SceneEditor, client: (point: [number, number]) => [number, number], vertex: [number, number]): void => {
+    const [x, y] = client(vertex);
+    const canvas = canvasOf(planimetry);
+
+    pickTool(planimetry, 'select');
+    ['pointerdown', 'pointerup'].forEach((type) => {
+      canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x + 22, clientY: y - 10, pointerId: 1 }));
+    });
+  };
+
+  const setChecked = (field: HTMLInputElement, checked: boolean): void => {
+    field.checked = checked;
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  const undoKey = (planimetry: SceneEditor): void => {
+    canvasOf(planimetry).dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+  };
+
+  const anglesOf = (planimetry: SceneEditor): Array<{ points: string[]; style: string; label?: string }> =>
+    (planimetry.getScene().angles as Array<{ points: string[]; style: string; label?: string }> | undefined) ?? [];
+
+  it('новый непрямой угол подписан величиной, прямой — уголком без подписи', () => {
+    const planimetry = create();
+
+    drawTriangleAngle(planimetry, [[0, 0], [4, 0], [0, 3]]);
+    pickTool(planimetry, 'angle');
+    [[4, 0], [0, 0], [0, 3]].forEach((point) => click(canvasOf(planimetry), point as [number, number]));
+
+    expect(anglesOf(planimetry)).toEqual([
+      { points: ['A', 'B', 'C'], style: 'single', label: '36,9°' },
+      { points: ['B', 'A', 'C'], style: 'right' },
+    ]);
+  });
+
+  it('перемещение вершины пересчитывает подпись-величину', () => {
+    const planimetry = create();
+
+    drawTriangleAngle(planimetry, [[0, 0], [4, 0], [0, 3]]);
+    dragVertex(planimetry, [0, 3], [0, 4]);
+    expect(anglesOf(planimetry)[0]?.label).toBe('45°');
+
+    // «Длина» двигает вершину B(4,0) → (8,0): тоже правка геометрии.
+    click(canvasOf(planimetry), [2, 0]);
+    setProp(prop(planimetry, 'length'), '8');
+    expect(anglesOf(planimetry)[0]?.label).toBe('26,6°');
+  });
+
+  it('панель угла: «Величина» показывает значение, подпись недоступна, пока флажок включён', () => {
+    const planimetry = create();
+
+    drawTriangleAngle(planimetry, [[0, 0], [4, 0], [0, 3]]);
+
+    const value = prop(planimetry, 'angleValue');
+
+    expect(value.value).toBe('36,9°');
+    expect(value.readOnly).toBe(true);
+    expect(prop(planimetry, 'angleMeasure').checked).toBe(true);
+    expect(prop(planimetry, 'angleLabel').disabled).toBe(true);
+    expect(prop(planimetry, 'angleLabel').value).toBe('36,9°');
+
+    setChecked(prop(planimetry, 'angleMeasure'), false);
+    expect(prop(planimetry, 'angleMeasure').checked).toBe(false);
+    expect(prop(planimetry, 'angleLabel').disabled).toBe(false);
+    expect(prop(planimetry, 'angleValue').value).toBe('36,9°');
+
+    // Включение одним шагом пишет величину вместо ручной подписи.
+    setProp(prop(planimetry, 'angleLabel'), 'α');
+    setChecked(prop(planimetry, 'angleMeasure'), true);
+    expect(anglesOf(planimetry)[0]?.label).toBe('36,9°');
+    undoKey(planimetry);
+    expect(anglesOf(planimetry)[0]?.label).toBe('α');
+  });
+
+  it('выключенный флажок оставляет подпись прежним текстом и больше её не пересчитывает', () => {
+    const planimetry = create();
+
+    drawTriangleAngle(planimetry, [[0, 0], [4, 0], [0, 3]]);
+    setChecked(prop(planimetry, 'angleMeasure'), false);
+    expect(anglesOf(planimetry)[0]?.label).toBe('36,9°');
+
+    dragVertex(planimetry, [0, 3], [0, 4]);
+    expect(anglesOf(planimetry)[0]?.label).toBe('36,9°');
+  });
+
+  it('ручная подпись «α» при правках геометрии не меняется', () => {
+    const planimetry = create();
+
+    drawTriangleAngle(planimetry, [[0, 0], [4, 0], [0, 3]]);
+    setChecked(prop(planimetry, 'angleMeasure'), false);
+    setProp(prop(planimetry, 'angleLabel'), 'α');
+    dragVertex(planimetry, [0, 3], [0, 4]);
+    expect(anglesOf(planimetry)[0]?.label).toBe('α');
+
+    selectTriangleEdge(planimetry, [2, 0]);
+    expect(anglesOf(planimetry)[0]?.label).toBe('α');
+  });
+
+  it('отмена возвращает и подпись, и флажок', () => {
+    const planimetry = create();
+
+    drawTriangleAngle(planimetry, [[0, 0], [4, 0], [0, 3]]);
+    setChecked(prop(planimetry, 'angleMeasure'), false);
+    undoKey(planimetry);
+    // Флажок снова включён: подпись идёт за точкой.
+    dragVertex(planimetry, [0, 3], [0, 4]);
+    expect(anglesOf(planimetry)[0]?.label).toBe('45°');
+
+    undoKey(planimetry);
+    expect(anglesOf(planimetry)[0]?.label).toBe('36,9°');
+  });
+
+  it('load: подпись, равная величине, ведётся сама; «45°» у угла в 60° остаётся как есть', () => {
+    const measured = {
+      type: '2d',
+      vertices: { A: [0, 0], B: [4, 0], C: [4, 4] },
+      edges: [['A', 'B'], ['A', 'C']],
+      angles: [{ points: ['B', 'A', 'C'], style: 'single', label: '45°' }],
+    };
+    const planimetry = create();
+    let client = fittedClient(measured);
+
+    planimetry.load(measured);
+    selectAngleNear(planimetry, client, [0, 0]);
+    expect(prop(planimetry, 'angleMeasure').checked).toBe(true);
+    dragVertex(planimetry, [4, 4], [4, 3], client);
+    expect(anglesOf(planimetry)[0]?.label).toBe('36,9°');
+
+    const notToScale = {
+      type: '2d',
+      vertices: { A: [0, 0], B: [2, 0], C: [1, 1.73] },
+      edges: [['A', 'B'], ['A', 'C']],
+      angles: [{ points: ['B', 'A', 'C'], style: 'single', label: '45°' }],
+    };
+
+    client = fittedClient(notToScale);
+    planimetry.load(notToScale);
+    selectAngleNear(planimetry, client, [0, 0]);
+    expect(prop(planimetry, 'angleMeasure').checked).toBe(false);
+    expect(prop(planimetry, 'angleValue').value).toBe('60°');
+    dragVertex(planimetry, [1, 1.73], [0, 2], client);
+    expect(anglesOf(planimetry)[0]?.label).toBe('45°');
+  });
+
+  it('load → getScene без правок отдаёт углы как были, без признака «ведётся сам»', () => {
+    const angles = [
+      { points: ['B', 'A', 'C'], style: 'right' },
+      { points: ['A', 'B', 'C'], style: 'single', label: '36,9°' },
+      { points: ['A', 'C', 'B'], style: 'double', label: 'α' },
+      // Совпадает с величиной, но записано иначе — без правок не переписывается.
+      { points: ['B', 'C', 'A'], style: 'single', label: '53.1 °' },
+    ];
+    const planimetry = create();
+
+    planimetry.load({ ...TRIANGLE, angles });
+
+    const scene = planimetry.getScene();
+
+    expect(scene.angles).toEqual(angles);
+    expect(JSON.stringify(scene)).not.toContain('measured');
   });
 
   it('выбор точки показывает свойства; переименование тянет рёбра и углы; удаление чистит связи', () => {

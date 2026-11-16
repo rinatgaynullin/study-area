@@ -43,6 +43,15 @@ The packages are not published yet; everything below lands in the first release.
   edge in the stereometry constructor and for a selected segment in the plane
   constructor; a «Радиус» field for a vertex that is a centre of a cylinder,
   cone or sphere.
+- `@rich-editor/drawings`: the measure of an angle on the drawing, in the plane
+  and stereometry constructors. A new non-right angle is labelled with its
+  measure («60°», «63,4°»; in stereometry the angle in space, not of the
+  projection) and the label follows the geometry — a dragged vertex, an edge
+  length, the template parameters. The angle panel gets a read-only «Величина»
+  line and the «Показывать величину на чертеже» checkbox; with it off the label
+  is plain text. The scene format is unchanged: the measure is written to
+  `label`, and on opening a scene only a label equal to the actual measure is
+  kept up to date.
 - `@rich-editor/core`: blocks of the document move. Drawings and plots,
   images, audio and attachments are dragged with the mouse between blocks, the
   drop place is a line in the theme colour; `Alt+↑` / `Alt+↓` move the selected
