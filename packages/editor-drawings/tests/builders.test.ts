@@ -353,7 +353,7 @@ describe('диалог с конструктором', () => {
     editor.core.setHTML('<div data-geometry-data=\'{"type":"3d","vertices":{"S":[0,0,2],"A":[0,0,0]},"edges":[["S","A"]]}\'></div>');
     editor.element
       .querySelector<HTMLElement>('.rte-content .rte-drawing')
-      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     dialog = openDialog();
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Стереометрия');
   });
