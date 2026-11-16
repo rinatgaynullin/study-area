@@ -11,6 +11,7 @@ import {
   unprojectToGround,
   unprojectToHeight,
 } from '../src/builders/stereometry-editor';
+import { formatAngleMeasure } from '../src/builders/geometry-utils';
 import { STEREOMETRY_MESSAGES } from '../src/builders/stereometry-messages';
 import type { SceneEditor } from '../src/builders/types';
 import { DRAWINGS_MESSAGES } from '../src/messages';
@@ -381,13 +382,15 @@ describe('конструктор стереометрии', () => {
 
     const angles = stereo.getScene().angles as Array<Record<string, unknown>>;
 
-    expect(angles[2]).toEqual({ points: ['C1', 'A', 'C'], style: 'single' });
+    // Наклонный угол сразу подписан величиной в пространстве: arctg(5 / 6√2) ≈ 30,5°.
+    expect(angles[2]).toEqual({ points: ['C1', 'A', 'C'], style: 'single', label: '30,5°' });
 
     const [style] = propsOf(stereo).querySelectorAll('select');
-    const label = propsOf(stereo).querySelector<HTMLInputElement>('input[type="text"]');
 
     setValue(style, 'double');
-    setValue(label!, '60°');
+    // Своя подпись — только с выключенной величиной.
+    viewField(stereo, 'angleMeasure').click();
+    setValue(firstControl(stereo, 'input[placeholder="30°"]'), '60°');
     expect((stereo.getScene().angles as unknown[])[2]).toEqual({ points: ['C1', 'A', 'C'], style: 'double', label: '60°' });
   });
 
@@ -1591,6 +1594,163 @@ describe('конструктор стереометрии', () => {
     // Без пунктира плоская заготовка размечается сама, как только появится объём.
     stereo.load({ ...flat, edges: flat.edges.slice(0, 3) });
     expect(autoHiddenBox(stereo).checked).toBe(true);
+  });
+
+  // --------------------------------------------------------- величина угла
+
+  /** Величина угла S–A–C пирамиды из шаблона высоты `h`: наклон SA к диагонали основания. */
+  const pyramidAngle = (h: number): string => formatAngleMeasure((Math.atan(h / (3 * Math.SQRT2)) * 180) / Math.PI);
+
+  const anglesOf = (stereo: SceneEditor): Array<Record<string, unknown>> => (stereo.getScene().angles ?? []) as Array<Record<string, unknown>>;
+
+  /** Клик внутри сектора угла в 26 px от вершины — дальше радиуса попадания в неё: так угол выбирается на полотне. */
+  const clickAngle = (canvas: HTMLElement, a: Point, vertex: Point, b: Point): void => {
+    const [from, at, to] = [a, vertex, b].map((point) => svgOf(point));
+
+    if (!from || !at || !to) return;
+
+    const unit = (point: At): At => {
+      const length = Math.hypot(point.x - at.x, point.y - at.y);
+
+      return { x: (point.x - at.x) / length, y: (point.y - at.y) / length };
+    };
+    const [u, w] = [unit(from), unit(to)];
+    const sum = { x: (u?.x ?? 0) + (w?.x ?? 0), y: (u?.y ?? 0) + (w?.y ?? 0) };
+    const length = Math.hypot(sum.x, sum.y);
+
+    clickAt(canvas, { x: at.x + (sum.x / length) * 26, y: at.y + (sum.y / length) * 26 });
+  };
+
+  /** Пирамида из шаблона с углом S–A–C, введённым буквами; угол остаётся выделенным. */
+  const pyramidWithAngle = (stereo: SceneEditor): void => {
+    pickTemplate(stereo, 'pyramid');
+    pickTool(stereo, 'angle');
+    setValue(firstControl(stereo, 'input[placeholder="SOH"]'), 'SAC');
+  };
+
+  it('новый наклонный угол подписан величиной в пространстве, прямой — уголком без подписи', () => {
+    const stereo = create();
+
+    pyramidWithAngle(stereo);
+    expect(anglesOf(stereo)).toEqual([{ points: ['S', 'A', 'C'], style: 'single', label: pyramidAngle(5.5) }]);
+    expect(pyramidAngle(5.5)).toBe('52,4°');
+    // Панель: величина только для чтения, флажок включён, подпись руками не правится.
+    expect(viewField(stereo, 'angleValue').value).toBe('52,4°');
+    expect(viewField(stereo, 'angleValue').readOnly).toBe(true);
+    expect(viewField(stereo, 'angleMeasure').checked).toBe(true);
+    expect(firstControl(stereo, 'input[placeholder="30°"]').disabled).toBe(true);
+
+    press(canvasOf(stereo), 'Escape');
+    setValue(firstControl(stereo, 'input[placeholder="SOH"]'), 'BAD');
+    expect(anglesOf(stereo)[1]).toEqual({ points: ['B', 'A', 'D'], style: 'right' });
+    expect(viewField(stereo, 'angleMeasure').checked).toBe(false);
+    expect(firstControl(stereo, 'input[placeholder="30°"]').disabled).toBe(false);
+  });
+
+  it('подпись-величина следует за вершиной и за параметром шаблона, блок параметров остаётся', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pyramidWithAngle(stereo);
+    press(canvas, 'Escape');
+    setValue(viewField(stereo, 'template-height'), '8');
+    expect(anglesOf(stereo)[0]?.label).toBe(pyramidAngle(8));
+    expect(pyramidAngle(8)).toBe('62,1°');
+    expect(viewField(stereo, 'template-height').value).toBe('8');
+
+    // Перемещение вершины — координатой в панели и мышью с Alt.
+    view = fittedViewport(stereo);
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [0, 0, 8]);
+    setValue(firstControl(stereo, 'input[data-axis="z"]'), '3');
+    expect(anglesOf(stereo)[0]?.label).toBe(pyramidAngle(3));
+
+    const top = svgOf([0, 0, 3]);
+    const lifted = svgOf([0, 0, 4]);
+
+    dragFrom(canvas, top, lifted, { altKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([0, 0, 4]);
+    expect(anglesOf(stereo)[0]?.label).toBe(pyramidAngle(4));
+
+    // Отмена возвращает прежнюю подпись вместе с геометрией.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(anglesOf(stereo)[0]?.label).toBe(pyramidAngle(3));
+  });
+
+  it('выключенный флажок оставляет подпись текстом; ручная «α» правками геометрии не меняется', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pyramidWithAngle(stereo);
+    viewField(stereo, 'angleMeasure').click();
+    expect(viewField(stereo, 'angleMeasure').checked).toBe(false);
+    expect(anglesOf(stereo)[0]?.label).toBe('52,4°');
+    press(canvas, 'Escape');
+    setValue(viewField(stereo, 'template-height'), '8');
+    expect(anglesOf(stereo)[0]?.label).toBe('52,4°');
+
+    // Отмена возвращает и флажок: подпись снова ведётся и следует за высотой.
+    press(canvas, 'z', { ctrlKey: true });
+    press(canvas, 'z', { ctrlKey: true });
+    expect(anglesOf(stereo)[0]?.label).toBe('52,4°');
+    setValue(viewField(stereo, 'template-height'), '5');
+    expect(anglesOf(stereo)[0]?.label).toBe(pyramidAngle(5));
+
+    view = fittedViewport(stereo);
+    pickTool(stereo, 'select');
+    clickAngle(canvas, [0, 0, 5], [-3, -3, 0], [3, 3, 0]);
+    expect(viewField(stereo, 'angleMeasure').checked).toBe(true);
+    viewField(stereo, 'angleMeasure').click();
+    setValue(firstControl(stereo, 'input[placeholder="30°"]'), 'α');
+    expect(anglesOf(stereo)[0]?.label).toBe('α');
+    press(canvas, 'Escape');
+    setValue(viewField(stereo, 'template-height'), '8');
+    expect(anglesOf(stereo)[0]?.label).toBe('α');
+
+    // Включение флажка снова пишет величину одним шагом.
+    view = fittedViewport(stereo);
+    clickAngle(canvas, [0, 0, 8], [-3, -3, 0], [3, 3, 0]);
+    viewField(stereo, 'angleMeasure').click();
+    expect(anglesOf(stereo)[0]?.label).toBe('62,1°');
+    press(canvas, 'z', { ctrlKey: true });
+    expect(anglesOf(stereo)[0]?.label).toBe('α');
+  });
+
+  it('load: подпись, равная величине, ведётся дальше; чужая «45°» у угла в 60° остаётся; сцена без правок прежняя', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    // Правильный тетраэдр без одной вершины: угол B–A–C ровно 60°.
+    const scene = {
+      type: '3d',
+      vertices: { A: [0, 0, 0], B: [4, 0, 0], C: [2, 3.46, 0], S: [2, 1.15, 3.27] },
+      edges: [['A', 'B'], ['B', 'C'], ['C', 'A'], ['S', 'A'], ['S', 'B'], ['S', 'C']],
+      angles: [
+        { points: ['B', 'A', 'C'], style: 'single', label: '60 °' },
+        { points: ['C', 'B', 'A'], style: 'double', label: '45°' },
+      ],
+      angleY: 15,
+      angleZ: -30,
+    };
+
+    stereo.load(scene);
+    expect(stereo.getScene().angles).toEqual(scene.angles);
+    view = fittedViewport(stereo);
+    pickTool(stereo, 'select');
+    clickAngle(canvas, [4, 0, 0], [0, 0, 0], [2, 3.46, 0]);
+    expect(viewField(stereo, 'angleMeasure').checked).toBe(true);
+    clickAngle(canvas, [2, 3.46, 0], [4, 0, 0], [0, 0, 0]);
+    expect(viewField(stereo, 'angleMeasure').checked).toBe(false);
+    expect(viewField(stereo, 'angleValue').value).toBe('60°');
+
+    // Правка геометрии: первая подпись — новая величина, чужие не трогаются.
+    clickVertex(canvas, [2, 3.46, 0]);
+    setValue(firstControl(stereo, 'input[data-axis="y"]'), '4');
+
+    const angles = anglesOf(stereo);
+
+    expect(angles[0]?.label).toBe(formatAngleMeasure((Math.atan2(4, 2) * 180) / Math.PI));
+    expect(angles[1]?.label).toBe('45°');
+    angles.forEach((angle) => expect(angle).not.toHaveProperty('measured'));
   });
 
   // ------------------------------------------------------------ длина ребра

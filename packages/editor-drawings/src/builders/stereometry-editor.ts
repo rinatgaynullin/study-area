@@ -4,7 +4,7 @@ import { renderGeometrySvg, resolveGeometryViewport } from '../render/geometry-s
 import { fmt, pointsAttr } from '../render/svg-builder';
 import { normalizeGeometryScene } from '../scene/normalize';
 import type { AngleStyle, EdgeStyle, GeometryHighlight, GeometryScene, Point, Vec2, Vec3 } from '../scene/types';
-import { angleBetween, distance, projectOnSegment, roundTo, snapToGrid } from './geometry-utils';
+import { angleBetween, distance, formatAngleMeasure, isAngleMeasureLabel, projectOnSegment, roundTo, snapToGrid } from './geometry-utils';
 import { classifyEdges, supportPlanes, type SupportHull } from './hidden-lines';
 import { HistoryStack } from './history';
 import {
@@ -170,10 +170,20 @@ interface StereoSphere extends BodySource {
   radius: number;
 }
 
-interface StereoAngle {
+/** Угол, как он пишется в сцену. */
+interface SceneAngle {
   points: [string, string, string];
   style: AngleStyle;
   label?: string;
+}
+
+/**
+ * Угол в состоянии: `measured` — подпись ведёт конструктор, это величина угла
+ * в пространстве, и она пересчитывается при каждой правке геометрии. В сцену
+ * признак не пишется, в снимках истории едет.
+ */
+interface StereoAngle extends SceneAngle {
+  measured: boolean;
 }
 
 /**
@@ -330,7 +340,7 @@ const copyEdge = (edge: StereoEdge): StereoEdge => ({
   ...(edge.ticks ? { ticks: edge.ticks } : {}),
 });
 
-const copyAngle = (angle: StereoAngle): StereoAngle => ({
+const copyAngle = (angle: SceneAngle): SceneAngle => ({
   points: [...angle.points] as [string, string, string],
   style: angle.style,
   ...(angle.label ? { label: angle.label } : {}),
@@ -465,6 +475,22 @@ const bodyRefsOf = (state: StereometryState, id: string): BodyRef[] => [
   ...state.cones.flatMap((cone, index): BodyRef[] => (cone.base === id || cone.apex === id ? [{ kind: 'cones', index }] : [])),
   ...state.spheres.flatMap((sphere, index): BodyRef[] => (sphere.center === id ? [{ kind: 'spheres', index }] : [])),
 ];
+
+/** Величина угла в пространстве, градусы; `null`, если какой-то его вершины нет. */
+const angleDegrees = (vertices: Record<string, Vec3>, angle: SceneAngle): number | null => {
+  const [a, vertex, b] = angle.points.map((name) => vertices[name]);
+
+  return a && vertex && b ? angle3d(vertex, a, b) : null;
+};
+
+/** Подписи углов, которые ведёт конструктор, — по текущей геометрии. Угол с битой ссылкой не трогаем. */
+const updateAngleMeasures = (state: StereometryState): void => {
+  state.angles.forEach((angle) => {
+    const degrees = angle.measured ? angleDegrees(state.vertices, angle) : null;
+
+    if (degrees !== null) angle.label = formatAngleMeasure(degrees);
+  });
+};
 
 /** Угол со стилем «прямой», который в новой геометрии уже не прямой, — одной дугой. */
 const keepRightAngle = (state: StereometryState, angle: StereoAngle): StereoAngle => {
@@ -711,7 +737,12 @@ class StereometryEditor implements SceneEditor {
       cylinders: scene.cylinders.map((cylinder, index) => withSource(cylinder, sources.cylinders[index] ?? { ...cylinder })),
       cones: scene.cones.map((cone, index) => withSource(cone, sources.cones[index] ?? { ...cone })),
       spheres: scene.spheres.map((sphere, index) => withSource(sphere, sources.spheres[index] ?? { ...sphere })),
-      angles: scene.angles.map(copyAngle),
+      // Подпись, равная величине угла, ведётся дальше сама; чужую («α», «45°» не в масштабе) не трогаем.
+      angles: scene.angles.map((angle) => {
+        const degrees = angleDegrees(vertices, angle);
+
+        return { ...copyAngle(angle), measured: degrees !== null && isAngleMeasureLabel(angle.label, degrees) };
+      }),
       labels: { ...scene.labels },
       angleY: clamp(scene.angleY, -MAX_TILT, MAX_TILT),
       angleZ: wrapDegrees(scene.angleZ),
@@ -957,11 +988,12 @@ class StereometryEditor implements SceneEditor {
   }
 
   /**
-   * После правки: деление рёбер, пунктир по невидимости, рисунок, панель.
+   * После правки: деление рёбер, величины углов, пунктир по невидимости, рисунок, панель.
    * `autoHidden: false` — у отмены и повтора: стили возвращаются из снимка как есть.
    */
   private afterChange(autoHidden = true): void {
     this.splitEdgesInState();
+    updateAngleMeasures(this.state);
 
     if (autoHidden) this.applyAutoHidden();
 
@@ -1413,6 +1445,7 @@ class StereometryEditor implements SceneEditor {
     }
 
     this.state.vertices[gesture.id] = point;
+    updateAngleMeasures(this.state);
     this.render();
     this.syncFields();
   }
@@ -1758,16 +1791,19 @@ class StereometryEditor implements SceneEditor {
     this.addAngle(points);
   }
 
-  /** Прямой угол — сразу уголком: его в стереометрии отмечают чаще всего. */
+  /**
+   * Прямой угол — сразу уголком и без подписи: его в стереометрии отмечают
+   * чаще всего. У остальных подпись — величина, её ведёт конструктор.
+   */
   private addAngle(points: [string, string, string]): void {
     this.commit((state) => {
-      const [a, vertex, b] = points.map((name) => state.vertices[name]);
+      const degrees = angleDegrees(state.vertices, { points, style: 'single' });
 
-      if (!a || !vertex || !b) return;
+      if (degrees === null) return;
 
-      const degrees = angle3d(vertex, a, b);
+      const right = Math.abs(degrees - 90) < RIGHT_ANGLE_TOLERANCE;
 
-      state.angles.push({ points, style: Math.abs(degrees - 90) < RIGHT_ANGLE_TOLERANCE ? 'right' : 'single' });
+      state.angles.push(right ? { points, style: 'right', measured: false } : { points, style: 'single', label: formatAngleMeasure(degrees), measured: true });
       this.selection = { type: 'angle', index: state.angles.length - 1 };
     });
   }
@@ -1886,8 +1922,15 @@ class StereometryEditor implements SceneEditor {
 
       const style = selectControl(ANGLE_STYLES.map((value) => ({ value, label: t(`drawings_angle_${value}`) })), angle.style);
       const label = el('input', { class: 'rte-input', attrs: { type: 'text', value: angle.label ?? '', placeholder: '30°' } });
+      const degrees = angleDegrees(state.vertices, angle);
 
-      this.properties.append(propertyField(t('drawings_prop_style'), style), propertyField(t('drawings_prop_label'), label));
+      // Подпись-величину ведёт конструктор: руками её правят, только выключив флажок.
+      label.disabled = angle.measured;
+      this.properties.append(
+        propertyField(t('drawings_prop_style'), style),
+        ...this.angleMeasureFields(selection.index, angle, degrees),
+        propertyField(t('drawings_prop_label'), label),
+      );
       on(style, 'change', () => {
         this.commit((draft) => {
           const draftAngle = draft.angles[selection.index];
@@ -1896,6 +1939,8 @@ class StereometryEditor implements SceneEditor {
         });
       });
       on(label, 'change', () => {
+        if (angle.measured) return;
+
         this.commit((draft) => {
           const text = label.value.trim();
           const draftAngle = draft.angles[selection.index];
@@ -1912,6 +1957,40 @@ class StereometryEditor implements SceneEditor {
 
     on(remove, 'click', () => this.deleteSelection());
     this.properties.appendChild(remove);
+  }
+
+  /**
+   * Величина выделенного угла (только для чтения) и флажок «Показывать
+   * величину на чертеже»: включение пишет величину в подпись, выключение
+   * оставляет подпись текстом как есть — по шагу истории.
+   */
+  private angleMeasureFields(index: number, angle: StereoAngle, degrees: number | null): HTMLElement[] {
+    const { t } = this;
+    const value = el('input', {
+      class: 'rte-input',
+      attrs: { type: 'text', readonly: 'true', value: degrees === null ? '' : formatAngleMeasure(degrees), 'data-prop': 'angleValue' },
+    });
+    const toggle = el('input', { attrs: { type: 'checkbox', 'data-prop': 'angleMeasure' } });
+
+    toggle.checked = angle.measured;
+    // Без вершины величины нет — и вести нечего.
+    toggle.disabled = degrees === null;
+    on(toggle, 'change', () => {
+      this.commit((draft) => {
+        const target = draft.angles[index];
+
+        if (!target) return;
+
+        target.measured = toggle.checked;
+
+        if (target.measured && degrees !== null) target.label = formatAngleMeasure(degrees);
+      });
+    });
+
+    return [
+      propertyField(t('drawings_stereo_prop_angle_value'), value),
+      el('label', { class: 'rte-stereo__check', children: [toggle, el('span', { text: t('drawings_stereo_angle_measure') })] }),
+    ];
   }
 
   /** Длина выбранного ребра в пространстве и конец, который едет при её смене. */
