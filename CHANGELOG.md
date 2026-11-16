@@ -7,6 +7,47 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/drawings`: cones and spheres in the 3D scene format and in the
+  stereometry constructor. `cones: [{ base, apex, radius }]` is a right circular
+  cone (the base circle is centred at `base`, perpendicular to the axis
+  `base → apex`), `spheres: [{ center, radius }]`; the radius defaults to 1 and an
+  entry with an unknown vertex is not drawn. The SVG renderer draws the visible
+  part of a cone's rim solid, the hidden part dashed, plus the two silhouette
+  generatrices, and a sphere as a silhouette with an equator (the hidden half
+  dashed); TikZ gains the «Конусы» and «Шары» blocks. The pure helpers
+  `circle3d`, `coneOutline`, `sphereOutline` and `visibilityRuns` are exported
+  from `.` and `./viewer`.
+- `@rich-editor/drawings`: stereometry templates with parameters — cube,
+  parallelepiped, prism and pyramid (3–8 sides), frustum, cylinder, cone and
+  sphere. After inserting one, the «Параметры фигуры» block in the panel
+  rebuilds the figure until its geometry is edited by hand; a template fits the
+  figure into the canvas.
+- `@rich-editor/drawings`: stereometry view and editing. Rotation by dragging
+  empty space with the primary button or a finger (below 4 px it is still a
+  click), by the sliders «Наклон» and «Поворот», by the arrow keys (5°, 15° with
+  `Shift`) and the «Сбросить вид» button. In the «Выбор» tool a vertex is
+  dragged in the horizontal plane of its height, with `Alt` vertically, and
+  `Shift` turns the 0.5 grid snapping off. The «Высота новой точки, z» field for
+  the «Точка» and «Отрезок» tools, with a plumb line in the overlay at a
+  non-zero height. When a plane is seen almost edge-on, a point is not placed
+  into empty space and a vertex is not moved horizontally.
+- `@rich-editor/drawings`: automatic hidden lines in the stereometry
+  constructor — the «Невидимые линии — пунктиром автоматически» checkbox in the
+  «Вид» block. Hidden edges are found from the support planes of the convex
+  hull of the vertices and the round bodies and written to the edges' `style`,
+  so the scene format is unchanged. On for a new scene and a template; on
+  opening a scene only if the calculation matches the saved styles; changing an
+  edge's style by hand turns it off. The body is assumed convex.
+- `@rich-editor/drawings`: «Длина» and «Подвижный конец» fields for a selected
+  edge in the stereometry constructor and for a selected segment in the plane
+  constructor; a «Радиус» field for a vertex that is a centre of a cylinder,
+  cone or sphere.
+- `@rich-editor/core`: blocks of the document move. Drawings and plots,
+  images, audio and attachments are dragged with the mouse between blocks, the
+  drop place is a line in the theme colour; `Alt+↑` / `Alt+↓` move the selected
+  block node by one block (TipTap commands `moveBlockUp` / `moveBlockDown`).
+  Formulas and chemistry (inline nodes) are not draggable. Touch devices rely on
+  the browser's own drag mechanism and were not tested.
 - `@rich-editor/ocr`: `createOcrFeature({ recognize })` — the «Recognize
   photo» toolbar button. The host supplies an adapter like the upload ones:
   it receives the chosen images and returns the backend's PinQueen text; the
@@ -202,6 +243,19 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Changed
 
+- `@rich-editor/drawings`: a click on a drawing opens its editor, instead of the
+  press as before — the press now goes to the editor so the node can be dragged.
+- `@rich-editor/drawings`: in the stereometry constructor the figure is rotated
+  by dragging empty space with the primary button (it was the right button only,
+  which still works); the five old templates (two pyramids, a prism, a
+  parallelepiped, a cylinder) are replaced by eight parametrised ones.
+- `@rich-editor/drawings`: scene type detection. A scene is 3D if some vertex has
+  a non-zero `z`, or it has a round body (cylinder, cone, sphere) whose vertices
+  all exist and no `plots`; a cylinder lying flat or a sphere centred at the
+  origin used to be drawn as 2D. Old scenes read and render as before.
+- `@rich-editor/drawings`: `autoFit` counts the outlines of round bodies,
+  including cylinder rims, so a cylinder is no longer cut off by the edge of the
+  picture.
 - `@rich-editor/core`: the TipTap editor and ProseMirror JSON are no longer part of
   the public API. `RichEditorCore.editor` and `getJSON()` are `@internal` and
   stripped from the published types, `onSelectionUpdate` / `onTransaction` no
@@ -248,6 +302,8 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Fixed
 
+- `@rich-editor/drawings`: in the pyramid sample (the JSON tab and the demo) the
+  dashes were on the wrong edges.
 - `@rich-editor/ocr`: scene JSON from recognition text keeps its LaTeX.
   `DATA`, `TIKZ` and HTML nodes are now lifted out before the LaTeX and
   Markdown passes, which turned `"\\frac"` in a scene label into `"\frac"`

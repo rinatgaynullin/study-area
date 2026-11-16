@@ -52,6 +52,16 @@ export const roundTo = (value: number, digits = 2): number => Number(value.toFix
 
 export const roundPoint = (p: Vec2, digits = 2): Vec2 => [roundTo(p[0], digits), roundTo(p[1], digits)];
 
+/** Подпись величины угла: «60°», дробные — с одним знаком через запятую («63,4°»). */
+export const formatAngleMeasure = (degrees: number): string => `${String(roundTo(degrees, 1)).replace('.', ',')}°`;
+
+/**
+ * Подпись угла — это его величина: такую подпись конструктор ведёт сам и
+ * пересчитывает при правках. Пробелы и точка вместо запятой не мешают.
+ */
+export const isAngleMeasureLabel = (label: string | undefined, degrees: number): boolean =>
+  label !== undefined && label.replace(/\s+/g, '').replace('.', ',') === formatAngleMeasure(degrees);
+
 // ---------------------------------------------------------- подбор фигур
 
 /** Матрица 3×3 по строкам — для систем, решаемых методом Крамера. */
