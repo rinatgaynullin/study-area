@@ -60,7 +60,7 @@ const DRAG_THRESHOLD_PX = 4;
 const KEY_TURN_STEP = 5;
 const KEY_TURN_STEP_LARGE = 15;
 
-/** Класс корня конструктора, пока сцену вращают: курсор «схваченной руки». */
+/** Класс корня конструктора, пока сцену вращают или двигают полотно: курсор «схваченной руки». */
 const ROTATING_CLASS = 'rte-stereo--rotating';
 
 /** Вид по умолчанию у шаблонов и пустой сцены — как в оригинале. */
@@ -142,19 +142,30 @@ interface StereoSection {
   stroke?: string;
 }
 
-interface StereoCylinder {
+/**
+ * Тело вращения как оно пришло в сцену: исходная запись целиком, с чужими
+ * полями, и правил ли пользователь радиус. `getScene` отдаёт запись обратно,
+ * меняя только имена вершин и — после правки — радиус. Сам `radius` тела —
+ * нормализованный: по нему рисуют и считают.
+ */
+interface BodySource {
+  source: RawScene;
+  radiusEdited: boolean;
+}
+
+interface StereoCylinder extends BodySource {
   base: string;
   top: string;
   radius: number;
 }
 
-interface StereoCone {
+interface StereoCone extends BodySource {
   base: string;
   apex: string;
   radius: number;
 }
 
-interface StereoSphere {
+interface StereoSphere extends BodySource {
   center: string;
   radius: number;
 }
@@ -195,12 +206,23 @@ interface StereometryState {
    * едет в снимках истории: отмена смены параметра возвращает и прежние параметры.
    */
   template: AppliedTemplate | null;
+  /**
+   * Пунктир по невидимости расставляется сам при каждой правке и вращении. Не
+   * часть сцены, но едет в снимках истории: отмена возвращает флаг вместе со
+   * стилями. Ручная смена стиля ребра его выключает.
+   */
+  autoHidden: boolean;
   /** Поля сцены, которых конструктор не знает: уходят обратно нетронутыми. */
   extra: RawScene;
 }
 
+/** Поля сцены с телами вращения и имена их ссылок на вершины — как их отбирает нормализация. */
+const BODY_FIELDS: Record<BodyKind, string[]> = { cylinders: ['base', 'top'], cones: ['base', 'apex'], spheres: ['center'] };
+
 /** Ссылка тела вращения на вершину: центр основания, вершина конуса, центр шара. */
-type BodyRef = { kind: 'cylinders' | 'cones' | 'spheres'; index: number };
+type BodyKind = 'cylinders' | 'cones' | 'spheres';
+
+type BodyRef = { kind: BodyKind; index: number };
 
 /** Углы вида и рёбра в начале жеста ползунка: вид до жеста вместе с его пунктиром. */
 type SlideStart = ViewAngles & { edges: StereoEdge[] };
@@ -220,6 +242,8 @@ type Selection =
 type Gesture =
   /** Нажатие по пустому месту: клик, пока указатель не ушёл дальше порога. */
   | { type: 'empty'; pointerId: number; x: number; y: number; info: PointerInfo }
+  /** Панорама основной кнопкой: `x`, `y` и `cx`, `cy` — указатель и центр окна там, где пройден порог. */
+  | { type: 'pan'; pointerId: number; x: number; y: number; cx: number; cy: number }
   /** Вращение сцены; `recorded` — снимок истории уже сделан. */
   | { type: 'rotate'; pointerId: number; x: number; y: number; recorded: boolean }
   /**
@@ -269,6 +293,30 @@ const normalizeView = (angle: ViewAngle, value: number): number => (angle === 'a
 const snapHeight = (z: number): number => Math.round(z / GROUND_STEP) * GROUND_STEP;
 
 const toVec3 = (point: Point): Vec3 => [point[0], point[1], point[2] ?? 0];
+
+const isRawRecord = (value: unknown): value is RawScene => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Исходные записи тел вида `kind` в том порядке, в каком их оставляет
+ * нормализация: записи с именами всех вершин строками.
+ */
+const rawBodies = (raw: RawScene, kind: BodyKind): RawScene[] => {
+  const list = raw[kind];
+
+  if (!Array.isArray(list)) return [];
+
+  return list.filter((item): item is RawScene => isRawRecord(item) && BODY_FIELDS[kind].every((name) => typeof item[name] === 'string'));
+};
+
+/** Тело с исходной записью: нормализованные поля плюс копия записи, радиус не правлен. */
+const withSource = <T extends object>(body: T, source: RawScene): T & BodySource => ({ ...body, source: { ...source }, radiusEdited: false });
+
+/** Запись тела для сцены: исходная, с текущими именами вершин и радиусом — исходным, пока его не правили. */
+const bodyRecord = (body: BodySource & { radius: number }, names: RawScene): RawScene => ({
+  ...body.source,
+  ...names,
+  ...(body.radiusEdited ? { radius: roundTo(body.radius) } : {}),
+});
 
 const roundVec3 = (point: Vec3): Vec3 => [roundTo(point[0]), roundTo(point[1]), roundTo(point[2])];
 
@@ -418,6 +466,15 @@ const bodyRefsOf = (state: StereometryState, id: string): BodyRef[] => [
   ...state.spheres.flatMap((sphere, index): BodyRef[] => (sphere.center === id ? [{ kind: 'spheres', index }] : [])),
 ];
 
+/** Угол со стилем «прямой», который в новой геометрии уже не прямой, — одной дугой. */
+const keepRightAngle = (state: StereometryState, angle: StereoAngle): StereoAngle => {
+  const [a, vertex, b] = angle.points.map((name) => state.vertices[name]);
+
+  if (angle.style !== 'right' || !a || !vertex || !b) return angle;
+
+  return Math.abs(angle3d(vertex, a, b) - 90) < RIGHT_ANGLE_TOLERANCE ? angle : { ...angle, style: 'single' };
+};
+
 const findTemplate = (id: string): StereoTemplate | undefined => STEREO_TEMPLATES.find((template) => template.id === id);
 
 /**
@@ -432,9 +489,9 @@ const placeTemplate = (state: StereometryState, template: StereoTemplate, params
   state.vertices = built.vertices;
   state.edges = normalizeGeometryScene({ type: '3d', vertices: built.vertices, edges }).edges.map(copyEdge);
   state.labels = built.labels;
-  state.cylinders = built.cylinders;
-  state.cones = built.cones;
-  state.spheres = built.spheres;
+  state.cylinders = built.cylinders.map((cylinder) => withSource(cylinder, { ...cylinder }));
+  state.cones = built.cones.map((cone) => withSource(cone, { ...cone }));
+  state.spheres = built.spheres.map((sphere) => withSource(sphere, { ...sphere }));
   state.template = { id: template.id, params, signature: templateSignature(state) };
 };
 
@@ -517,12 +574,6 @@ class StereometryEditor implements SceneEditor {
    * Снимок в историю пишется по окончании жеста и только если вид изменился.
    */
   private slideFrom: SlideStart | null = null;
-
-  /**
-   * Пунктир по невидимости расставляется сам при каждой правке и вращении.
-   * Не часть сцены и не часть истории: ручная смена стиля ребра его выключает.
-   */
-  private autoHidden = true;
 
   private readonly hiddenLines = new HiddenLines();
 
@@ -628,6 +679,7 @@ class StereometryEditor implements SceneEditor {
       showGrid: true,
       showAxes: false,
       template: null,
+      autoHidden: true,
       extra: {},
     };
   }
@@ -645,16 +697,20 @@ class StereometryEditor implements SceneEditor {
     const extra: RawScene = {};
 
     Object.entries(raw).forEach(([key, value]) => {
-      if (!KNOWN_KEYS.has(key)) extra[key] = value;
+      // Тела не массивом конструктор не разбирает: они уходят обратно как есть.
+      if (!KNOWN_KEYS.has(key) || (key in BODY_FIELDS && !Array.isArray(value))) extra[key] = value;
     });
+
+    // Исходные записи тел: в сцену они вернутся целиком, с чужими полями.
+    const sources = { cylinders: rawBodies(raw, 'cylinders'), cones: rawBodies(raw, 'cones'), spheres: rawBodies(raw, 'spheres') };
 
     this.state = {
       vertices,
       edges: scene.edges.map(copyEdge),
       sections: scene.sections.map(copySection),
-      cylinders: scene.cylinders.map((cylinder) => ({ ...cylinder })),
-      cones: scene.cones.map((cone) => ({ ...cone })),
-      spheres: scene.spheres.map((sphere) => ({ ...sphere })),
+      cylinders: scene.cylinders.map((cylinder, index) => withSource(cylinder, sources.cylinders[index] ?? { ...cylinder })),
+      cones: scene.cones.map((cone, index) => withSource(cone, sources.cones[index] ?? { ...cone })),
+      spheres: scene.spheres.map((sphere, index) => withSource(sphere, sources.spheres[index] ?? { ...sphere })),
       angles: scene.angles.map(copyAngle),
       labels: { ...scene.labels },
       angleY: clamp(scene.angleY, -MAX_TILT, MAX_TILT),
@@ -662,14 +718,19 @@ class StereometryEditor implements SceneEditor {
       showGrid: scene.showGrid,
       showAxes: scene.showAxes,
       template: null,
+      autoHidden: true,
       extra,
     };
 
     // Сцену размечали вручную или нейросеть: пунктир сам ставится, только если
-    // расчёт совпал с сохранённым, иначе разметку молча не переписываем.
+    // расчёт совпал с сохранённым, иначе разметку молча не переписываем. Без
+    // оболочки сверять не с чем — ручной пунктир плоской заготовки бережём.
     const styles = this.hiddenLines.styles(this.state);
 
-    this.autoHidden = styles === null || styles.every((style, index) => this.state.edges[index]?.style === style);
+    this.state.autoHidden =
+      styles === null
+        ? this.state.edges.every((target) => target.style !== 'dashed')
+        : styles.every((style, index) => this.state.edges[index]?.style === style);
     this.history.clear();
     this.selection = null;
     this.draft = [];
@@ -699,15 +760,15 @@ class StereometryEditor implements SceneEditor {
     if (state.sections.length > 0) scene.sections = state.sections.map(copySection);
 
     if (state.cylinders.length > 0) {
-      scene.cylinders = state.cylinders.map((cylinder) => ({ base: cylinder.base, top: cylinder.top, radius: roundTo(cylinder.radius) }));
+      scene.cylinders = state.cylinders.map((cylinder) => bodyRecord(cylinder, { base: cylinder.base, top: cylinder.top }));
     }
 
     if (state.cones.length > 0) {
-      scene.cones = state.cones.map((cone) => ({ base: cone.base, apex: cone.apex, radius: roundTo(cone.radius) }));
+      scene.cones = state.cones.map((cone) => bodyRecord(cone, { base: cone.base, apex: cone.apex }));
     }
 
     if (state.spheres.length > 0) {
-      scene.spheres = state.spheres.map((sphere) => ({ center: sphere.center, radius: roundTo(sphere.radius) }));
+      scene.spheres = state.spheres.map((sphere) => bodyRecord(sphere, { center: sphere.center }));
     }
 
     if (!state.showGrid) scene.showGrid = false;
@@ -911,7 +972,7 @@ class StereometryEditor implements SceneEditor {
 
   /** Флажок включён и у фигуры есть оболочка — каждое ребро получает стиль по невидимости. */
   private applyAutoHidden(): void {
-    if (!this.autoHidden) return;
+    if (!this.state.autoHidden) return;
 
     const styles = this.hiddenLines.styles(this.state);
 
@@ -922,11 +983,11 @@ class StereometryEditor implements SceneEditor {
     });
   }
 
-  /** Флажок автоматического пунктира: включение сразу расставляет его одним шагом истории. */
+  /** Флажок автоматического пунктира — шаг истории; включение сразу расставляет пунктир. */
   private toggleAutoHidden(): void {
-    this.autoHidden = !this.autoHidden;
-
-    if (this.autoHidden) this.commit(() => undefined);
+    this.commit((state) => {
+      state.autoHidden = !state.autoHidden;
+    });
   }
 
   /** Точка, попавшая на ребро (в том числе координатами из панели), делит его сразу. */
@@ -936,11 +997,11 @@ class StereometryEditor implements SceneEditor {
     if (normalized.edges.length !== this.state.edges.length) this.state.edges = normalized.edges.map(copyEdge);
   }
 
-  /** Идёт жест, который меняет сцену по ходу: вращение, перетаскивание вершины, ползунок. */
+  /** Идёт жест, который меняет сцену или вид по ходу: вращение, панорама, перетаскивание вершины, ползунок. */
   private changing(): boolean {
     const type = this.gesture?.type;
 
-    return type === 'rotate' || type === 'vertex' || this.slideFrom !== null;
+    return type === 'rotate' || type === 'vertex' || type === 'pan' || this.slideFrom !== null;
   }
 
   private undo(): void {
@@ -1003,9 +1064,9 @@ class StereometryEditor implements SceneEditor {
     this.draft = [];
     this.selection = null;
     this.pointHeight = 0;
-    this.autoHidden = true;
     this.commit((state) => {
       placeTemplate(state, template, template.defaults);
+      state.autoHidden = true;
       state.sections = [];
       state.angles = [];
       state.angleY = DEFAULT_ANGLE_Y;
@@ -1017,7 +1078,8 @@ class StereometryEditor implements SceneEditor {
 
   /**
    * Та же фигура с новыми параметрами одним шагом истории: вид, сетка и оси
-   * остаются, сечения и углы — если все их вершины есть в новой фигуре.
+   * остаются, сечения и углы — если все их вершины есть в новой фигуре;
+   * прямой угол, переставший быть прямым, рисуется одной дугой.
    */
   private rebuildTemplate(applied: AppliedTemplate, params: StereoTemplateParams): void {
     const template = findTemplate(applied.id);
@@ -1033,14 +1095,18 @@ class StereometryEditor implements SceneEditor {
       return;
     }
 
-    this.autoHidden = true;
+    // Черновик и выделение могли ссылаться на вершины, которых в новой фигуре нет.
+    this.draft = [];
+    this.selection = null;
+    this.cursor = null;
     this.commit((state) => {
       placeTemplate(state, template, next);
+      state.autoHidden = true;
 
       const exists = (name: string): boolean => Object.hasOwn(state.vertices, name);
 
       state.sections = state.sections.filter((section) => section.vertices.every(exists));
-      state.angles = state.angles.filter((angle) => angle.points.every(exists));
+      state.angles = state.angles.filter((angle) => angle.points.every(exists)).map((angle) => keepRightAngle(state, angle));
     });
     this.fitView();
   }
@@ -1268,12 +1334,17 @@ class StereometryEditor implements SceneEditor {
 
     switch (gesture.type) {
       case 'empty':
-        // Порог пройден — это вращение; дельты считаются отсюда, чтобы фигура не дёрнулась.
+        // Порог пройден — это панорама; сдвиг считается отсюда, чтобы полотно не дёрнулось.
         if (StereometryEditor.pastThreshold(gesture, event)) {
-          this.gesture = { type: 'rotate', pointerId: gesture.pointerId, x: event.clientX, y: event.clientY, recorded: false };
+          const { cx, cy } = this.canvas.viewport;
+
+          this.gesture = { type: 'pan', pointerId: gesture.pointerId, x: event.clientX, y: event.clientY, cx, cy };
           this.element.classList.add(ROTATING_CLASS);
         }
 
+        break;
+      case 'pan':
+        this.pan(gesture, event);
         break;
       case 'rotate':
         this.rotate(gesture, event);
@@ -1284,6 +1355,17 @@ class StereometryEditor implements SceneEditor {
       default:
         break;
     }
+  }
+
+  /**
+   * Окно просмотра едет за указателем, как у панорамы средней кнопкой: смещение
+   * в единицах полотна с учётом масштаба CSS. Ни сцена, ни история не меняются.
+   */
+  private pan(gesture: Extract<Gesture, { type: 'pan' }>, event: PointerEvent): void {
+    const from = this.canvas.clientToSvg(gesture.x, gesture.y);
+    const to = this.canvas.clientToSvg(event.clientX, event.clientY);
+
+    this.canvas.setViewport({ cx: gesture.cx + to.x - from.x, cy: gesture.cy + to.y - from.y });
   }
 
   private rotate(gesture: Extract<Gesture, { type: 'rotate' }>, event: PointerEvent): void {
@@ -1767,10 +1849,11 @@ class StereometryEditor implements SceneEditor {
 
       this.properties.appendChild(propertyField(t('drawings_prop_style'), style));
       on(style, 'change', () => {
-        // Стиль, выбранный руками, автоматический пунктир больше не трогает.
-        this.autoHidden = false;
         this.commit((draft) => {
           const draftEdge = draft.edges[selection.index];
+
+          // Стиль, выбранный руками, автоматический пунктир больше не трогает.
+          draft.autoHidden = false;
 
           if (draftEdge) draftEdge.style = style.value === 'dashed' ? 'dashed' : 'solid';
         });
@@ -1863,7 +1946,8 @@ class StereometryEditor implements SceneEditor {
         return;
       }
 
-      this.setEdgeLength(selection, moving.value === 'from' ? 'from' : 'to', value);
+      // Подвижный конец после округления совпал с неподвижным: такой длины не задать.
+      if (!this.setEdgeLength(selection, moving.value === 'from' ? 'from' : 'to', value)) length.value = String(roundTo(current));
     });
   }
 
@@ -1878,12 +1962,13 @@ class StereometryEditor implements SceneEditor {
   /**
    * Новая длина ребра: подвижный конец M едет по прямой ребра, неподвижный F
    * стоит, M' = F + (M − F) · L / |M − F|. Выделение остаётся на ребре F–M,
-   * а если правка его разделила — снимается.
+   * а если правка его разделила — снимается. `false` — сцена не изменилась:
+   * ребра нет, оно нулевое или конец после округления лёг на неподвижный.
    */
-  private setEdgeLength(selection: EdgeSelection, end: EdgeEnd, value: number): void {
+  private setEdgeLength(selection: EdgeSelection, end: EdgeEnd, value: number): boolean {
     const target = this.state.edges[selection.index];
 
-    if (!target) return;
+    if (!target) return false;
 
     const { from, to } = target;
     const movingName = end === 'from' ? from : to;
@@ -1891,7 +1976,7 @@ class StereometryEditor implements SceneEditor {
     const moving = this.state.vertices[movingName];
     const current = this.edgeLength(target);
 
-    if (!fixed || !moving || current === 0) return;
+    if (!fixed || !moving || current === 0) return false;
 
     const factor = value / current;
     const point = roundVec3([
@@ -1900,13 +1985,15 @@ class StereometryEditor implements SceneEditor {
       fixed[2] + (moving[2] - fixed[2]) * factor,
     ]);
 
+    if (point.every((value, axis) => value === fixed[axis])) return false;
+
     this.commit((state) => {
       state.vertices[movingName] = point;
     });
 
     const index = this.state.edges.findIndex((other) => other.from === from && other.to === to);
 
-    if (index === selection.index) return;
+    if (index === selection.index) return true;
 
     // Рёбра поделились, и индексы сдвинулись: выделение — на то же ребро или никуда.
     const next: EdgeSelection | null = index === -1 ? null : { type: 'edge', index };
@@ -1915,6 +2002,8 @@ class StereometryEditor implements SceneEditor {
     this.lengthEnd = next && this.lengthEnd?.selection === selection ? { selection: next, end: this.lengthEnd.end } : null;
     this.render();
     this.renderProperties();
+
+    return true;
   }
 
   /** У «Точки» и «Отрезка» — высота, на которую встанет новая точка в пустоте. */
@@ -1993,7 +2082,7 @@ class StereometryEditor implements SceneEditor {
     this.properties.append(
       checkbox(t('drawings_grid'), state.showGrid, () => this.toggleGrid()),
       checkbox(t('drawings_stereo_axes'), state.showAxes, () => this.toggleAxes()),
-      checkbox(t('drawings_stereo_auto_hidden'), this.autoHidden, () => this.toggleAutoHidden(), 'autoHidden'),
+      checkbox(t('drawings_stereo_auto_hidden'), state.autoHidden, () => this.toggleAutoHidden(), 'autoHidden'),
     );
 
     if (this.tool !== 'angle') return;
@@ -2192,13 +2281,22 @@ class StereometryEditor implements SceneEditor {
       this.properties.appendChild(propertyField(this.t('drawings_stereo_param_radius'), input));
       on(input, 'change', () => {
         const value = Number(input.value);
+        const radius = Number.isFinite(value) && input.value.trim() !== '' ? roundTo(value) : 0;
 
-        if (!Number.isFinite(value) || value <= 0) return;
+        // Радиус проверяется после округления: 0,004 стал бы нулём.
+        if (radius <= 0) {
+          input.value = String(roundTo(body.radius));
+
+          return;
+        }
 
         this.commit((draft) => {
           const target = draft[ref.kind][ref.index];
 
-          if (target) target.radius = roundTo(value);
+          if (!target) return;
+
+          target.radius = radius;
+          target.radiusEdited = true;
         });
       });
     });

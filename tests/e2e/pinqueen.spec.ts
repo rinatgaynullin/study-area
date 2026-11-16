@@ -83,7 +83,7 @@ test.describe('чертежи', () => {
     await expect(page.locator('.demo__preview .rte-drawing svg')).toHaveCount(1);
   });
 
-  test('конструктор стереометрии: шаблон вращается перетаскиванием пустого места, вид уходит в документ', async ({ page }) => {
+  test('конструктор стереометрии: левая кнопка двигает полотно, правая вращает шаблон, вид уходит в документ', async ({ page }) => {
     await openDemo(page);
 
     await page.locator(`${EDITOR} p`).first().click();
@@ -96,12 +96,19 @@ test.describe('чертежи', () => {
     await expect(canvas.locator('svg').first()).toBeVisible();
     await expect(turn).toHaveValue('-30');
 
-    // Угол полотна после вписывания шаблона пуст: перетаскивание основной кнопкой вращает фигуру.
+    // Угол полотна после вписывания шаблона пуст: левая кнопка двигает полотно, угол прежний.
     const box = (await canvas.boundingBox())!;
     await page.mouse.move(box.x + 8, box.y + 8);
     await page.mouse.down();
     await page.mouse.move(box.x + 88, box.y + 40, { steps: 8 });
     await page.mouse.up();
+    await expect(turn).toHaveValue('-30');
+
+    // Правая кнопка вращает фигуру.
+    await page.mouse.move(box.x + 8, box.y + 8);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(box.x + 88, box.y + 40, { steps: 8 });
+    await page.mouse.up({ button: 'right' });
     await expect(turn).not.toHaveValue('-30');
 
     await page.getByRole('button', { name: 'Вставить', exact: true }).click();
