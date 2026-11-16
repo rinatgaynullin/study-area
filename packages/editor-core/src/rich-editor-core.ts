@@ -169,9 +169,10 @@ export class RichEditorCore {
           HTMLAttributes: { rel: 'noopener noreferrer' },
         },
         codeBlock: { HTMLAttributes: { class: 'rte-code-block' } },
-        // Линия места вставки при переносе узла. Цвет — из темы через класс,
-        // а не инлайновым стилем: так он следует за токенами.
-        dropcursor: { class: 'rte-dropcursor', width: 2, color: false },
+        // Линия места вставки при переносе узла. Плагин пишет цвет в инлайновый
+        // `background-color`; у переменной темы есть запасное значение, чтобы
+        // линию было видно и у ядра без интерфейса, где токенов `.rte-root` нет.
+        dropcursor: { class: 'rte-dropcursor', width: 2, color: 'var(--rte-color-primary, currentColor)' },
       }),
       StrictTextStyle,
       MoveBlock,

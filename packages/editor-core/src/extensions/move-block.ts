@@ -40,11 +40,15 @@ const moveSelectedBlock =
 
     const neighbour = parent.child(neighbourIndex);
 
-    // Пустой абзац в конце дописывает сам редактор, чтобы под атомом было куда
-    // поставить каретку. Уйти под него нельзя: на его месте тут же вырос бы
-    // новый, и каждое нажатие добавляло бы пустую строку.
+    // Пустой абзац в конце документа дописывает сам редактор, чтобы под атомом
+    // было куда поставить каретку. Уйти под него нельзя: на его месте тут же
+    // вырос бы новый, и каждое нажатие добавляло бы пустую строку. Внутри
+    // цитаты или ячейки такого абзаца нет — там последний пустой абзац обычный.
     const isTrailingEmpty =
-      neighbourIndex === parent.childCount - 1 && neighbour.isTextblock && neighbour.content.size === 0;
+      $from.depth === 0
+      && neighbourIndex === parent.childCount - 1
+      && neighbour.isTextblock
+      && neighbour.content.size === 0;
 
     if (direction > 0 && isTrailingEmpty) return false;
 
