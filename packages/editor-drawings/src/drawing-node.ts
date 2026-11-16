@@ -153,9 +153,22 @@ export const createDrawingNode = (kind: DrawingKind) => {
           options.onEdit?.({ kind, data: currentData, tikz: currentTikz, pos: typeof pos === 'number' ? pos : null });
         };
 
-        // `mousedown`, а не `click`: при выделении атома ProseMirror
-        // перерисовывает node view, и `click` до него не доходит.
-        dom.addEventListener('mousedown', openEditor);
+        // Только для чтения документ не отдаёт чертёж наружу: ProseMirror
+        // начинает перенос и в нередактируемом виде, поэтому отказ — здесь.
+        // До ProseMirror событие не доходит, иначе он запомнил бы перенос,
+        // которого браузер так и не начал.
+        const preventReadonlyDrag = (event: DragEvent): void => {
+          if (editor.isEditable) return;
+
+          event.preventDefault();
+          event.stopPropagation();
+        };
+
+        // `click`, а не `mousedown`: нажатие отдаётся ProseMirror, чтобы он
+        // мог начать перенос узла. Клик после переноса браузер не присылает,
+        // а тап на тач-экране приходит тем же `click`.
+        dom.addEventListener('click', openEditor);
+        dom.addEventListener('dragstart', preventReadonlyDrag);
 
         return {
           dom,
@@ -174,7 +187,8 @@ export const createDrawingNode = (kind: DrawingKind) => {
           // SVG внутри узла — не часть документа ProseMirror.
           ignoreMutation: () => true,
           destroy: () => {
-            dom.removeEventListener('mousedown', openEditor);
+            dom.removeEventListener('click', openEditor);
+            dom.removeEventListener('dragstart', preventReadonlyDrag);
           },
         };
       };

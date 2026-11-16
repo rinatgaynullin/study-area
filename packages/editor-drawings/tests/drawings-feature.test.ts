@@ -207,7 +207,7 @@ describe('возможность целиком: кнопки, диалог, п�
 
     editor.element
       .querySelector<HTMLElement>('.rte-content .rte-drawing')
-      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
     const dialog = openDialog();
 
