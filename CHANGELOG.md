@@ -22,10 +22,11 @@ The packages are not published yet; everything below lands in the first release.
   sphere. After inserting one, the «Параметры фигуры» block in the panel
   rebuilds the figure until its geometry is edited by hand; a template fits the
   figure into the canvas.
-- `@rich-editor/drawings`: stereometry view and editing. Rotation by dragging
-  empty space with the primary button or a finger (below 4 px it is still a
-  click), by the sliders «Наклон» and «Поворот», by the arrow keys (5°, 15° with
-  `Shift`) and the «Сбросить вид» button. In the «Выбор» tool a vertex is
+- `@rich-editor/drawings`: stereometry view and editing. Dragging empty space
+  with the left button or a finger pans the canvas (below 4 px it is still a
+  click); the figure is rotated with the right button, by the sliders «Наклон»
+  and «Поворот», by the arrow keys (5°, 15° with `Shift`), and the «Сбросить
+  вид» button restores the default view. In the «Выбор» tool a vertex is
   dragged in the horizontal plane of its height, with `Alt` vertically, and
   `Shift` turns the 0.5 grid snapping off. The «Высота новой точки, z» field for
   the «Точка» and «Отрезок» tools, with a plumb line in the overlay at a
@@ -245,9 +246,9 @@ The packages are not published yet; everything below lands in the first release.
 
 - `@rich-editor/drawings`: a click on a drawing opens its editor, instead of the
   press as before — the press now goes to the editor so the node can be dragged.
-- `@rich-editor/drawings`: in the stereometry constructor the figure is rotated
-  by dragging empty space with the primary button (it was the right button only,
-  which still works); the five old templates (two pyramids, a prism, a
+- `@rich-editor/drawings`: in the stereometry constructor dragging empty space
+  with the left button pans the canvas (it used to do nothing; rotation stays on
+  the right button); the five old templates (two pyramids, a prism, a
   parallelepiped, a cylinder) are replaced by eight parametrised ones.
 - `@rich-editor/drawings`: scene type detection. A scene is 3D if some vertex has
   a non-zero `z`, or it has a round body (cylinder, cone, sphere) whose vertices
