@@ -98,6 +98,23 @@ describe('нормализация геометрии', () => {
     expect(normalizeGeometryScene({ type: '2d', vertices: { O: [0, 0] }, spheres: [{ center: 'O' }] }).type).toBe('2d');
   });
 
+  it('тело с несуществующей вершиной не делает сцену трёхмерной', () => {
+    const flat = { A: [0, 0], B: [4, 0] };
+
+    expect(normalizeGeometryScene({ vertices: flat, cylinders: [{ base: 'A', top: 'Q' }] }).type).toBe('2d');
+    expect(normalizeGeometryScene({ vertices: flat, cones: [{ base: 'Q', apex: 'A' }] }).type).toBe('2d');
+    expect(normalizeGeometryScene({ vertices: flat, spheres: [{ center: 'constructor' }] }).type).toBe('2d');
+    expect(normalizeGeometryScene({ vertices: flat, cylinders: [{ base: 'A', top: 'Q' }, { base: 'A', top: 'B' }] }).type).toBe('3d');
+  });
+
+  it('сцена с графиками без явного типа определяется, как раньше, даже с телами вращения', () => {
+    const plots = [{ type: 'parabola', vertex: [0, 0] }];
+
+    expect(normalizeGeometryScene({ plots, vertices: { O: [0, 0] }, spheres: [{ center: 'O' }] }).type).toBe('2d');
+    expect(normalizeGeometryScene({ plots, vertices: { O: [0, 0, 0], S: [0, 0, 4] }, cones: [{ base: 'O', apex: 'S' }] }).type).toBe('3d');
+    expect(normalizeGeometryScene({ plots, vertices: {}, spheres: [{ center: 'O' }] }).type).toBe('plot_2d');
+  });
+
   it('понижает 3D с нулевой глубиной до 2D и распознаёт графики', () => {
     expect(normalizeGeometryScene({ type: '3d', vertices: { A: [0, 0, 0], B: [1, 0, 0] } }).type).toBe('2d');
     expect(normalizeGeometryScene({ type: '3d', vertices: { A: [0, 0, 0], S: [1, 1, 3] } }).type).toBe('3d');

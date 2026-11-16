@@ -118,6 +118,18 @@ describe('geometryToTikz: 3D', () => {
     expect(silhouette).toMatch(/^\\draw\[visible\] plot\[smooth cycle\] coordinates \{(\(-?[\d.]+,-?[\d.]+,-?[\d.]+\) ?){24}\};$/);
   });
 
+  it('имена вершин из прототипа объекта у конусов и шаров не находят вершину', () => {
+    const raw = { type: '3d', vertices: { O: [0, 0, 0], S: [0, 0, 4] }, edges: [['O', 'S']] };
+    const out = geometry({
+      ...raw,
+      cones: [{ base: 'constructor', apex: 'S' }, { base: 'O', apex: 'toString' }],
+      spheres: [{ center: 'hasOwnProperty' }],
+    });
+
+    expect(out).not.toContain('NaN');
+    expect(out).toBe(geometry(raw));
+  });
+
   it('порядок блоков: цилиндры, конусы, шары, рёбра', () => {
     const out = geometry({
       type: '3d',

@@ -246,14 +246,15 @@ const collectLooseCircles = (raw: Raw): Plot[] => {
 
 /**
  * Тип сцены. `hasRoundBodies` — есть цилиндр, конус или шар: тело вращения
- * бывает только в 3D, даже если все вершины лежат в плоскости z = 0.
+ * бывает только в 3D, даже если все вершины лежат в плоскости z = 0. Графики
+ * важнее: сцена с `plots` определяется, как раньше.
  */
 const detectGeometryType = (raw: Raw, vertices: Record<string, Point>, plots: Plot[], hasRoundBodies: boolean): GeometrySceneType => {
   if (raw.type === 'plot_2d') return 'plot_2d';
 
   if (raw.type === '2d') return '2d';
 
-  if (hasRoundBodies) return '3d';
+  if (hasRoundBodies && plots.length === 0) return '3d';
 
   const names = Object.keys(vertices);
 
@@ -381,7 +382,11 @@ export const normalizeGeometryScene = (raw: unknown): GeometryScene => {
     )
     .filter((sphere): sphere is GeometrySphere => sphere !== null);
 
-  const hasRoundBodies = cylinders.length > 0 || cones.length > 0 || spheres.length > 0;
+  // Тело считается, только если все его вершины есть в сцене: иначе рисовать нечего.
+  const hasVertex = (name: string): boolean => Object.hasOwn(vertices, name);
+  const hasRoundBodies = cylinders.some((cylinder) => hasVertex(cylinder.base) && hasVertex(cylinder.top))
+    || cones.some((cone) => hasVertex(cone.base) && hasVertex(cone.apex))
+    || spheres.some((sphere) => hasVertex(sphere.center));
 
   const axes = isRecord(raw.axes) ? raw.axes : {};
 

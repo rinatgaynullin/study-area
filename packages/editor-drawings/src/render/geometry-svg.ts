@@ -84,6 +84,10 @@ const attempt = (draw: () => void): void => {
   }
 };
 
+/** Вершина по имени без значений из прототипа (имя `constructor` и т. п. — нет вершины). */
+const vertexOf = (vertices: Record<string, Point>, name: string): Point | undefined =>
+  Object.hasOwn(vertices, name) ? vertices[name] : undefined;
+
 const axisBetween = (from: Point, to: Point): Vec3 => {
   const [a, b] = [toVec3(from), toVec3(to)];
 
@@ -108,13 +112,13 @@ const roundBodyPoints = (scene: GeometryScene): Vec3[] => {
     return [toVec3(base), toVec3(top)].flatMap((center) => circle3d(center, axis, cylinder.radius, CYLINDER_SEGMENTS));
   });
   const cones = scene.cones.flatMap((cone) => {
-    const base = vertices[cone.base];
-    const apex = vertices[cone.apex];
+    const base = vertexOf(vertices, cone.base);
+    const apex = vertexOf(vertices, cone.apex);
 
     return base && apex ? circle3d(toVec3(base), axisBetween(base, apex), cone.radius, CYLINDER_SEGMENTS) : [];
   });
   const spheres = scene.spheres.flatMap((sphere) => {
-    const center = vertices[sphere.center];
+    const center = vertexOf(vertices, sphere.center);
 
     return center ? sphereOutline(toVec3(center), sphere.radius, view)?.silhouette ?? [] : [];
   });
@@ -433,8 +437,8 @@ const renderCones = ({ scene, builder, project }: FigureContext): void => {
   const view = viewDirection3d(scene.angleY, scene.angleZ);
 
   scene.cones.forEach((cone) => {
-    const base = scene.vertices[cone.base];
-    const apex = scene.vertices[cone.apex];
+    const base = vertexOf(scene.vertices, cone.base);
+    const apex = vertexOf(scene.vertices, cone.apex);
 
     if (!base || !apex) return;
 
@@ -455,7 +459,7 @@ const renderSpheres = ({ scene, builder, project }: FigureContext): void => {
   const view = viewDirection3d(scene.angleY, scene.angleZ);
 
   scene.spheres.forEach((sphere) => {
-    const center = scene.vertices[sphere.center];
+    const center = vertexOf(scene.vertices, sphere.center);
     const outline = center ? sphereOutline(toVec3(center), sphere.radius, view) : null;
 
     if (!outline) return;
