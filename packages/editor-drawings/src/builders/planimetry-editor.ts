@@ -7,6 +7,8 @@ import {
   angleBetween,
   distance,
   distanceToSegment,
+  formatAngleMeasure,
+  isAngleMeasureLabel,
   nearestOnCircle,
   projectOnSegment,
   roundPoint,
@@ -54,11 +56,20 @@ type Selection =
   | { type: 'text'; index: number }
   | null;
 
+/** Угол в состоянии конструктора. */
+interface PlanimetryAngle {
+  points: [string, string, string];
+  style: AngleStyle;
+  label?: string;
+  /** Подпись — величина угла, конструктор пересчитывает её сам. В сцену не пишется, в истории есть. */
+  measured: boolean;
+}
+
 /** Живая сцена конструктора: подмножество `GeometryScene` для плоскости плюс всё чужое как есть. */
 interface PlanimetryState {
   vertices: Record<string, Vec2>;
   edges: Array<{ from: string; to: string; style: 'solid' | 'dashed'; ticks?: number }>;
-  angles: Array<{ points: [string, string, string]; style: AngleStyle; label?: string }>;
+  angles: PlanimetryAngle[];
   labels: Record<string, string>;
   textLabels: GeometryTextLabel[];
   circles: Circle[];
@@ -82,6 +93,13 @@ const nextVertexName = (used: Record<string, unknown>, preferred?: string): stri
   }
 
   return `P${Object.keys(used).length + 1}`;
+};
+
+/** Величина угла в градусах; `null`, если какой-то из трёх точек нет. */
+const angleMeasure = (points: [string, string, string], vertices: Record<string, Vec2>): number | null => {
+  const [a, vertex, b] = points.map((name) => vertices[name]);
+
+  return a && vertex && b ? angleBetween(vertex, a, b) : null;
 };
 
 let circleCount = 0;
@@ -230,7 +248,13 @@ class PlanimetryEditor implements SceneEditor {
     this.state = {
       vertices,
       edges: scene.edges.map((edge) => ({ from: edge.from, to: edge.to, style: edge.style, ...(edge.ticks ? { ticks: edge.ticks } : {}) })),
-      angles: scene.angles.map((angle) => ({ points: [...angle.points] as [string, string, string], style: angle.style, label: angle.label })),
+      // Подпись, совпадающая с величиной, дальше ведётся сама; чужая («α», «45°» не в масштабе) — нет.
+      angles: scene.angles.map((angle) => {
+        const points = [...angle.points] as [string, string, string];
+        const degrees = angleMeasure(points, vertices);
+
+        return { points, style: angle.style, label: angle.label, measured: degrees !== null && isAngleMeasureLabel(angle.label, degrees) };
+      }),
       labels: { ...scene.labels },
       textLabels: scene.textLabels.map((label) => ({ ...label })),
       circles,
@@ -399,6 +423,7 @@ class PlanimetryEditor implements SceneEditor {
 
   private afterChange(): void {
     this.splitEdgesInState();
+    this.measureAngles();
     this.render();
     this.renderProperties();
     this.changes.emit();
@@ -411,6 +436,15 @@ class PlanimetryEditor implements SceneEditor {
     if (normalized.edges.length !== this.state.edges.length) {
       this.state.edges = normalized.edges.map((edge) => ({ from: edge.from, to: edge.to, style: edge.style, ...(edge.ticks ? { ticks: edge.ticks } : {}) }));
     }
+  }
+
+  /** Подписи-величины углов следуют за геометрией; чужие подписи и углы без точек не трогаем. */
+  private measureAngles(): void {
+    this.state.angles.forEach((angle) => {
+      const degrees = angle.measured ? angleMeasure(angle.points, this.state.vertices) : null;
+
+      if (degrees !== null) angle.label = formatAngleMeasure(degrees);
+    });
   }
 
   private undo(): void {
@@ -618,6 +652,8 @@ class PlanimetryEditor implements SceneEditor {
       }
 
       this.state.vertices[id] = this.snap(info.world, info, id);
+      // Величины углов меняются вместе с точкой, не дожидаясь отпускания.
+      this.measureAngles();
       this.render();
 
       return;
@@ -777,10 +813,14 @@ class PlanimetryEditor implements SceneEditor {
 
       if (!a || !vertex || !b) return;
 
-      // Прямой угол — сразу уголком: так рисуют чаще всего.
+      // Прямой угол — сразу уголком и без подписи: так рисуют чаще всего. Остальные подписаны величиной.
       const degrees = angleBetween(vertex, a, b);
 
-      state.angles.push({ points, style: Math.abs(degrees - 90) < 1.5 ? 'right' : 'single' });
+      state.angles.push(
+        Math.abs(degrees - 90) < 1.5
+          ? { points, style: 'right', measured: false }
+          : { points, style: 'single', label: formatAngleMeasure(degrees), measured: true },
+      );
       this.selection = { type: 'angle', index: state.angles.length - 1 };
     });
   }
@@ -1002,10 +1042,38 @@ class PlanimetryEditor implements SceneEditor {
 
       if (!angle) return;
 
+      const degrees = angleMeasure(angle.points, state.vertices);
       const style = selectControl(ANGLE_STYLES.map((value) => ({ value, label: t(`drawings_angle_${value}`) })), angle.style);
-      const label = el('input', { class: 'rte-input', attrs: { type: 'text', value: angle.label ?? '', placeholder: '30°' } });
+      const measure = el('input', {
+        class: 'rte-input',
+        attrs: { type: 'text', value: degrees === null ? '' : formatAngleMeasure(degrees), readonly: true, 'data-prop': 'angleValue' },
+      });
+      const measured = el('input', { class: 'rte-builder__check', attrs: { type: 'checkbox', 'data-prop': 'angleMeasure' } });
+      // Пока подпись ведётся сама, руками её не правят.
+      const label = el('input', {
+        class: 'rte-input',
+        attrs: { type: 'text', value: angle.label ?? '', placeholder: '30°', disabled: angle.measured, 'data-prop': 'angleLabel' },
+      });
 
-      this.properties.append(propertyField(t('drawings_prop_style'), style), propertyField(t('drawings_prop_label'), label));
+      measured.checked = angle.measured;
+      this.properties.append(
+        propertyField(t('drawings_prop_style'), style),
+        propertyField(t('drawings_prop_angle_value'), measure),
+        propertyField(t('drawings_prop_angle_measure'), measured),
+        propertyField(t('drawings_prop_label'), label),
+      );
+      // Включение пишет величину в подпись (это делает `measureAngles`), выключение оставляет подпись текстом.
+      this.disposer.add(
+        on(measured, 'change', () => {
+          const { checked } = measured;
+
+          this.commit((draft) => {
+            const draftAngle = draft.angles[selection.index];
+
+            if (draftAngle) draftAngle.measured = checked;
+          });
+        }),
+      );
       this.disposer.add(
         on(style, 'change', () => {
           this.commit((draft) => {
