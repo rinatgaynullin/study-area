@@ -250,6 +250,10 @@ const cylinderLines = (ctx: Context): string[] =>
     }),
   );
 
+/** Вершина по имени без значений из прототипа (имя `constructor` и т. п. — нет вершины). */
+const vertexOf = (vertices: Record<string, Point>, name: string): Point | undefined =>
+  Object.hasOwn(vertices, name) ? vertices[name] : undefined;
+
 /** Угол (в градусах) точки `point` вокруг `center` в плоскости xy. */
 const planeAngle = (center: Vec3, point: Vec3): number => (Math.atan2(point[1] - center[1], point[0] - center[0]) * 180) / Math.PI;
 
@@ -271,8 +275,8 @@ const coneLines = (ctx: Context): string[] =>
   withHeading(
     '% Конусы',
     ctx.scene.cones.flatMap((cone) => {
-      const basePoint = ctx.scene.vertices[cone.base];
-      const apexPoint = ctx.scene.vertices[cone.apex];
+      const basePoint = vertexOf(ctx.scene.vertices, cone.base);
+      const apexPoint = vertexOf(ctx.scene.vertices, cone.apex);
 
       if (!basePoint || !apexPoint) return [];
 
@@ -325,7 +329,7 @@ const sphereLines = (ctx: Context): string[] =>
   withHeading(
     '% Шары',
     ctx.scene.spheres.flatMap((sphere) => {
-      const centerPoint = ctx.scene.vertices[sphere.center];
+      const centerPoint = vertexOf(ctx.scene.vertices, sphere.center);
       const outline = centerPoint ? sphereOutline(toVec3(centerPoint), sphere.radius, TIKZ_VIEW, SPHERE_SILHOUETTE_POINTS) : null;
 
       if (!outline) return [];

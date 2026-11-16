@@ -447,6 +447,20 @@ describe('autoFit и viewport', () => {
     expect(collectGeometryPoints(cone)).toHaveLength(2 + 32);
   });
 
+  it('имена вершин из прототипа объекта у конусов и шаров не находят вершину', () => {
+    const raw = { type: '3d', vertices: { O: [0, 0, 0], S: [0, 0, 4] }, edges: [['O', 'S']], showGrid: false };
+    const bogus = normalizeGeometryScene({
+      ...raw,
+      cones: [{ base: 'constructor', apex: 'S' }, { base: 'O', apex: 'toString' }],
+      spheres: [{ center: 'hasOwnProperty' }],
+    });
+    const svg = renderGeometrySvg(bogus);
+
+    expect(svg).not.toContain('NaN');
+    expect(svg).toBe(renderGeometrySvg(normalizeGeometryScene(raw)));
+    expect(collectGeometryPoints(bogus)).toHaveLength(2);
+  });
+
   it('пустая сцена с autoFit получает запасной масштаб', () => {
     expect(resolveGeometryViewport(normalizeGeometryScene({}), { autoFit: true })).toEqual({ scale: 25, cx: 150, cy: 150 });
     expect(resolveGeometryViewport(normalizeGeometryScene({ type: 'plot_2d' }), { autoFit: true }).scale).toBe(15);
