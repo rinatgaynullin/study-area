@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Translate } from '@rich-editor/core';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { supportPlanes } from '../src/builders/hidden-lines';
 import {
   STEREOMETRY_CANVAS,
   parseAngleVertices,
@@ -17,6 +18,13 @@ import { project3dToPlane, type Viewport } from '../src/render/coords';
 import { resolveGeometryViewport } from '../src/render/geometry-svg';
 import { normalizeGeometryScene } from '../src/scene/normalize';
 import type { Point } from '../src/scene/types';
+
+/** Настоящая оболочка, но со счётчиком вызовов: при вращении её не пересчитывают. */
+vi.mock('../src/builders/hidden-lines', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/builders/hidden-lines')>();
+
+  return { ...actual, supportPlanes: vi.fn(actual.supportPlanes) };
+});
 
 /** jsdom не знает PointerEvent — полотно слушает именно его. */
 beforeAll(() => {
@@ -195,14 +203,26 @@ describe('конструктор стереометрии', () => {
     expect(stereo.element.querySelector('.rte-builder__hint')?.textContent).toContain('Тяните пустое место');
   });
 
-  it('шаблоны дают ожидаемые вершины, рёбра и цилиндр', () => {
+  it('шаблоны дают ожидаемые вершины, рёбра и тела вращения', () => {
     const stereo = create();
     const expectations: Array<[string, string[], number]> = [
-      ['pyramid3', ['A', 'B', 'C', 'S'], 6],
-      ['pyramid4', ['A', 'B', 'C', 'D', 'S'], 8],
-      ['prism3', ['A', 'B', 'C', 'A1', 'B1', 'C1'], 9],
+      ['cube', ['A', 'B', 'C', 'D', 'A1', 'B1', 'C1', 'D1'], 12],
       ['parallelepiped', ['A', 'B', 'C', 'D', 'A1', 'B1', 'C1', 'D1'], 12],
+      ['prism', ['A', 'B', 'C', 'A1', 'B1', 'C1'], 9],
+      ['pyramid', ['A', 'B', 'C', 'D', 'S'], 8],
+      ['frustum', ['A', 'B', 'C', 'D', 'A1', 'B1', 'C1', 'D1'], 12],
     ];
+
+    expect([...stereo.element.querySelectorAll<HTMLButtonElement>('button[data-template]')].map((button) => button.dataset.template)).toEqual([
+      'cube',
+      'parallelepiped',
+      'prism',
+      'pyramid',
+      'frustum',
+      'cylinder',
+      'cone',
+      'sphere',
+    ]);
 
     expectations.forEach(([template, names, edgeCount]) => {
       pickTemplate(stereo, template);
@@ -214,6 +234,8 @@ describe('конструктор стереометрии', () => {
       expect(scene.angleY).toBe(15);
       expect(scene.angleZ).toBe(-30);
       expect(scene.cylinders).toBeUndefined();
+      expect(scene.cones).toBeUndefined();
+      expect(scene.spheres).toBeUndefined();
     });
 
     pickTemplate(stereo, 'cylinder');
@@ -229,7 +251,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'point');
     // Клик по середине проекции ребра S–B: доля t = 0.5 переносится в пространство.
     clickVertex(canvas, [1.5, -1.5, 2.75]);
@@ -263,7 +285,7 @@ describe('конструктор стереометрии', () => {
     expect(free[2]).toBe(0);
 
     // И на повёрнутой сцене с фигурой: клик мимо рёбер — новая точка на земле.
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'point');
     clickVertex(canvas, [-1, 1, 0]);
     expect(stereo.getScene().vertices).toMatchObject({ E: [-1, 1, 0] });
@@ -274,7 +296,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'segment');
     clickVertex(canvas, [-3, -3, 0]);
     clickVertex(canvas, [3, 3, 0]);
@@ -282,7 +304,8 @@ describe('конструктор стереометрии', () => {
     const edges = edgesOf(stereo);
 
     expect(edges).toHaveLength(9);
-    expect(edges).toContainEqual({ from: 'A', to: 'C', style: 'solid' });
+    // Диагональ лежит в основании, а его в виде по умолчанию не видно.
+    expect(edges).toContainEqual({ from: 'A', to: 'C', style: 'dashed' });
 
     // Повтор того же отрезка и клик дважды по одной точке ничего не добавляют.
     clickVertex(canvas, [3, 3, 0]);
@@ -296,7 +319,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'section');
     clickVertex(canvas, [-3, -3, 0]);
     clickVertex(canvas, [3, -3, 0]);
@@ -373,7 +396,7 @@ describe('конструктор стереометрии', () => {
     const canvas = canvasOf(stereo);
     let changes = 0;
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     stereo.onChange(() => {
       changes += 1;
     });
@@ -411,7 +434,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'point');
     clickVertex(canvas, [-1, 1, 0]);
     expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(6);
@@ -431,7 +454,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'select');
     // Середина проекции ребра B–C.
     clickVertex(canvas, [3, 0, 0]);
@@ -471,19 +494,20 @@ describe('конструктор стереометрии', () => {
     // Панель перерисовывается после каждого изменения, поэтому чекбоксы берём заново.
     const checkboxes = (): NodeListOf<HTMLInputElement> => propsOf(stereo).querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
 
-    expect([...checkboxes()].map((box) => box.checked)).toEqual([true, false]);
+    // Третий — автоматический пунктир: ручной стиль ребра B–C его выключил.
+    expect([...checkboxes()].map((box) => box.checked)).toEqual([true, false, false]);
     checkboxes()[0].click();
     expect(stereo.getScene().showGrid).toBe(false);
     checkboxes()[1].click();
     expect(stereo.getScene().showAxes).toBe(true);
-    expect([...checkboxes()].map((box) => box.checked)).toEqual([false, true]);
+    expect([...checkboxes()].map((box) => box.checked)).toEqual([false, true, false]);
   });
 
   it('удаление вершины чистит рёбра, сечения, углы и подпись', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'section');
     clickVertex(canvas, [-3, -3, 0]);
     clickVertex(canvas, [3, -3, 0]);
@@ -579,7 +603,7 @@ describe('конструктор стереометрии', () => {
     const canvas = canvasOf(stereo);
     let changes = 0;
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     stereo.onChange(() => {
       changes += 1;
     });
@@ -632,13 +656,13 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'select');
     clickVertex(canvas, [3, 0, 0]);
     expect(propsOf(stereo).querySelector('select')).not.toBeNull();
 
     clickAt(canvas, EMPTY_CORNER);
-    expect(propsOf(stereo).querySelector('.rte-builder__props-title')?.textContent).toBe('Вид');
+    expect([...propsOf(stereo).querySelectorAll('.rte-builder__props-title')].map((title) => title.textContent)).toEqual(['Параметры фигуры', 'Вид']);
     expect(propsOf(stereo).querySelector('input[data-prop="angleY"]')).not.toBeNull();
   });
 
@@ -661,7 +685,7 @@ describe('конструктор стереометрии', () => {
     const canvas = canvasOf(stereo);
     let changes = 0;
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'select');
     stereo.onChange(() => {
       changes += 1;
@@ -696,7 +720,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'select');
     dragFrom(canvas, svgOf([0, 0, 5.5]), svgOf([0, 0, 7]), { altKey: true });
     expect(vertexOf(stereo, 'S')).toEqual([0, 0, 7]);
@@ -753,7 +777,7 @@ describe('конструктор стереометрии', () => {
     expect(viewField(stereo, 'pointHeight').value).toBe('2');
 
     // Шаблон сбрасывает высоту в 0, и подсказки больше нет.
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pointerAt(canvas, 'pointermove', EMPTY_CORNER);
     expect(canvas.querySelector('.rte-sketch__overlay line')).toBeNull();
     expect(viewField(stereo, 'pointHeight').value).toBe('0');
@@ -763,7 +787,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    ['pyramid3', 'pyramid4', 'prism3', 'parallelepiped', 'cylinder'].forEach((template) => {
+    ['cube', 'parallelepiped', 'prism', 'pyramid', 'frustum', 'cylinder', 'cone', 'sphere'].forEach((template) => {
       pickTemplate(stereo, template);
       pickTool(stereo, 'select');
 
@@ -786,7 +810,7 @@ describe('конструктор стереометрии', () => {
     const canvas = canvasOf(stereo);
     let changes = 0;
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     stereo.onChange(() => {
       changes += 1;
     });
@@ -837,7 +861,7 @@ describe('конструктор стереометрии', () => {
     const arrow = (key: string, shiftKey = false): boolean =>
       canvas.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
 
     expect(arrow('ArrowRight')).toBe(false);
     expect(stereo.getScene().angleZ).toBe(-25);
@@ -872,7 +896,7 @@ describe('конструктор стереометрии', () => {
       events.forEach((type) => slider.dispatchEvent(new Event(type, { bubbles: true })));
     };
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     slide('40', 'input');
     slide('-30', 'input');
     pickTool(stereo, 'point');
@@ -900,7 +924,7 @@ describe('конструктор стереометрии', () => {
     const canvas = canvasOf(stereo);
     let changes = 0;
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     stereo.onChange(() => {
       changes += 1;
     });
@@ -926,7 +950,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'select');
 
     const grab = { x: 3, y: 2 };
@@ -993,7 +1017,7 @@ describe('конструктор стереометрии', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
 
     // Вращение.
     pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
@@ -1047,7 +1071,7 @@ describe('конструктор стереометрии', () => {
     expect(stereo.getScene().vertices).toEqual({ A: [1, 1, 0], B: [3, -2, 0] });
     expect(edgesOf(stereo)).toEqual([{ from: 'A', to: 'B', style: 'solid' }]);
 
-    pickTemplate(stereo, 'pyramid4');
+    pickTemplate(stereo, 'pyramid');
     pickTool(stereo, 'section');
     clickVertex(canvas, [-3, -3, 0]);
     clickVertex(canvas, [3, -3, 0]);
@@ -1057,6 +1081,444 @@ describe('конструктор стереометрии', () => {
 
     canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: at.x, clientY: at.y }));
     expect(stereo.getScene().sections).toEqual([{ vertices: ['A', 'B', 'C'], fill: 'rgba(16, 185, 129, 0.25)', stroke: '#10b981' }]);
+  });
+
+  // ------------------------------------------- автоматический пунктир и шаблоны
+
+  /** Пунктирные рёбра сцены строками «AB». */
+  const dashedOf = (stereo: SceneEditor): string[] =>
+    edgesOf(stereo)
+      .filter((edge) => edge.style === 'dashed')
+      .map((edge) => `${edge.from}${edge.to}`);
+
+  const autoHiddenBox = (stereo: SceneEditor): HTMLInputElement => viewField(stereo, 'autoHidden');
+
+  /** Первый элемент панели свойств по селектору; нет — тест падает. */
+  const firstControl = (stereo: SceneEditor, selector: string): HTMLInputElement | HTMLSelectElement => {
+    const control = propsOf(stereo).querySelector<HTMLInputElement | HTMLSelectElement>(selector);
+
+    if (!control) throw new Error(`Нет ${selector}`);
+
+    return control;
+  };
+
+  const templateField = (stereo: SceneEditor, key: string): HTMLInputElement | null =>
+    propsOf(stereo).querySelector<HTMLInputElement>(`input[data-prop="template-${key}"]`);
+
+  it('поворот на 180° вокруг вертикали переносит пунктир с рёбер A на рёбра C — числом и ползунком', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'parallelepiped');
+    expect(dashedOf(stereo)).toEqual(['AB', 'DA', 'AA1']);
+    expect(autoHiddenBox(stereo).checked).toBe(true);
+
+    setValue(viewField(stereo, 'angleZ'), '150');
+    expect(dashedOf(stereo)).toEqual(['BC', 'CD', 'CC1']);
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(dashedOf(stereo)).toEqual(['AB', 'DA', 'AA1']);
+
+    // Ползунок пересчитывает пунктир на каждом кадре, отмена возвращает его вместе с видом.
+    const slider = viewField(stereo, 'angleZRange');
+
+    slider.value = '150';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(dashedOf(stereo)).toEqual(['BC', 'CD', 'CC1']);
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(-30);
+    expect(dashedOf(stereo)).toEqual(['AB', 'DA', 'AA1']);
+
+    // Перетаскивание пустого места — тоже на каждом кадре.
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
+    // Первое движение за порог только начинает вращение: дальше 225 px — это 180°.
+    pointerAt(canvas, 'pointermove', { x: EMPTY_CORNER.x + 5, y: EMPTY_CORNER.y });
+    pointerAt(canvas, 'pointermove', { x: EMPTY_CORNER.x + 230, y: EMPTY_CORNER.y });
+    expect(stereo.getScene().angleZ).toBe(150);
+    expect(dashedOf(stereo)).toEqual(['BC', 'CD', 'CC1']);
+    pointerAt(canvas, 'pointerup', { x: EMPTY_CORNER.x + 230, y: EMPTY_CORNER.y });
+  });
+
+  it('высота SO пирамиды, проведённая отрезком, сразу пунктирная', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid');
+    pickTool(stereo, 'segment');
+    clickVertex(canvas, [0, 0, 5.5]);
+    clickVertex(canvas, [0, 0, 0]);
+
+    expect(stereo.getScene().vertices).toMatchObject({ E: [0, 0, 0] });
+    expect(edgesOf(stereo)).toContainEqual({ from: 'S', to: 'E', style: 'dashed' });
+    expect(dashedOf(stereo)).toEqual(['AB', 'DA', 'SA', 'SE']);
+  });
+
+  it('ручной стиль ребра выключает автоматический пунктир, и поворот стили больше не трогает', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid');
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [3, 0, 0]);
+    setValue(firstControl(stereo, 'select'), 'dashed');
+    press(canvas, 'Escape');
+    expect(autoHiddenBox(stereo).checked).toBe(false);
+
+    const before = dashedOf(stereo);
+
+    expect(before).toEqual(['AB', 'BC', 'DA', 'SA']);
+    setValue(viewField(stereo, 'angleZ'), '150');
+    expect(dashedOf(stereo)).toEqual(before);
+    press(canvas, 'ArrowLeft');
+    expect(dashedOf(stereo)).toEqual(before);
+  });
+
+  it('load сцены со сплошными рёбрами флажок выключает; включение расставляет пунктир одним шагом', () => {
+    const source = create();
+
+    pickTemplate(source, 'cube');
+
+    const solid = { ...source.getScene(), edges: edgesOf(source).map((edge) => ({ ...edge, style: 'solid' })) };
+
+    source.destroy();
+
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    stereo.load(solid);
+    expect(autoHiddenBox(stereo).checked).toBe(false);
+    // Пока ничего не трогали, сцена уходит такой, какой пришла.
+    expect(stereo.getScene()).toEqual(solid);
+    setValue(viewField(stereo, 'angleZ'), '0');
+    expect(dashedOf(stereo)).toEqual([]);
+
+    press(canvas, 'z', { ctrlKey: true });
+    autoHiddenBox(stereo).click();
+    expect(autoHiddenBox(stereo).checked).toBe(true);
+    expect(dashedOf(stereo)).toEqual(['AB', 'DA', 'AA1']);
+
+    // Отмена возвращает сплошные рёбра, флажок остаётся включённым.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(dashedOf(stereo)).toEqual([]);
+    expect(autoHiddenBox(stereo).checked).toBe(true);
+    press(canvas, 'y', { ctrlKey: true });
+    expect(dashedOf(stereo)).toEqual(['AB', 'DA', 'AA1']);
+
+    // Выключение сцену не меняет.
+    autoHiddenBox(stereo).click();
+    expect(autoHiddenBox(stereo).checked).toBe(false);
+    expect(dashedOf(stereo)).toEqual(['AB', 'DA', 'AA1']);
+  });
+
+  it('load сцены, построенной шаблоном, оставляет флажок включённым и сцену прежней', () => {
+    ['cube', 'pyramid', 'cone', 'sphere', 'cylinder'].forEach((template) => {
+      const source = create();
+
+      pickTemplate(source, template);
+      setValue(viewField(source, 'angleZ'), '40');
+
+      const saved = source.getScene();
+
+      source.destroy();
+
+      const stereo = create();
+
+      stereo.load(saved);
+      expect(autoHiddenBox(stereo).checked).toBe(true);
+      expect(stereo.getScene()).toEqual(saved);
+      // Шаблон после load неизвестен: параметров нет.
+      expect(templateField(stereo, 'radius') ?? templateField(stereo, 'edge')).toBeNull();
+      stereo.destroy();
+    });
+  });
+
+  it('поле параметра перестраивает фигуру одним шагом: призма 3 → 6 сторон, вид, сетка и оси остаются', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'prism');
+    expect([...propsOf(stereo).querySelectorAll<HTMLInputElement>('input[data-prop^="template-"]')].map((input) => input.dataset.prop)).toEqual([
+      'template-sides',
+      'template-edge',
+      'template-height',
+    ]);
+    setValue(viewField(stereo, 'angleZ'), '20');
+    setValue(viewField(stereo, 'angleY'), '30');
+    autoHiddenBox(stereo).click();
+    propsOf(stereo).querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[0]?.click();
+    propsOf(stereo).querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1]?.click();
+    expect(autoHiddenBox(stereo).checked).toBe(false);
+
+    setValue(viewField(stereo, 'template-sides'), '6');
+
+    const scene = stereo.getScene();
+
+    expect(Object.keys(scene.vertices as object)).toHaveLength(12);
+    expect(scene.edges).toHaveLength(18);
+    expect(scene.angleZ).toBe(20);
+    expect(scene.angleY).toBe(30);
+    expect(scene.showGrid).toBe(false);
+    expect(scene.showAxes).toBe(true);
+    expect(templateField(stereo, 'sides')?.value).toBe('6');
+    // Перестроенная фигура снова размечена автоматически.
+    expect(autoHiddenBox(stereo).checked).toBe(true);
+    expect(dashedOf(stereo).length).toBeGreaterThan(0);
+
+    // Значение за пределом упирается в него.
+    setValue(viewField(stereo, 'template-sides'), '20');
+    expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(16);
+    expect(templateField(stereo, 'sides')?.value).toBe('8');
+
+    // Отмена — к шести сторонам, ещё одна — к трём и к прежним параметрам в панели.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(12);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(Object.keys(stereo.getScene().vertices as object)).toEqual(['A', 'B', 'C', 'A1', 'B1', 'C1']);
+    expect(templateField(stereo, 'sides')?.value).toBe('3');
+  });
+
+  it('вращение и флажки блок параметров не убирают, правка геометрии — убирает', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid');
+    setValue(viewField(stereo, 'angleZ'), '60');
+    propsOf(stereo).querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1]?.click();
+    expect(templateField(stereo, 'height')?.value).toBe('5.5');
+
+    setValue(viewField(stereo, 'template-height'), '8');
+    expect(stereo.getScene().vertices).toMatchObject({ S: [0, 0, 8] });
+
+    pickTool(stereo, 'point');
+    clickVertex(canvas, [1, 1, 0], { angleY: 15, angleZ: 60 });
+    press(canvas, 'Escape');
+    expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(6);
+    expect(templateField(stereo, 'height')).toBeNull();
+    expect(propsOf(stereo).querySelector('.rte-builder__props-title')?.textContent).not.toBe('Параметры фигуры');
+
+    // Отмена точки возвращает фигуру шаблона — и блок вместе с ней.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(templateField(stereo, 'height')?.value).toBe('8');
+  });
+
+  it('конус и шар из шаблонов: в getScene, поле «Радиус» у центров, удаление центра удаляет тело', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'cone');
+    expect(stereo.getScene().cones).toEqual([{ base: 'O', apex: 'S', radius: 3 }]);
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [0, 0, 5.5]);
+    expect(nameField(stereo)).toBe('S');
+    setValue(viewField(stereo, 'radius'), '2');
+    expect(stereo.getScene().cones).toEqual([{ base: 'O', apex: 'S', radius: 2 }]);
+    clickVertex(canvas, [0, -3, 0]);
+    expect(nameField(stereo)).toBe('A');
+    expect(propsOf(stereo).querySelector('input[data-prop="radius"]')).toBeNull();
+
+    clickVertex(canvas, [0, 0, 0]);
+    expect(nameField(stereo)).toBe('O');
+    setValue(firstControl(stereo, 'input[type="text"]'), 'Q');
+    expect(stereo.getScene().cones).toEqual([{ base: 'Q', apex: 'S', radius: 2 }]);
+    press(canvas, 'Delete');
+    expect(stereo.getScene().cones).toBeUndefined();
+
+    pickTemplate(stereo, 'sphere');
+    expect(stereo.getScene().spheres).toEqual([{ center: 'O', radius: 3 }]);
+    expect(stereo.getScene().cones).toBeUndefined();
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [0, 0, 0]);
+    setValue(viewField(stereo, 'radius'), '4.5');
+    expect(stereo.getScene().spheres).toEqual([{ center: 'O', radius: 4.5 }]);
+    // Ноль и мусор радиус не меняют.
+    setValue(viewField(stereo, 'radius'), '0');
+    expect(stereo.getScene().spheres).toEqual([{ center: 'O', radius: 4.5 }]);
+    setValue(firstControl(stereo, 'input[type="text"]'), 'P');
+    expect(stereo.getScene().spheres).toEqual([{ center: 'P', radius: 4.5 }]);
+    pickTool(stereo, 'delete');
+    clickVertex(canvas, [0, 0, 0]);
+    expect(stereo.getScene().spheres).toBeUndefined();
+
+    // Цилиндр: удаление центра основания удаляет и его.
+    pickTemplate(stereo, 'cylinder');
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [0, 0, 5.5]);
+    expect(nameField(stereo)).toBe('O2');
+    expect(viewField(stereo, 'radius').value).toBe('3');
+    press(canvas, 'Delete');
+    expect(stereo.getScene().cylinders).toBeUndefined();
+  });
+
+  it('у вершины нескольких тел — поле радиуса на каждое', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    stereo.load({
+      type: '3d',
+      vertices: { O: [0, 0, 0], S: [0, 0, 4], T: [0, 0, -4] },
+      edges: [['S', 'T']],
+      cones: [
+        { base: 'O', apex: 'S', radius: 2 },
+        { base: 'O', apex: 'T', radius: 1 },
+      ],
+      spheres: [{ center: 'O', radius: 1.5 }],
+    });
+    view = fittedViewport(stereo);
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [0, 0, 0]);
+    expect(nameField(stereo)).toBe('O');
+
+    const radii = (): HTMLInputElement[] => [...propsOf(stereo).querySelectorAll<HTMLInputElement>('input[data-prop="radius"]')];
+    const [, second] = radii();
+
+    expect(radii().map((input) => input.value)).toEqual(['2', '1', '1.5']);
+    expect(second).toBeDefined();
+    if (second) setValue(second, '2.5');
+    expect(stereo.getScene().cones).toEqual([
+      { base: 'O', apex: 'S', radius: 2 },
+      { base: 'O', apex: 'T', radius: 2.5 },
+    ]);
+  });
+
+  it('оболочка сцены с шаром считается один раз на геометрию, а не на кадр вращения', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    const calls = vi.mocked(supportPlanes);
+
+    pickTemplate(stereo, 'sphere');
+    calls.mockClear();
+
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
+    Array.from({ length: 30 }, (_, index) => index + 1).forEach((step) => {
+      pointerAt(canvas, 'pointermove', { x: EMPTY_CORNER.x + step * 8, y: EMPTY_CORNER.y + step });
+    });
+    pointerAt(canvas, 'pointerup', { x: EMPTY_CORNER.x + 240, y: EMPTY_CORNER.y + 30 });
+    expect(stereo.getScene().angleZ).not.toBe(-30);
+    expect(calls).not.toHaveBeenCalled();
+    // Радиус шара OA — внутри тела при любом виде.
+    expect(dashedOf(stereo)).toEqual(['OA']);
+
+    // Правка геометрии — один пересчёт.
+    pickTool(stereo, 'select');
+    const { angleY, angleZ } = stereo.getScene();
+
+    clickVertex(canvas, [0, 0, 0], { angleY: Number(angleY), angleZ: Number(angleZ) });
+    setValue(viewField(stereo, 'radius'), '4');
+    expect(calls).toHaveBeenCalledTimes(1);
+  });
+
+  // ------------------------------------------------------------ длина ребра
+
+  const lengthField = (stereo: SceneEditor): HTMLInputElement => viewField(stereo, 'length');
+
+  const lengthEnd = (stereo: SceneEditor): HTMLSelectElement => {
+    const select = propsOf(stereo).querySelector<HTMLSelectElement>('select[data-prop="lengthEnd"]');
+
+    if (!select) throw new Error('Нет выбора подвижного конца');
+
+    return select;
+  };
+
+  const distanceOf = (stereo: SceneEditor, a: string, b: string): number => {
+    const from = vertexOf(stereo, a) ?? [];
+    const to = vertexOf(stereo, b) ?? [];
+
+    return Math.hypot((to[0] ?? 0) - (from[0] ?? 0), (to[1] ?? 0) - (from[1] ?? 0), (to[2] ?? 0) - (from[2] ?? 0));
+  };
+
+  it('длина выбранного ребра: второй конец едет вдоль отрезка, первый стоит; отмена — одним шагом', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'parallelepiped');
+    pickTool(stereo, 'select');
+    // Середина ребра B–C.
+    clickVertex(canvas, [3, 0, 0]);
+    expect(lengthField(stereo).value).toBe('6');
+    expect(lengthEnd(stereo).value).toBe('to');
+    expect([...lengthEnd(stereo).options].map((option) => option.textContent)).toEqual(['B', 'C']);
+
+    setValue(lengthField(stereo), '10');
+    expect(vertexOf(stereo, 'B')).toEqual([3, -3, 0]);
+    expect(vertexOf(stereo, 'C')).toEqual([3, 7, 0]);
+    expect(Math.abs(distanceOf(stereo, 'B', 'C') - 10)).toBeLessThan(0.02);
+    // Выделение осталось на ребре, поле показывает новую длину.
+    expect(lengthField(stereo).value).toBe('10');
+    // Блок параметров исчез: геометрию правили.
+    press(canvas, 'Escape');
+    expect(templateField(stereo, 'depth')).toBeNull();
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(vertexOf(stereo, 'C')).toEqual([3, 3, 0]);
+    expect(vertexOf(stereo, 'B')).toEqual([3, -3, 0]);
+  });
+
+  it('подвижным концом можно выбрать первый; выбор сбрасывается со сменой выделения', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'parallelepiped');
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [3, 0, 0]);
+    setValue(lengthEnd(stereo), 'from');
+    setValue(lengthField(stereo), '9');
+    expect(vertexOf(stereo, 'C')).toEqual([3, 3, 0]);
+    expect(vertexOf(stereo, 'B')).toEqual([3, -6, 0]);
+    // Пока выделение то же, выбор конца держится.
+    expect(lengthEnd(stereo).value).toBe('from');
+    setValue(lengthField(stereo), '8');
+    expect(vertexOf(stereo, 'B')).toEqual([3, -5, 0]);
+
+    clickAt(canvas, EMPTY_CORNER);
+    clickVertex(canvas, [3, -1, 0]);
+    expect(lengthEnd(stereo).value).toBe('to');
+  });
+
+  it('ноль, отрицательная и пустая длина сцену не меняют, поле показывает прежнюю', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'parallelepiped');
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [3, 0, 0]);
+
+    const before = stereo.getScene();
+    let changes = 0;
+
+    stereo.onChange(() => {
+      changes += 1;
+    });
+    ['0', '-3', '', 'abc'].forEach((value) => {
+      const field = lengthField(stereo);
+
+      setValue(field, value);
+      expect(field.value).toBe('6');
+    });
+    expect(stereo.getScene()).toEqual(before);
+    expect(changes).toBe(0);
+  });
+
+  it('поле показывает длину в пространстве, а не длину проекции', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid');
+    pickTool(stereo, 'select');
+    // Середина бокового ребра S–C.
+    clickVertex(canvas, [1.5, 1.5, 2.75]);
+
+    const scene = stereo.getScene();
+    const target = (scene.edges as Edge[]).find((edge) => edge.from === 'S' && edge.to === 'C');
+
+    expect(target).toBeDefined();
+    expect(lengthField(stereo).value).toBe(String(Math.round(Math.sqrt(9 + 9 + 5.5 * 5.5) * 100) / 100));
+    expect(lengthField(stereo).value).toBe('6.95');
+
+    // Новая длина откладывается вдоль наклонного ребра: C едет к S.
+    setValue(lengthField(stereo), '3.5');
+    expect(Math.abs(distanceOf(stereo, 'S', 'C') - 3.5)).toBeLessThan(0.02);
+    expect(vertexOf(stereo, 'S')).toEqual([0, 0, 5.5]);
   });
 });
 
@@ -1137,13 +1599,16 @@ describe('проекция стереометрии', () => {
 });
 
 describe('сообщения конструктора стереометрии', () => {
-  const source = readFileSync(resolve(process.cwd(), 'packages/editor-drawings/src/builders/stereometry-editor.ts'), 'utf8');
+  // Подписи шаблонов и их полей живут в построителях шаблонов.
+  const source = ['stereometry-editor.ts', 'stereo-templates.ts']
+    .map((file) => readFileSync(resolve(process.cwd(), 'packages/editor-drawings/src/builders', file), 'utf8'))
+    .join('\n');
 
   it('английская таблица повторяет набор ключей русской', () => {
     expect(Object.keys(STEREOMETRY_MESSAGES.en).sort()).toEqual(Object.keys(STEREOMETRY_MESSAGES.ru).sort());
   });
 
-  it('все ключи с префиксом drawings_stereo_ и читаются кодом конструктора целиком', () => {
+  it('все ключи с префиксом drawings_stereo_ и читаются кодом конструктора и шаблонов целиком', () => {
     Object.keys(STEREOMETRY_MESSAGES.ru).forEach((key) => {
       expect(key.startsWith('drawings_stereo_')).toBe(true);
       expect(source.includes(`'${key}'`)).toBe(true);
