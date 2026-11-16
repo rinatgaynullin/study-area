@@ -37,9 +37,22 @@ const HINTS: Record<Tool, string> = {
  */
 export const STEREOMETRY_CANVAS = { width: 560, height: 420, scale: 40 } as const;
 
-/** Вращение правой кнопкой: градусов на пиксель и предел наклона. */
+/** Вращение мышью: градусов на пиксель и предел наклона. */
 const ROTATION_DEGREES_PER_PX = 0.8;
 const MAX_TILT = 85;
+
+/** Поворот вокруг вертикали — от −180° до 180°: так его показывает ползунок. */
+const MAX_TURN = 180;
+
+/** Сдвиг указателя в пикселях экрана, после которого нажатие — уже не клик, а перетаскивание. */
+const DRAG_THRESHOLD_PX = 4;
+
+/** Шаг поворота стрелками: обычный и с Shift. */
+const KEY_TURN_STEP = 5;
+const KEY_TURN_STEP_LARGE = 15;
+
+/** Класс корня конструктора, пока сцену вращают: курсор «схваченной руки». */
+const ROTATING_CLASS = 'rte-stereo--rotating';
 
 /** Вид по умолчанию у шаблонов и пустой сцены — как в оригинале. */
 const DEFAULT_ANGLE_Y = 15;
@@ -55,6 +68,9 @@ const EDGE_POINT_MAX_T = 0.9;
 /** Определитель, при котором плоскость z = 0 считается видимой с ребра. */
 const DEGENERATE_DET = 1e-6;
 
+/** Квадрат длины образа оси z, при котором она видна с торца и высоту мышью не поменять. */
+const DEGENERATE_AXIS = 1e-6;
+
 /** Положение подписи у новых точек: на ребре — над ним, на плоскости — у ног. */
 const EDGE_POINT_LABEL = 'above';
 const GROUND_POINT_LABEL = 'below right';
@@ -65,6 +81,19 @@ const RIGHT_ANGLE_TOLERANCE = 1.5;
 
 const LABEL_POSITIONS = ['above', 'below', 'left', 'right', 'above left', 'above right', 'below left', 'below right'];
 const ANGLE_STYLES: AngleStyle[] = ['single', 'double', 'triple', 'right'];
+
+/** Инструменты, которые ставят новую точку в пустоте: им показывается высота новой точки. */
+const HEIGHT_TOOLS: ReadonlySet<Tool> = new Set<Tool>(['point', 'segment', 'section']);
+
+type ViewAngle = 'angleY' | 'angleZ';
+
+/** Стрелки поворачивают вид: какой угол и в какую сторону. */
+const VIEW_KEYS: Record<string, { angle: ViewAngle; sign: number }> = {
+  ArrowLeft: { angle: 'angleZ', sign: -1 },
+  ArrowRight: { angle: 'angleZ', sign: 1 },
+  ArrowUp: { angle: 'angleY', sign: 1 },
+  ArrowDown: { angle: 'angleY', sign: -1 },
+};
 
 interface SectionFill {
   value: string;
@@ -142,6 +171,23 @@ type Selection =
   | { type: 'angle'; index: number }
   | null;
 
+/**
+ * Жест указателя от нажатия до отпускания. `x`, `y` — экранная точка: у
+ * нажатия по пустому месту и у вершины — где нажали, у вращения — последняя.
+ */
+type Gesture =
+  /** Нажатие по пустому месту: клик, пока указатель не ушёл дальше порога. */
+  | { type: 'empty'; pointerId: number; x: number; y: number; info: PointerInfo }
+  /** Вращение сцены; `recorded` — снимок истории уже сделан. */
+  | { type: 'rotate'; pointerId: number; x: number; y: number; recorded: boolean }
+  /**
+   * Перетаскивание вершины: где она была, где нажали (единицы мира) и на
+   * сколько нажатие разошлось с её проекцией; `moving` — порог пройден.
+   */
+  | { type: 'vertex'; pointerId: number; x: number; y: number; id: string; start: Vec3; grab: Vec2; offset: Vec2; moving: boolean };
+
+type VertexDrag = Extract<Gesture, { type: 'vertex' }>;
+
 const KNOWN_KEYS = new Set([
   'type',
   'vertices',
@@ -165,6 +211,12 @@ const clamp = (value: number, low: number, high: number): number => Math.max(low
 
 /** Поворот вокруг вертикали — по кругу: 370° и 10° — один и тот же вид. */
 const wrapDegrees = (value: number): number => ((((value + 180) % 360) + 360) % 360) - 180;
+
+/** Угол вида в допустимых пределах: наклон упирается в ±85°, поворот идёт по кругу. */
+const normalizeView = (angle: ViewAngle, value: number): number => (angle === 'angleY' ? clamp(value, -MAX_TILT, MAX_TILT) : wrapDegrees(value));
+
+/** Высота с прилипанием к полуклеткам, как у точек на плоскости. */
+const snapHeight = (z: number): number => Math.round(z / GROUND_STEP) * GROUND_STEP;
 
 const toVec3 = (point: Point): Vec3 => [point[0], point[1], point[2] ?? 0];
 
@@ -281,6 +333,17 @@ export const unprojectToGround = (plane: Vec2, angleY: number, angleZ: number): 
   return [px * Math.sin(radians), px * Math.cos(radians)];
 };
 
+/**
+ * Обратная проекция точки картинки на плоскость z = `z`. Проекция линейна,
+ * поэтому достаточно вычесть образ отрезка высоты `z * e3`, где `e3` — образ
+ * оси z, и решить задачу для плоскости z = 0.
+ */
+export const unprojectToHeight = (plane: Vec2, z: number, angleY: number, angleZ: number): Vec2 => {
+  const [ex, ey] = project3dToPlane([0, 0, 1], angleY, angleZ);
+
+  return unprojectToGround([plane[0] - z * ex, plane[1] - z * ey], angleY, angleZ);
+};
+
 // ---------------------------------------------------------------- шаблоны
 
 const edge = (from: string, to: string, style: EdgeStyle = 'solid'): StereoEdge => ({ from, to, style });
@@ -365,10 +428,12 @@ const TEMPLATE_SCENES: Record<TemplateId, () => TemplateScene> = {
 
 /**
  * Конструктор стереометрии: вершины, рёбра, сечения, углы и цилиндры в
- * кабинетной проекции с вращением правой кнопкой мыши.
+ * кабинетной проекции. Сцену вращают перетаскиванием пустого места (любой
+ * кнопкой, кроме средней), стрелками и ползунками; вершины в «Выборе» тащатся мышью.
  *
- * Инструмент, черновик, выделение, жест вращения, история и сцена — общее
- * состояние обработчиков указателя, клавиатуры и панели свойств, поэтому класс.
+ * Инструмент, черновик, выделение, жест указателя, высота новой точки, история
+ * и сцена — общее состояние обработчиков указателя, клавиатуры и панели
+ * свойств, поэтому класс.
  */
 class StereometryEditor implements SceneEditor {
   readonly element: HTMLElement;
@@ -398,11 +463,20 @@ class StereometryEditor implements SceneEditor {
   /** Вершины, уже выбранные текущим инструментом: начало отрезка, стороны угла, контур сечения. */
   private draft: string[] = [];
 
-  /** Курсор в координатах картинки — для черновика отрезка и сечения. */
+  /** Курсор в координатах картинки — для черновика отрезка и сечения; `null` — указатель вне полотна. */
   private cursor: SvgPoint | null = null;
 
-  /** Жест вращения правой кнопкой: последняя точка экрана и сделан ли снимок истории. */
-  private rotation: { x: number; y: number; recorded: boolean } | null = null;
+  /** Shift у последнего движения: подсказка высоты показывает точку без прилипания. */
+  private cursorFree = false;
+
+  /** Текущий жест указателя; `null`, когда кнопки отпущены. */
+  private gesture: Gesture | null = null;
+
+  /** Высота, на которую встают новые точки в пустоте. Не часть сцены и не часть истории. */
+  private pointHeight = 0;
+
+  /** Ползунок вида тянут: снимок истории на этот жест уже сделан. */
+  private sliding = false;
 
   constructor(context: SceneEditorContext) {
     this.t = context.t;
@@ -453,6 +527,19 @@ class StereometryEditor implements SceneEditor {
         const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-template]');
 
         if (button) this.applyTemplate(button.dataset.template as TemplateId);
+      }),
+    );
+
+    this.disposer.add(
+      on(this.canvas.element, 'pointerleave', () => {
+        this.cursor = null;
+        this.renderOverlay();
+      }),
+    );
+    // Захват отняли без отпускания кнопки: жест обрывается, отложенный клик не выполняется.
+    this.disposer.add(
+      on(this.canvas.element, 'lostpointercapture', (event) => {
+        if (this.gesture?.pointerId === event.pointerId) this.finishGesture(false);
       }),
     );
 
@@ -520,7 +607,10 @@ class StereometryEditor implements SceneEditor {
     this.history.clear();
     this.selection = null;
     this.draft = [];
-    this.rotation = null;
+    this.gesture = null;
+    this.sliding = false;
+    this.pointHeight = 0;
+    this.element.classList.remove(ROTATING_CLASS);
     this.fitView();
     this.renderProperties();
   }
@@ -657,7 +747,41 @@ class StereometryEditor implements SceneEditor {
       );
     }
 
+    parts.push(this.heightHint());
     this.canvas.setOverlay(parts.join(''));
+  }
+
+  /**
+   * Подсказка высоты новой точки: призрачная точка там, где она встанет, и
+   * пунктирный отвес до её тени на z = 0. Только у инструментов, ставящих
+   * точки, над пустым местом полотна и вне жеста.
+   */
+  private heightHint(): string {
+    const { cursor, state } = this;
+
+    if (!cursor || this.pointHeight === 0 || !HEIGHT_TOOLS.has(this.tool) || this.gesture) return '';
+
+    if (this.vertexAt(cursor) !== null || this.edgeAt(cursor) !== null) return '';
+
+    const point = this.placeAtHeight(this.canvas.toWorld(cursor), this.cursorFree);
+    const top = projectVertex(point, state.angleY, state.angleZ, this.canvas.viewport);
+    const foot = projectVertex([point[0], point[1], 0], state.angleY, state.angleZ, this.canvas.viewport);
+
+    return (
+      `<line x1="${fmt(top.x)}" y1="${fmt(top.y)}" x2="${fmt(foot.x)}" y2="${fmt(foot.y)}" stroke="${DRAFT_COLOR}" stroke-width="1.5" stroke-dasharray="4 3" />` +
+      `<circle cx="${fmt(foot.x)}" cy="${fmt(foot.y)}" r="2.5" fill="${DRAFT_COLOR}" opacity="0.5" />` +
+      `<circle cx="${fmt(top.x)}" cy="${fmt(top.y)}" r="5" fill="${DRAFT_COLOR}" opacity="0.6" />`
+    );
+  }
+
+  /** Новая точка под курсором на плоскости z = высота новой точки; `free` отключает прилипание. */
+  private placeAtHeight(world: Vec2, free: boolean): Vec3 {
+    const { angleY, angleZ } = this.state;
+    const height = roundTo(this.pointHeight);
+    const plane = unprojectToHeight(world, height, angleY, angleZ);
+    const [x, y] = free ? plane : snapToGrid(plane, GROUND_STEP);
+
+    return [roundTo(x), roundTo(y), height];
   }
 
   /** Вершина на полотне в координатах картинки; `null`, если такой нет. */
@@ -743,7 +867,7 @@ class StereometryEditor implements SceneEditor {
     this.renderProperties();
   }
 
-  /** Шаблон заменяет сцену целиком и возвращает вид по умолчанию. */
+  /** Шаблон заменяет сцену целиком, возвращает вид по умолчанию и вписывает фигуру в полотно. */
   private applyTemplate(id: TemplateId): void {
     const build = TEMPLATE_SCENES[id];
 
@@ -753,6 +877,7 @@ class StereometryEditor implements SceneEditor {
 
     this.draft = [];
     this.selection = null;
+    this.pointHeight = 0;
     this.commit((state) => {
       state.vertices = template.vertices;
       state.edges = template.edges;
@@ -764,6 +889,16 @@ class StereometryEditor implements SceneEditor {
       state.angleZ = DEFAULT_ANGLE_Z;
       state.extra = {};
     });
+    this.fitView();
+  }
+
+  /** «Сбросить вид»: углы по умолчанию одним шагом истории и фигура целиком на полотне. */
+  private resetView(): void {
+    this.commit((state) => {
+      state.angleY = DEFAULT_ANGLE_Y;
+      state.angleZ = DEFAULT_ANGLE_Z;
+    });
+    this.fitView();
   }
 
   // ------------------------------------------------------------- хит-тест
@@ -861,14 +996,53 @@ class StereometryEditor implements SceneEditor {
   // ------------------------------------------------------------- указатель
 
   private readonly onPointerDown = (info: PointerInfo): void => {
+    // Новое нажатие обрывает недоделанный жест: второй палец или потерянное отпускание.
+    this.finishGesture(false);
+
+    const { pointerId, clientX: x, clientY: y } = info.event;
+
     if (info.button === 2) {
-      this.rotation = { x: info.event.clientX, y: info.event.clientY, recorded: false };
+      this.gesture = { type: 'rotate', pointerId, x, y, recorded: false };
 
       return;
     }
 
     if (info.button !== 0) return;
 
+    const hit = this.hitAt(info.svg);
+
+    // Пустое место: клик это или вращение, станет ясно по движению или отпусканию.
+    if (hit === null) {
+      this.gesture = { type: 'empty', pointerId, x, y, info };
+
+      return;
+    }
+
+    this.applyTool(info);
+
+    if (this.tool !== 'select' || hit.type !== 'vertex') return;
+
+    const point = this.state.vertices[hit.id];
+
+    if (!point) return;
+
+    const [px, py] = project3dToPlane(point, this.state.angleY, this.state.angleZ);
+
+    this.gesture = {
+      type: 'vertex',
+      pointerId,
+      x,
+      y,
+      id: hit.id,
+      start: [point[0], point[1], point[2]],
+      grab: info.world,
+      offset: [info.world[0] - px, info.world[1] - py],
+      moving: false,
+    };
+  };
+
+  /** Действие инструмента по клику: по вершине, ребру и прочему — на нажатии, по пустому месту — на отпускании. */
+  private applyTool(info: PointerInfo): void {
     switch (this.tool) {
       case 'select':
         this.selection = this.hitAt(info.svg);
@@ -894,41 +1068,181 @@ class StereometryEditor implements SceneEditor {
       default:
         break;
     }
-  };
+  }
 
   private readonly onPointerMove = (info: PointerInfo): void => {
-    if (this.rotation) {
-      const dx = info.event.clientX - this.rotation.x;
-      const dy = info.event.clientY - this.rotation.y;
+    const { gesture } = this;
 
-      if (dx === 0 && dy === 0) return;
-
-      // Один снимок на жест: отмена возвращает вид до начала вращения.
-      if (!this.rotation.recorded) {
-        this.history.record(this.state);
-        this.rotation.recorded = true;
-      }
-
-      this.rotation.x = info.event.clientX;
-      this.rotation.y = info.event.clientY;
-      // Фигура следует за курсором: вправо — поворот вправо, вниз — наклон к зрителю.
-      this.state.angleZ = wrapDegrees(this.state.angleZ + dx * ROTATION_DEGREES_PER_PX);
-      this.state.angleY = clamp(this.state.angleY + dy * ROTATION_DEGREES_PER_PX, -MAX_TILT, MAX_TILT);
-      this.render();
+    if (gesture && gesture.pointerId === info.event.pointerId) {
+      this.continueGesture(gesture, info);
 
       return;
     }
 
     this.cursor = info.svg;
+    this.cursorFree = info.shift;
 
-    if (this.draft.length > 0) this.renderOverlay();
+    if (this.draft.length > 0 || (this.pointHeight !== 0 && HEIGHT_TOOLS.has(this.tool))) this.renderOverlay();
   };
 
-  private readonly onPointerUp = (): void => {
-    if (this.rotation?.recorded) this.afterChange();
+  private readonly onPointerUp = (info: PointerInfo): void => {
+    if (this.gesture?.pointerId !== info.event.pointerId) return;
 
-    this.rotation = null;
+    // SketchCanvas присылает сюда и pointercancel: отменённое нажатие — не клик.
+    this.finishGesture(info.event.type !== 'pointercancel');
   };
+
+  /** Указатель ушёл от точки нажатия дальше порога? Считается в пикселях экрана. */
+  private static pastThreshold(gesture: Gesture, event: PointerEvent): boolean {
+    return Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > DRAG_THRESHOLD_PX;
+  }
+
+  private continueGesture(gesture: Gesture, info: PointerInfo): void {
+    const { event } = info;
+
+    switch (gesture.type) {
+      case 'empty':
+        // Порог пройден — это вращение; дельты считаются отсюда, чтобы фигура не дёрнулась.
+        if (StereometryEditor.pastThreshold(gesture, event)) {
+          this.gesture = { type: 'rotate', pointerId: gesture.pointerId, x: event.clientX, y: event.clientY, recorded: false };
+          this.element.classList.add(ROTATING_CLASS);
+        }
+
+        break;
+      case 'rotate':
+        this.rotate(gesture, event);
+        break;
+      case 'vertex':
+        this.dragVertex(gesture, info);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private rotate(gesture: Extract<Gesture, { type: 'rotate' }>, event: PointerEvent): void {
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+
+    if (dx === 0 && dy === 0) return;
+
+    // Один снимок на жест: отмена возвращает вид до начала вращения.
+    if (!gesture.recorded) {
+      this.history.record(this.state);
+      gesture.recorded = true;
+      this.element.classList.add(ROTATING_CLASS);
+    }
+
+    gesture.x = event.clientX;
+    gesture.y = event.clientY;
+    // Фигура следует за курсором: вправо — поворот вправо, вниз — наклон к зрителю.
+    this.state.angleZ = normalizeView('angleZ', this.state.angleZ + dx * ROTATION_DEGREES_PER_PX);
+    this.state.angleY = normalizeView('angleY', this.state.angleY + dy * ROTATION_DEGREES_PER_PX);
+    this.render();
+    this.syncFields();
+  }
+
+  /**
+   * Вершина едет за указателем: по умолчанию в горизонтальной плоскости на
+   * своей высоте, с Alt — по вертикали. Рёбра делятся только на отпускании.
+   */
+  private dragVertex(gesture: VertexDrag, info: PointerInfo): void {
+    if (!gesture.moving && !StereometryEditor.pastThreshold(gesture, info.event)) return;
+
+    const point = info.alt ? this.liftedVertex(gesture, info) : this.slidVertex(gesture, info);
+
+    if (!point) return;
+
+    // Один снимок на жест: отмена возвращает вершину туда, где её взяли.
+    if (!gesture.moving) {
+      this.history.record(this.state);
+      gesture.moving = true;
+    }
+
+    this.state.vertices[gesture.id] = point;
+    this.render();
+    this.syncFields();
+  }
+
+  /** Сдвиг по горизонтали: точка картинки без смещения захвата — на плоскость z = z0. */
+  private slidVertex(gesture: VertexDrag, info: PointerInfo): Vec3 {
+    const [, , z] = gesture.start;
+    const plane: Vec2 = [info.world[0] - gesture.offset[0], info.world[1] - gesture.offset[1]];
+    const ground = unprojectToHeight(plane, z, this.state.angleY, this.state.angleZ);
+    const [x, y] = info.shift ? ground : snapToGrid(ground, GROUND_STEP);
+
+    return [roundTo(x), roundTo(y), z];
+  }
+
+  /**
+   * Сдвиг по вертикали: смещение указателя проецируется на образ оси z.
+   * `null`, если ось z видна с торца — тогда высоту мышью не поменять.
+   */
+  private liftedVertex(gesture: VertexDrag, info: PointerInfo): Vec3 | null {
+    const [ex, ey] = project3dToPlane([0, 0, 1], this.state.angleY, this.state.angleZ);
+    const length = ex * ex + ey * ey;
+
+    if (length < DEGENERATE_AXIS) return null;
+
+    const [x, y, z] = gesture.start;
+    const dz = ((info.world[0] - gesture.grab[0]) * ex + (info.world[1] - gesture.grab[1]) * ey) / length;
+
+    return [x, y, roundTo(info.shift ? z + dz : snapHeight(z + dz))];
+  }
+
+  /**
+   * Конец жеста. `click` — обычное отпускание: только тогда нажатие по
+   * пустому месту выполняет действие инструмента. Вращение и перетаскивание
+   * доводятся до конца в любом случае.
+   */
+  private finishGesture(click: boolean): void {
+    const { gesture } = this;
+
+    this.gesture = null;
+    this.element.classList.remove(ROTATING_CLASS);
+
+    if (!gesture) return;
+
+    switch (gesture.type) {
+      case 'empty':
+        if (click) this.applyTool(gesture.info);
+
+        break;
+      case 'rotate':
+        if (gesture.recorded) this.afterChange();
+
+        break;
+      case 'vertex':
+        if (gesture.moving) this.afterChange();
+
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Поля панели во время жеста: значения меняются на месте, без пересборки
+   * панели. Поле в фокусе не трогаем — его сейчас правят или тянут.
+   */
+  private syncFields(): void {
+    const { selection, state } = this;
+    const values: Record<string, number> = {
+      angleY: state.angleY,
+      angleYRange: state.angleY,
+      angleZ: state.angleZ,
+      angleZRange: state.angleZ,
+    };
+    const point = selection?.type === 'vertex' ? state.vertices[selection.id] : undefined;
+    const fields = this.properties.querySelectorAll<HTMLInputElement>('input[data-prop], input[data-axis]');
+
+    fields.forEach((input) => {
+      const axis = ['x', 'y', 'z'].indexOf(input.dataset.axis ?? '');
+      const value = axis === -1 ? values[input.dataset.prop ?? ''] : point?.[axis];
+
+      if (value !== undefined && input !== document.activeElement) input.value = String(roundTo(value));
+    });
+  }
 
   private readonly onDoubleClick = (info: PointerInfo): void => {
     if (this.tool === 'section') {
@@ -967,6 +1281,21 @@ class StereometryEditor implements SceneEditor {
     if (event.key === 'Enter' && this.tool === 'section') {
       event.preventDefault();
       this.closeSection();
+
+      return;
+    }
+
+    const turn = VIEW_KEYS[event.key];
+
+    // Стрелки крутят вид, пока ничего не выбрано: шаг истории на каждое нажатие.
+    if (turn && !this.selection && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+
+      const step = (event.shiftKey ? KEY_TURN_STEP_LARGE : KEY_TURN_STEP) * turn.sign;
+
+      this.commit((state) => {
+        state[turn.angle] = normalizeView(turn.angle, state[turn.angle] + step);
+      });
 
       return;
     }
@@ -1020,14 +1349,16 @@ class StereometryEditor implements SceneEditor {
     return name;
   }
 
-  /** Точка в пустоте: обратная проекция курсора на плоскость z = 0 с прилипанием к полуклеткам. */
+  /**
+   * Точка в пустоте: обратная проекция курсора на плоскость z = высота новой
+   * точки (по умолчанию 0) с прилипанием к полуклеткам; Shift его отключает.
+   */
   private addGroundPoint(info: PointerInfo): string {
-    const ground = unprojectToGround(info.world, this.state.angleY, this.state.angleZ);
-    const [x, y] = info.shift ? ground : snapToGrid(ground, GROUND_STEP);
+    const point = this.placeAtHeight(info.world, info.shift);
     const name = nextVertexName(this.state.vertices);
 
     this.commit((state) => {
-      state.vertices[name] = [roundTo(x), roundTo(y), 0];
+      state.vertices[name] = point;
       state.labels[name] = GROUND_POINT_LABEL;
     });
 
@@ -1289,7 +1620,10 @@ class StereometryEditor implements SceneEditor {
     this.properties.appendChild(remove);
   }
 
-  /** Ничего не выбрано: повороты, сетка и оси; у инструмента угла — ввод вершин текстом. */
+  /**
+   * Ничего не выбрано: повороты числом и ползунком, сброс вида, сетка и оси;
+   * у инструментов, ставящих точки, — высота новой точки; у угла — ввод вершин текстом.
+   */
   private renderViewProperties(): void {
     const { state, t } = this;
 
@@ -1301,14 +1635,19 @@ class StereometryEditor implements SceneEditor {
     });
     const turn = el('input', { class: 'rte-input', attrs: { type: 'number', step: '5', value: String(roundTo(state.angleZ)), 'data-prop': 'angleZ' } });
 
-    this.properties.append(propertyField(t('drawings_stereo_prop_angle_y'), tilt), propertyField(t('drawings_stereo_prop_angle_z'), turn));
+    this.properties.append(
+      propertyField(t('drawings_stereo_prop_angle_y'), tilt),
+      this.viewSlider('angleY', 'angleYRange', MAX_TILT, t('drawings_stereo_prop_angle_y')),
+      propertyField(t('drawings_stereo_prop_angle_z'), turn),
+      this.viewSlider('angleZ', 'angleZRange', MAX_TURN, t('drawings_stereo_prop_angle_z')),
+    );
     on(tilt, 'change', () => {
       const value = Number(tilt.value);
 
       if (!Number.isFinite(value)) return;
 
       this.commit((draft) => {
-        draft.angleY = clamp(value, -MAX_TILT, MAX_TILT);
+        draft.angleY = normalizeView('angleY', value);
       });
     });
     on(turn, 'change', () => {
@@ -1317,9 +1656,14 @@ class StereometryEditor implements SceneEditor {
       if (!Number.isFinite(value)) return;
 
       this.commit((draft) => {
-        draft.angleZ = wrapDegrees(value);
+        draft.angleZ = normalizeView('angleZ', value);
       });
     });
+
+    const reset = el('button', { class: 'rte-button rte-stereo__reset', attrs: { type: 'button' }, text: t('drawings_stereo_reset_view') });
+
+    on(reset, 'click', () => this.resetView());
+    this.properties.appendChild(reset);
 
     const checkbox = (label: string, checked: boolean, toggle: () => void): HTMLElement => {
       const input = el('input', { attrs: { type: 'checkbox' } });
@@ -1334,6 +1678,21 @@ class StereometryEditor implements SceneEditor {
       checkbox(t('drawings_grid'), state.showGrid, () => this.toggleGrid()),
       checkbox(t('drawings_stereo_axes'), state.showAxes, () => this.toggleAxes()),
     );
+
+    if (HEIGHT_TOOLS.has(this.tool)) {
+      const height = el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value: String(roundTo(this.pointHeight)), 'data-prop': 'pointHeight' } });
+
+      this.properties.appendChild(propertyField(t('drawings_stereo_prop_point_height'), height));
+      // Высота — настройка инструмента, а не правка сцены: в историю не пишется.
+      on(height, 'change', () => {
+        const value = Number(height.value);
+
+        if (!Number.isFinite(value) || height.value.trim() === '') return;
+
+        this.pointHeight = roundTo(value);
+        this.renderOverlay();
+      });
+    }
 
     if (this.tool !== 'angle') return;
 
@@ -1358,6 +1717,55 @@ class StereometryEditor implements SceneEditor {
       this.draft = [];
       this.addAngle(points);
     });
+  }
+
+  /**
+   * Ползунок угла вида от −`limit` до `limit`. Пока его тянут (`input`), сцена
+   * поворачивается сразу, а история получает один снимок на жест; `change`
+   * завершает жест и оповещает об изменении.
+   */
+  private viewSlider(angle: ViewAngle, prop: string, limit: number, label: string): HTMLInputElement {
+    const slider = el('input', {
+      class: 'rte-stereo__range',
+      attrs: { type: 'range', min: String(-limit), max: String(limit), step: '1', value: String(roundTo(this.state[angle])), 'data-prop': prop, 'aria-label': label },
+    });
+
+    on(slider, 'input', () => this.slideView(angle, slider, false));
+    on(slider, 'change', () => this.slideView(angle, slider, true));
+
+    return slider;
+  }
+
+  private slideView(angle: ViewAngle, slider: HTMLInputElement, final: boolean): void {
+    const raw = Number(slider.value);
+
+    if (!Number.isFinite(raw)) return;
+
+    const value = normalizeView(angle, raw);
+
+    if (!this.sliding) {
+      // `change` без движения ползунка — не правка.
+      if (value === this.state[angle]) return;
+
+      this.history.record(this.state);
+      this.sliding = true;
+    }
+
+    this.state[angle] = value;
+
+    if (final) {
+      const focused = slider === document.activeElement;
+
+      this.sliding = false;
+      this.afterChange();
+      // Панель пересобрана: ползунок, который вели с клавиатуры, не теряет фокус.
+      if (focused) this.properties.querySelector<HTMLInputElement>(`input[data-prop="${slider.dataset.prop ?? ''}"]`)?.focus();
+
+      return;
+    }
+
+    this.render();
+    this.syncFields();
   }
 
   private renderVertexProperties(id: string): void {

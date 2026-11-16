@@ -32,3 +32,18 @@
   text-transform: uppercase;
   font-family: var(--rte-mono-font, ui-monospace, monospace);
 }
+
+/* Пока сцену вращают, курсор — «схваченная рука» на всём полотне. */
+.rte-stereo--rotating .rte-sketch {
+  cursor: grabbing;
+}
+
+.rte-stereo__range {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--rte-color-primary, #ff892e);
+}
+
+.rte-stereo__reset {
+  justify-self: start;
+}

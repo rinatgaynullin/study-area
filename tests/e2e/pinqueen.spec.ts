@@ -83,6 +83,36 @@ test.describe('чертежи', () => {
     await expect(page.locator('.demo__preview .rte-drawing svg')).toHaveCount(1);
   });
 
+  test('конструктор стереометрии: шаблон вращается перетаскиванием пустого места, вид уходит в документ', async ({ page }) => {
+    await openDemo(page);
+
+    await page.locator(`${EDITOR} p`).first().click();
+    await page.locator('.rte-toolbar button[aria-label="Чертёж"]').click();
+    await page.locator(`${OPEN_MODAL} [role="tab"]`, { hasText: 'Стереометрия' }).click();
+    await page.locator(`${OPEN_MODAL} button[data-template="parallelepiped"]`).click();
+
+    const canvas = page.locator(`${OPEN_MODAL} .rte-sketch`);
+    const turn = page.locator(`${OPEN_MODAL} input[data-prop="angleZ"]`);
+    await expect(canvas.locator('svg').first()).toBeVisible();
+    await expect(turn).toHaveValue('-30');
+
+    // Угол полотна после вписывания шаблона пуст: перетаскивание основной кнопкой вращает фигуру.
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.move(box.x + 8, box.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 88, box.y + 40, { steps: 8 });
+    await page.mouse.up();
+    await expect(turn).not.toHaveValue('-30');
+
+    await page.getByRole('button', { name: 'Вставить', exact: true }).click();
+    await expect(page.locator(MODAL_PANEL)).toBeHidden();
+
+    const node = page.locator(`${EDITOR} div[data-geometry-data]`);
+    await expect(node).toHaveCount(1);
+    const scene = JSON.parse((await node.getAttribute('data-geometry-data')) ?? '{}') as { angleZ?: number };
+    expect(scene.angleZ).not.toBe(-30);
+  });
+
   test('образец чертежей PinQueen: карточки по видам сцен, битый JSON сохраняется', async ({ page }) => {
     await openDemo(page);
     await applySample(page, 'Чертежи PinQueen');
