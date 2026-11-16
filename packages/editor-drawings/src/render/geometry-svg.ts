@@ -322,13 +322,23 @@ const renderCylinders = ({ scene, builder, project }: FigureContext): void => {
     let rightmost = 0;
 
     topRing.forEach((point, index) => {
-      if (point.x < topRing[leftmost].x) leftmost = index;
+      const left = topRing[leftmost];
+      const right = topRing[rightmost];
 
-      if (point.x > topRing[rightmost].x) rightmost = index;
+      if (left && point.x < left.x) leftmost = index;
+
+      if (right && point.x > right.x) rightmost = index;
     });
 
-    builder.line(baseRing[leftmost], topRing[leftmost], { width: 1.5 });
-    builder.line(baseRing[rightmost], topRing[rightmost], { width: 1.5 });
+    const baseLeft = baseRing[leftmost];
+    const topLeft = topRing[leftmost];
+    const baseRight = baseRing[rightmost];
+    const topRight = topRing[rightmost];
+
+    if (!baseLeft || !topLeft || !baseRight || !topRight) return;
+
+    builder.line(baseLeft, topLeft, { width: 1.5 });
+    builder.line(baseRight, topRight, { width: 1.5 });
     builder.path(polylinePath(topRing, true), { width: 1.5 });
 
     // Нижнее основание делится образующими на две дуги; передняя — та, что
@@ -336,9 +346,15 @@ const renderCylinders = ({ scene, builder, project }: FigureContext): void => {
     const arcFrom = (start: number, end: number): SvgPoint[] => {
       const arc: SvgPoint[] = [];
 
-      for (let index = start; index !== end; index = (index + 1) % CYLINDER_SEGMENTS) arc.push(baseRing[index]);
+      for (let index = start; index !== end; index = (index + 1) % CYLINDER_SEGMENTS) {
+        const point = baseRing[index];
 
-      arc.push(baseRing[end]);
+        if (point) arc.push(point);
+      }
+
+      const last = baseRing[end];
+
+      if (last) arc.push(last);
 
       return arc;
     };
@@ -411,8 +427,10 @@ const renderAngleDraft = ({ highlight, builder, placed }: FigureContext): void =
     builder.circle(point, 12, { fill: color, color: 'none', width: 0, opacity: 0.15 });
   });
 
-  if (points.length === 2) {
-    builder.line(points[0], points[1], { color: DRAFT_COLOR, width: 1.5, dashed: '3 3', opacity: 0.8 });
+  const [first, second] = points;
+
+  if (points.length === 2 && first && second) {
+    builder.line(first, second, { color: DRAFT_COLOR, width: 1.5, dashed: '3 3', opacity: 0.8 });
   }
 };
 

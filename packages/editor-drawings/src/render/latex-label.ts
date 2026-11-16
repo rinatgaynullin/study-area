@@ -92,7 +92,7 @@ const tokenize = (source: string): Token[] => {
   };
 
   while (index < source.length) {
-    const char = source[index];
+    const char = source.charAt(index);
 
     if (char === '\\') {
       const command = /^\\([A-Za-z]+)/.exec(source.slice(index));
@@ -100,7 +100,8 @@ const tokenize = (source: string): Token[] => {
       if (command) {
         index += command[0].length;
 
-        const name = command[1];
+        // Группа обязательная: при совпадении она есть, `?? ''` не срабатывает.
+        const name = command[1] ?? '';
 
         if (name === 'text' || name === 'mathrm' || name === 'mathit') {
           if (source[index] === '{') tokens.push({ kind: 'text', value: readGroup() });

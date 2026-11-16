@@ -60,9 +60,13 @@ const sampledPath = (samples: Array<SvgPoint | null>): string => {
   const runs: SvgPoint[][] = [[]];
 
   samples.forEach((sample) => {
+    const run = runs[runs.length - 1];
+
+    if (!run) return;
+
     if (sample) {
-      runs[runs.length - 1].push(sample);
-    } else if (runs[runs.length - 1].length > 0) {
+      run.push(sample);
+    } else if (run.length > 0) {
       runs.push([]);
     }
   });
@@ -92,7 +96,9 @@ const drawCurve = (builder: SvgBuilder, d: string, color: string, dashed: boolea
 /** Подпись графика: дроби и греческие буквы в юникод, остальные команды — без слеша. */
 const plotLabelText = (label: string): string => prettifyMathText(label).replace(/\\/g, '');
 
-const tickStep = (scale: number): number => TICK_STEPS.find((step) => step * scale >= MIN_TICK_PIXELS) ?? TICK_STEPS[TICK_STEPS.length - 1];
+// Мелкие шаги не подошли — берётся крупнейший, он же последний: шаги идут по возрастанию.
+const tickStep = (scale: number): number =>
+  TICK_STEPS.find((step) => step * scale >= MIN_TICK_PIXELS) ?? Math.max(...TICK_STEPS);
 
 const gridStep = (scale: number): number => (scale < MIN_GRID_PIXELS ? scale * Math.ceil(MIN_GRID_PIXELS / scale) : scale);
 

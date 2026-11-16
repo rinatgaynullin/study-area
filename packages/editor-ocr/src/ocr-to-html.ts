@@ -218,7 +218,7 @@ class OcrDocumentBuilder {
       return this.pushDrawing({
         kind: attribute === 'physics-data' ? 'physics' : 'geometry',
         data: value,
-        tikz: tikz ? unescapeAttr(tikz[2]) : '',
+        tikz: tikz ? unescapeAttr(tikz[2] ?? '') : '',
       });
     });
 

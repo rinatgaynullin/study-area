@@ -206,7 +206,11 @@ export const renderAngleMark = (builder: SvgBuilder, options: AngleMarkOptions):
   bisector = bisectorLength < 1e-6 ? { x: -u.y, y: u.x } : { x: bisector.x / bisectorLength, y: bisector.y / bisectorLength };
 
   const radii = style === 'right' ? ARC_RADII.single : ARC_RADII[style];
-  const distance = radii[radii.length - 1] + LABEL_GAP;
+  const outerRadius = radii[radii.length - 1];
+
+  if (outerRadius === undefined) return;
+
+  const distance = outerRadius + LABEL_GAP;
   const size = clamp(Math.round(10 * ((options.scale ?? 25) / 25)), 9, 18);
   const at = shifted(vertex, bisector, distance);
 

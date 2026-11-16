@@ -37,4 +37,4 @@ export const wrapBlock = (name: string, body: string): string =>
 
 /** Все вхождения блока: содержимое по порядку. */
 export const extractBlocks = (text: string, pattern: RegExp): string[] =>
-  [...text.matchAll(pattern)].map((match) => match[1].trim());
+  [...text.matchAll(pattern)].map((match) => (match[1] ?? '').trim());

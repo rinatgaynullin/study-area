@@ -79,7 +79,7 @@ const readBalanced = (source: string, start: number, open: string, close: string
 const skipSpaces = (source: string, index: number): number => {
   let position = index;
 
-  while (position < source.length && /\s/.test(source[position])) position += 1;
+  while (position < source.length && /\s/.test(source.charAt(position))) position += 1;
 
   return position;
 };
@@ -134,8 +134,9 @@ const readAxisLabel = (source: string, key: 'xlabel' | 'ylabel'): string | undef
 
 const readColor = (options: string): string | undefined => {
   const match = /\b(blue|red|green|orange|purple|violet|magenta|pink|cyan|teal|brown|olive|gray|grey|black)\b/i.exec(options);
+  const name = match?.[1];
 
-  return match ? NAMED_COLORS[match[1].toLowerCase()] : undefined;
+  return name ? NAMED_COLORS[name.toLowerCase()] : undefined;
 };
 
 const readDomain = (options: string): [number, number] | undefined => {
@@ -296,7 +297,7 @@ const legendAfter = (source: string, command: AddplotCommand): string | undefine
   const nextPlot = source.indexOf('\\addplot', command.end);
   const tail = source.slice(command.end, nextPlot < 0 ? source.length : nextPlot);
   const match = /\\addlegendentry\s*\{([^}]*)\}/.exec(tail);
-  const text = match?.[1].replace(/\$/g, '').trim();
+  const text = match?.[1]?.replace(/\$/g, '').trim();
 
   return text ? text : undefined;
 };
@@ -343,7 +344,8 @@ const applyNodes = (source: string, plots: RawPlot[]): void => {
   for (const match of source.matchAll(NODE_AT)) {
     const x = Number(match[1]);
     const y = Number(match[2]);
-    const label = match[3].replace(/\$/g, '').replace(/\s+/g, ' ').trim();
+    // Третья группа обязательная: при совпадении она есть, `?? ''` не срабатывает.
+    const label = (match[3] ?? '').replace(/\$/g, '').replace(/\s+/g, ' ').trim();
 
     if (label === '') continue;
 

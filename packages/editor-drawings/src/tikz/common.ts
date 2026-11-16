@@ -83,7 +83,8 @@ export const anchorTowards = (dx: number, dy: number): string => {
 
   const sector = Math.round((Math.atan2(dy, dx) * 180) / Math.PI / 45);
 
-  return DIRECTIONS[((sector % 8) + 8) % 8];
+  // Индекс всегда в 0..7; запасное значение — только для `NaN` на входе, как у нулевого вектора.
+  return DIRECTIONS[((sector % 8) + 8) % 8] ?? 'above right';
 };
 
 /** Единичная нормаль слева от направления `a → b`; для совпадающих точек — вверх. */
@@ -102,26 +103,39 @@ export const shifted = (point: Vec2, direction: Vec2, distance: number): Vec2 =>
 
 /** Середина ломаной по длине — туда ставится подпись верёвки, провода, пружины. */
 export const polylineMidpoint = (points: Vec2[]): Vec2 => {
-  if (points.length === 0) return [0, 0];
+  const [first] = points;
 
-  if (points.length === 1) return points[0];
+  if (!first) return [0, 0];
 
-  const lengths = points.slice(1).map((point, index) => Math.hypot(point[0] - points[index][0], point[1] - points[index][1]));
+  if (points.length === 1) return first;
+
+  const lengths = points.slice(1).map((point, index) => {
+    const previous = points[index];
+
+    if (!previous) return 0;
+
+    return Math.hypot(point[0] - previous[0], point[1] - previous[1]);
+  });
   const total = lengths.reduce((sum, length) => sum + length, 0);
   let remaining = total / 2;
 
   for (let index = 0; index < lengths.length; index += 1) {
-    if (remaining <= lengths[index] || index === lengths.length - 1) {
-      const t = lengths[index] > 0 ? remaining / lengths[index] : 0.5;
-      const [a, b] = [points[index], points[index + 1]];
+    const segment = lengths[index];
+    const a = points[index];
+    const b = points[index + 1];
 
-      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    if (segment !== undefined && a && b) {
+      if (remaining <= segment || index === lengths.length - 1) {
+        const t = segment > 0 ? remaining / segment : 0.5;
+
+        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      }
+
+      remaining -= segment;
     }
-
-    remaining -= lengths[index];
   }
 
-  return points[0];
+  return first;
 };
 
 // ----------------------------------------------------------------- подписи
