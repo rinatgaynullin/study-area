@@ -279,11 +279,6 @@
   min-width: 0;
 }
 
-/* Линия места вставки при переносе картинки, чертежа или файла мышью. */
-.rte-dropcursor {
-  background: var(--rte-color-primary);
-}
-
 .rte-host .rte-content {
   padding: var(--rte-content-padding);
   min-height: 100%;

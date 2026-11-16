@@ -152,6 +152,44 @@ describe('перестановка блочных атомов', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it('внутри цитаты Alt+↓ ставит картинку ниже последнего пустого абзаца', () => {
+    const editor = mount('<blockquote><p>a</p><img src="https://example.com/a.png"><p></p></blockquote>');
+
+    /** Дети цитаты по порядку. */
+    const quoteOrder = (): string[] => {
+      const names: string[] = [];
+      const quote = editor.editor.state.doc.firstChild;
+
+      expect(quote?.type.name).toBe('blockquote');
+      quote?.forEach((node) => {
+        names.push(node.type.name === 'paragraph' ? `p:${node.textContent}` : node.type.name);
+      });
+
+      return names;
+    };
+
+    expect(quoteOrder()).toEqual(['p:a', 'image', 'p:']);
+
+    selectNode(editor, 'image');
+    press(editor, 'ArrowDown');
+
+    expect(quoteOrder()).toEqual(['p:a', 'p:', 'image']);
+    expect(selectedName(editor)).toBe('image');
+  });
+
+  it('у ядра без интерфейса линия места вставки окрашена переменной темы с запасным цветом', () => {
+    const editor = mount('<p></p>');
+    const dropCursor = editor.editor.extensionManager.extensions.find(
+      (extension) => extension.name === 'dropCursor',
+    );
+
+    expect(dropCursor?.options).toMatchObject({
+      class: 'rte-dropcursor',
+      width: 2,
+      color: 'var(--rte-color-primary, currentColor)',
+    });
+  });
+
   it('узлы картинки, аудио и вложения перетаскиваются', () => {
     const editor = mount('<p></p>');
     const { nodes } = editor.editor.schema;
