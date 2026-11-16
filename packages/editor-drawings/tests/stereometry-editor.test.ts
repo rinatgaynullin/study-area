@@ -8,10 +8,14 @@ import {
   projectVertex,
   stereometryEditorFactory,
   unprojectToGround,
+  unprojectToHeight,
 } from '../src/builders/stereometry-editor';
 import { STEREOMETRY_MESSAGES } from '../src/builders/stereometry-messages';
 import type { SceneEditor } from '../src/builders/types';
 import { DRAWINGS_MESSAGES } from '../src/messages';
+import type { Viewport } from '../src/render/coords';
+import { resolveGeometryViewport } from '../src/render/geometry-svg';
+import { normalizeGeometryScene } from '../src/scene/normalize';
 import type { Point } from '../src/scene/types';
 
 /** jsdom не знает PointerEvent — полотно слушает именно его. */
@@ -38,6 +42,18 @@ const t: Translate = (key) => STEREOMETRY_MESSAGES.ru[key] ?? DRAWINGS_MESSAGES.
  */
 const VIEWPORT = { scale: STEREOMETRY_CANVAS.scale, cx: STEREOMETRY_CANVAS.width / 2, cy: STEREOMETRY_CANVAS.height / 2 };
 
+/**
+ * Окно, от которого считаются клики: исходное у нового конструктора, после
+ * шаблона — вписанное, как его подбирает `fitView`.
+ */
+let view: Viewport = VIEWPORT;
+
+const fittedViewport = (editor: SceneEditor): Viewport =>
+  resolveGeometryViewport(
+    { ...normalizeGeometryScene(editor.getScene()), type: '3d' },
+    { width: STEREOMETRY_CANVAS.width, height: STEREOMETRY_CANVAS.height, autoFit: true },
+  );
+
 /** Вид шаблонов и пустой сцены. */
 const TEMPLATE_VIEW = { angleY: 15, angleZ: -30 };
 
@@ -46,9 +62,11 @@ interface At {
   y: number;
 }
 
-const svgOf = (point: Point, view = TEMPLATE_VIEW): At => projectVertex(point, view.angleY, view.angleZ, VIEWPORT);
+const svgOf = (point: Point, angles = TEMPLATE_VIEW): At => projectVertex(point, angles.angleY, angles.angleZ, view);
 
-const pointerAt = (target: HTMLElement, type: 'pointerdown' | 'pointermove' | 'pointerup', at: At, init: Partial<PointerEventInit> = {}): void => {
+type PointerType = 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel';
+
+const pointerAt = (target: HTMLElement, type: PointerType, at: At, init: Partial<PointerEventInit> = {}): void => {
   target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: at.x, clientY: at.y, pointerId: 1, ...init }));
 };
 
@@ -57,7 +75,15 @@ const clickAt = (target: HTMLElement, at: At, init: Partial<PointerEventInit> = 
   pointerAt(target, 'pointerup', at, init);
 };
 
-const clickVertex = (target: HTMLElement, point: Point, view = TEMPLATE_VIEW): void => clickAt(target, svgOf(point, view));
+const clickVertex = (target: HTMLElement, point: Point, angles = TEMPLATE_VIEW): void => clickAt(target, svgOf(point, angles));
+
+/** Перетаскивание: нажатие, движение через середину пути и отпускание. */
+const dragFrom = (target: HTMLElement, from: At, to: At, init: Partial<PointerEventInit> = {}): void => {
+  pointerAt(target, 'pointerdown', from, init);
+  pointerAt(target, 'pointermove', { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }, init);
+  pointerAt(target, 'pointermove', to, init);
+  pointerAt(target, 'pointerup', to, init);
+};
 
 const press = (target: HTMLElement, key: string, init: Partial<KeyboardEventInit> = {}): void => {
   target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
@@ -67,8 +93,10 @@ const pickTool = (editor: SceneEditor, tool: string): void => {
   editor.element.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.click();
 };
 
+/** Шаблон вписывается в полотно: дальше клики считаются от нового окна. */
 const pickTemplate = (editor: SceneEditor, template: string): void => {
   editor.element.querySelector<HTMLButtonElement>(`button[data-template="${template}"]`)?.click();
+  view = fittedViewport(editor);
 };
 
 const canvasOf = (editor: SceneEditor): HTMLElement => {
@@ -131,6 +159,7 @@ describe('конструктор стереометрии', () => {
   const create = (): SceneEditor => {
     editor = stereometryEditorFactory.create({ t });
     document.body.appendChild(editor.element);
+    view = VIEWPORT;
 
     return editor;
   };
@@ -163,7 +192,7 @@ describe('конструктор стереометрии', () => {
     expect(scene.showGrid).toBeUndefined();
     expect(scene.showAxes).toBeUndefined();
     expect(canvasOf(stereo).querySelector('svg')).not.toBeNull();
-    expect(stereo.element.querySelector('.rte-builder__hint')?.textContent).toContain('правой кнопкой');
+    expect(stereo.element.querySelector('.rte-builder__hint')?.textContent).toContain('Тяните пустое место');
   });
 
   it('шаблоны дают ожидаемые вершины, рёбра и цилиндр', () => {
@@ -370,11 +399,12 @@ describe('конструктор стереометрии', () => {
     expect(stereo.getScene().angleY).toBe(85);
     expect(stereo.getScene().angleZ).toBe(-22);
 
-    // Левая кнопка в режиме выбора не вращает.
-    pointerAt(canvas, 'pointerdown', { x: 20, y: 20 });
-    pointerAt(canvas, 'pointermove', { x: 60, y: 60 });
-    pointerAt(canvas, 'pointerup', { x: 60, y: 60 });
+    // Средняя кнопка двигает полотно и вид не вращает.
+    pointerAt(canvas, 'pointerdown', { x: 20, y: 20 }, { button: 1 });
+    pointerAt(canvas, 'pointermove', { x: 60, y: 60 }, { button: 1 });
+    pointerAt(canvas, 'pointerup', { x: 60, y: 60 }, { button: 1 });
     expect(stereo.getScene().angleZ).toBe(-22);
+    expect(stereo.getScene().angleY).toBe(85);
   });
 
   it('отмена возвращает прошлое состояние, повтор — следующее', () => {
@@ -528,6 +558,315 @@ describe('конструктор стереометрии', () => {
     expect(stereo.getScene().custom).toEqual({ keep: true });
     expect(stereo.getScene().showAxes).toBe(true);
   });
+
+  /** Угол полотна: после вписывания шаблона там пусто. */
+  const EMPTY_CORNER: At = { x: 6, y: 6 };
+
+  const nameField = (stereo: SceneEditor): string | undefined => propsOf(stereo).querySelector<HTMLInputElement>('input[type="text"]')?.value;
+
+  const viewField = (stereo: SceneEditor, prop: string): HTMLInputElement => {
+    const input = propsOf(stereo).querySelector<HTMLInputElement>(`input[data-prop="${prop}"]`);
+
+    if (!input) throw new Error(`Нет поля ${prop}`);
+
+    return input;
+  };
+
+  const vertexOf = (stereo: SceneEditor, name: string): number[] | undefined => (stereo.getScene().vertices as Record<string, number[]>)[name];
+
+  it('перетаскивание пустого места основной кнопкой вращает вид; отмена — одним шагом', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid4');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
+    // В пределах порога это ещё клик: вид прежний.
+    pointerAt(canvas, 'pointermove', { x: 8, y: 7 });
+    expect(stereo.getScene().angleZ).toBe(-30);
+    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    // Порог пройден: дельты считаются отсюда, поэтому рывка нет.
+    pointerAt(canvas, 'pointermove', { x: 16, y: 6 });
+    expect(stereo.getScene().angleZ).toBe(-30);
+    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(true);
+    pointerAt(canvas, 'pointermove', { x: 26, y: 16 });
+    expect(stereo.getScene().angleZ).toBeCloseTo(-22);
+    expect(stereo.getScene().angleY).toBeCloseTo(23);
+    // Числа и ползунки «Вида» идут за вращением, панель не пересобирается.
+    expect(viewField(stereo, 'angleZ').value).toBe('-22');
+    expect(viewField(stereo, 'angleZRange').value).toBe('-22');
+    expect(viewField(stereo, 'angleY').value).toBe('23');
+    expect(changes).toBe(0);
+
+    pointerAt(canvas, 'pointerup', { x: 26, y: 16 });
+    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    expect(changes).toBe(1);
+    expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(5);
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleY).toBe(15);
+    expect(stereo.getScene().angleZ).toBe(-30);
+  });
+
+  it('в «Точке» клик без движения ставит точку, а перетаскивание вращает и точку не ставит', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTool(stereo, 'point');
+    clickVertex(canvas, [1, 2, 0]);
+    expect(stereo.getScene().vertices).toEqual({ A: [1, 2, 0] });
+
+    const from = svgOf([-3, -3, 0]);
+
+    // Порог пройден на середине пути (+20 px), дальше ещё 20 px — это 16°.
+    dragFrom(canvas, from, { x: from.x + 40, y: from.y });
+    expect(stereo.getScene().vertices).toEqual({ A: [1, 2, 0] });
+    expect(stereo.getScene().angleZ).toBeCloseTo(-14);
+  });
+
+  it('клик по пустому месту в «Выборе» снимает выделение', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid4');
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [3, 0, 0]);
+    expect(propsOf(stereo).querySelector('select')).not.toBeNull();
+
+    clickAt(canvas, EMPTY_CORNER);
+    expect(propsOf(stereo).querySelector('.rte-builder__props-title')?.textContent).toBe('Вид');
+    expect(propsOf(stereo).querySelector('input[data-prop="angleY"]')).not.toBeNull();
+  });
+
+  it('pointercancel после нажатия по пустому месту точку не ставит', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTool(stereo, 'point');
+    pointerAt(canvas, 'pointerdown', svgOf([1, 2, 0]));
+    pointerAt(canvas, 'pointercancel', svgOf([1, 2, 0]));
+    expect(stereo.getScene().vertices).toEqual({});
+
+    // Следующий обычный клик работает как раньше.
+    clickVertex(canvas, [1, 2, 0]);
+    expect(stereo.getScene().vertices).toEqual({ A: [1, 2, 0] });
+  });
+
+  it('вершина в «Выборе» тащится в плоскости своей высоты без рывка; отмена — один шаг', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid4');
+    pickTool(stereo, 'select');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    // Взяли не точно за центр: смещение захвата сохраняется, вершина не прыгает к курсору.
+    const grab = { x: 3, y: 2 };
+    const at = svgOf([0, 0, 5.5]);
+    const target = svgOf([1.5, -1, 5.5]);
+
+    pointerAt(canvas, 'pointerdown', { x: at.x + grab.x, y: at.y + grab.y });
+    pointerAt(canvas, 'pointermove', { x: at.x + grab.x + 1, y: at.y + grab.y + 1 });
+    expect(vertexOf(stereo, 'S')).toEqual([0, 0, 5.5]);
+    pointerAt(canvas, 'pointermove', { x: target.x + grab.x, y: target.y + grab.y });
+    expect(vertexOf(stereo, 'S')).toEqual([1.5, -1, 5.5]);
+    // Во время движения — только перерисовка, координаты в панели не отстают.
+    expect(changes).toBe(0);
+    expect(propsOf(stereo).querySelector<HTMLInputElement>('input[data-axis="x"]')?.value).toBe('1.5');
+    pointerAt(canvas, 'pointerup', { x: target.x + grab.x, y: target.y + grab.y });
+
+    expect(changes).toBe(1);
+    expect(nameField(stereo)).toBe('S');
+    expect(edgesOf(stereo)).toHaveLength(8);
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([0, 0, 5.5]);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
+  it('с Alt вершина тащится по вертикали: меняется только z', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid4');
+    pickTool(stereo, 'select');
+    dragFrom(canvas, svgOf([0, 0, 5.5]), svgOf([0, 0, 7]), { altKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([0, 0, 7]);
+
+    // Сдвиг вбок при Alt высоту почти не меняет и (x, y) не трогает.
+    dragFrom(canvas, svgOf([0, 0, 7]), svgOf([2, 2, 7]), { altKey: true });
+
+    const lifted = vertexOf(stereo, 'S');
+
+    expect(lifted?.[0]).toBe(0);
+    expect(lifted?.[1]).toBe(0);
+
+    // В других инструментах вершины не тащатся.
+    pickTool(stereo, 'point');
+    dragFrom(canvas, svgOf([3, 3, 0]), svgOf([4, 4, 0]));
+    expect(vertexOf(stereo, 'C')).toEqual([3, 3, 0]);
+  });
+
+  it('высота новой точки: точка встаёт на z = pointHeight, над полотном — подсказка', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTool(stereo, 'select');
+    expect(propsOf(stereo).querySelector('input[data-prop="pointHeight"]')).toBeNull();
+
+    pickTool(stereo, 'point');
+    expect(viewField(stereo, 'pointHeight').value).toBe('0');
+    setValue(viewField(stereo, 'pointHeight'), '2');
+
+    pointerAt(canvas, 'pointermove', svgOf([1, 2, 2]));
+    expect(canvas.querySelector('.rte-sketch__overlay line')).not.toBeNull();
+
+    clickVertex(canvas, [1, 2, 2]);
+    expect(stereo.getScene().vertices).toEqual({ A: [1, 2, 2] });
+
+    // Высота живёт в инструменте: после снятия выделения поле помнит её.
+    press(canvas, 'Escape');
+    expect(viewField(stereo, 'pointHeight').value).toBe('2');
+
+    // Шаблон сбрасывает высоту в 0, и подсказки больше нет.
+    pickTemplate(stereo, 'pyramid4');
+    pointerAt(canvas, 'pointermove', EMPTY_CORNER);
+    expect(canvas.querySelector('.rte-sketch__overlay line')).toBeNull();
+    expect(viewField(stereo, 'pointHeight').value).toBe('0');
+  });
+
+  it('после шаблона все вершины лежат внутри полотна', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    ['pyramid3', 'pyramid4', 'prism3', 'parallelepiped', 'cylinder'].forEach((template) => {
+      pickTemplate(stereo, template);
+      pickTool(stereo, 'select');
+
+      Object.entries(stereo.getScene().vertices as Record<string, Point>).forEach(([name, point]) => {
+        const at = svgOf(point);
+
+        expect(at.x).toBeGreaterThan(0);
+        expect(at.x).toBeLessThan(STEREOMETRY_CANVAS.width);
+        expect(at.y).toBeGreaterThan(0);
+        expect(at.y).toBeLessThan(STEREOMETRY_CANVAS.height);
+        // Конструктор рисует в том же вписанном окне: клик по расчётной точке попадает в вершину.
+        clickAt(canvas, at);
+        expect(nameField(stereo)).toBe(name);
+      });
+    });
+  });
+
+  it('ползунок «Поворот» вращает вид одним шагом истории, «Сбросить вид» возвращает 15° и −30°', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid4');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    const slider = viewField(stereo, 'angleZRange');
+
+    expect(slider.type).toBe('range');
+    expect(slider.value).toBe('-30');
+
+    slider.value = '40';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(stereo.getScene().angleZ).toBe(40);
+    expect(viewField(stereo, 'angleZ').value).toBe('40');
+    slider.value = '60';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(changes).toBe(0);
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(stereo.getScene().angleZ).toBe(60);
+    expect(changes).toBe(1);
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(-30);
+
+    const tilt = viewField(stereo, 'angleYRange');
+
+    tilt.value = '-40';
+    tilt.dispatchEvent(new Event('input', { bubbles: true }));
+    tilt.dispatchEvent(new Event('change', { bubbles: true }));
+    setValue(viewField(stereo, 'angleZ'), '100');
+    expect(stereo.getScene().angleY).toBe(-40);
+    expect(stereo.getScene().angleZ).toBe(100);
+
+    const reset = [...propsOf(stereo).querySelectorAll('button')].find((button) => button.textContent === 'Сбросить вид');
+
+    reset?.click();
+    expect(stereo.getScene().angleY).toBe(15);
+    expect(stereo.getScene().angleZ).toBe(-30);
+    expect(viewField(stereo, 'angleZRange').value).toBe('-30');
+
+    // Сброс — один шаг истории.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(100);
+  });
+
+  it('стрелки крутят вид, пока ничего не выбрано: по 5°, с Shift — по 15°', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    const arrow = (key: string, shiftKey = false): boolean =>
+      canvas.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+
+    pickTemplate(stereo, 'pyramid4');
+
+    expect(arrow('ArrowRight')).toBe(false);
+    expect(stereo.getScene().angleZ).toBe(-25);
+    arrow('ArrowRight', true);
+    expect(stereo.getScene().angleZ).toBe(-10);
+    arrow('ArrowLeft');
+    expect(stereo.getScene().angleZ).toBe(-15);
+    arrow('ArrowUp');
+    expect(stereo.getScene().angleY).toBe(20);
+    arrow('ArrowDown', true);
+    expect(stereo.getScene().angleY).toBe(5);
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleY).toBe(20);
+
+    // С выделением стрелки не обрабатываются.
+    // Окно вписано под шаблон и при повороте стрелками не меняется.
+    pickTool(stereo, 'select');
+    clickVertex(canvas, [3, 0, 0], { angleY: 20, angleZ: -15 });
+    expect(propsOf(stereo).querySelector('select')).not.toBeNull();
+    expect(arrow('ArrowRight')).toBe(true);
+    expect(stereo.getScene().angleZ).toBe(-15);
+  });
+
+  it('отложенный клик не ломает построения: отрезок в пустоту, сечение с двойным кликом', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTool(stereo, 'segment');
+    clickVertex(canvas, [1, 1, 0]);
+    clickVertex(canvas, [3, -2, 0]);
+    expect(stereo.getScene().vertices).toEqual({ A: [1, 1, 0], B: [3, -2, 0] });
+    expect(edgesOf(stereo)).toEqual([{ from: 'A', to: 'B', style: 'solid' }]);
+
+    pickTemplate(stereo, 'pyramid4');
+    pickTool(stereo, 'section');
+    clickVertex(canvas, [-3, -3, 0]);
+    clickVertex(canvas, [3, -3, 0]);
+    clickVertex(canvas, [3, 3, 0]);
+
+    const at = svgOf([3, 3, 0]);
+
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: at.x, clientY: at.y }));
+    expect(stereo.getScene().sections).toEqual([{ vertices: ['A', 'B', 'C'], fill: 'rgba(16, 185, 129, 0.25)', stroke: '#10b981' }]);
+  });
 });
 
 describe('проекция стереометрии', () => {
@@ -550,6 +889,32 @@ describe('проекция стереометрии', () => {
         const at = projectVertex([x, y, 0], angleY, angleZ, VIEWPORT);
         const plane: [number, number] = [(at.x - VIEWPORT.cx) / VIEWPORT.scale, (VIEWPORT.cy - at.y) / VIEWPORT.scale];
         const [bx, by] = unprojectToGround(plane, angleY, angleZ);
+
+        expect(bx).toBeCloseTo(x, 6);
+        expect(by).toBeCloseTo(y, 6);
+      });
+    });
+  });
+
+  it('обратная проекция на плоскость z = const обращает прямую', () => {
+    const views = [
+      { angleY: 15, angleZ: -30 },
+      { angleY: 0, angleZ: 0 },
+      { angleY: 60, angleZ: 45 },
+      { angleY: -80, angleZ: 170 },
+    ];
+    const points: Array<[number, number, number]> = [
+      [0, 0, 2],
+      [1, 2, -1.5],
+      [-3, 0.5, 5.5],
+      [2.5, -4, 0],
+    ];
+
+    views.forEach(({ angleY, angleZ }) => {
+      points.forEach(([x, y, z]) => {
+        const at = projectVertex([x, y, z], angleY, angleZ, VIEWPORT);
+        const plane: [number, number] = [(at.x - VIEWPORT.cx) / VIEWPORT.scale, (VIEWPORT.cy - at.y) / VIEWPORT.scale];
+        const [bx, by] = unprojectToHeight(plane, z, angleY, angleZ);
 
         expect(bx).toBeCloseTo(x, 6);
         expect(by).toBeCloseTo(y, 6);
