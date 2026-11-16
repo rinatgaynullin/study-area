@@ -6,17 +6,19 @@ import {
   project3dToPlane,
   projectOblique,
   rotatePoint3d,
+  viewDirection3d,
   worldToSvg,
   type SvgPoint,
   type Viewport,
 } from './coords';
 import { perpendicularOffset, prettifyMathText, renderAngleMark, renderEqualityTicks, safeColor } from './geometry-marks';
 import { renderCirclePlot, renderPlot2dContent, type PlotSize } from './plot2d-svg';
+import { circle3d, coneOutline, sphereOutline, toVec3, visibilityRuns, type RimPoint } from './round-bodies';
 import { DIAGONAL_STRIPE_DEFS, HIGHLIGHT_COLOR, INK, SvgBuilder, polylinePath, wrapSvg, type StrokeOptions } from './svg-builder';
 
 /**
  * Геометрический чертёж в SVG: 2D, 3D (кабинетная проекция) и графики
- * функций. Слои идут снизу вверх — сетка, сечения, цилиндры, рёбра, углы,
+ * функций. Слои идут снизу вверх — сетка, сечения, цилиндры, конусы, шары, рёбра, углы,
  * окружности, вершины, подписи — чтобы буквы и точки не прятались под
  * линиями. Сцена уже нормализована; всё, чего в ней нет, пропускается.
  */
@@ -55,6 +57,7 @@ const SECTION_STROKE = '#10b981';
 const SECTION_HIGHLIGHT_FILL = 'rgba(236, 72, 153, 0.35)';
 
 const CYLINDER_SEGMENTS = 32;
+const BODY_WIDTH = 1.5;
 const CIRCLE_2D_COLOR = '#475569';
 const DRAFT_COLOR = '#8b5cf6';
 
@@ -81,12 +84,54 @@ const attempt = (draw: () => void): void => {
   }
 };
 
+/** Вершина по имени без значений из прототипа (имя `constructor` и т. п. — нет вершины). */
+const vertexOf = (vertices: Record<string, Point>, name: string): Point | undefined =>
+  Object.hasOwn(vertices, name) ? vertices[name] : undefined;
+
+const axisBetween = (from: Point, to: Point): Vec3 => {
+  const [a, b] = [toVec3(from), toVec3(to)];
+
+  return [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+};
+
+/**
+ * Точки тел вращения для вписывания: окружности оснований цилиндров и
+ * конусов и силуэты шаров. Вершины осей и центры уже есть среди вершин сцены.
+ */
+const roundBodyPoints = (scene: GeometryScene): Vec3[] => {
+  const { vertices } = scene;
+  const view = viewDirection3d(scene.angleY, scene.angleZ);
+  const cylinders = scene.cylinders.flatMap((cylinder) => {
+    const base = vertices[cylinder.base];
+    const top = vertices[cylinder.top];
+
+    if (!base || !top) return [];
+
+    const axis = axisBetween(base, top);
+
+    return [toVec3(base), toVec3(top)].flatMap((center) => circle3d(center, axis, cylinder.radius, CYLINDER_SEGMENTS));
+  });
+  const cones = scene.cones.flatMap((cone) => {
+    const base = vertexOf(vertices, cone.base);
+    const apex = vertexOf(vertices, cone.apex);
+
+    return base && apex ? circle3d(toVec3(base), axisBetween(base, apex), cone.radius, CYLINDER_SEGMENTS) : [];
+  });
+  const spheres = scene.spheres.flatMap((sphere) => {
+    const center = vertexOf(vertices, sphere.center);
+
+    return center ? sphereOutline(toVec3(center), sphere.radius, view)?.silhouette ?? [] : [];
+  });
+
+  return [...cylinders, ...cones, ...spheres];
+};
+
 /** Сколько единиц ветви кривой показывать при вписывании, если `domain` не задан. */
 const CURVE_EXTENT = 2;
 
 /**
- * Точки мира, которые должны попасть в картинку: вершины (3D — уже в
- * плоскости проекции) и опорные точки графиков у плоских сцен. У кривых
+ * Точки мира, которые должны попасть в картинку: вершины и контуры тел
+ * вращения (3D — уже в плоскости проекции) и опорные точки графиков у плоских сцен. У кривых
  * кроме вершины берётся кусок ветвей — иначе одна парабола вписывается
  * вершиной в центр на максимальном масштабе, и самой параболы не видно.
  */
@@ -94,6 +139,10 @@ export const collectGeometryPoints = (scene: GeometryScene): Vec2[] => {
   const points: Vec2[] = Object.values(scene.vertices).map((vertex) =>
     scene.type === '3d' ? project3dToPlane(vertex, scene.angleY, scene.angleZ) : [vertex[0], vertex[1]],
   );
+
+  if (scene.type === '3d') {
+    roundBodyPoints(scene).forEach((point) => points.push(project3dToPlane(point, scene.angleY, scene.angleZ)));
+  }
 
   if (scene.type !== '3d') {
     scene.plots.forEach((plot) => {
@@ -368,6 +417,58 @@ const renderCylinders = ({ scene, builder, project }: FigureContext): void => {
   });
 };
 
+/** Обод тела вращения: скрытые серии пунктиром, поверх — видимые сплошной, как дуги цилиндра. */
+const renderRim = (builder: SvgBuilder, project: Projector, rim: RimPoint[]): void => {
+  const runs = visibilityRuns(rim);
+
+  [false, true].forEach((visible) => {
+    runs.forEach((run) => {
+      if (run.visible !== visible) return;
+
+      const path = polylinePath(run.points.map(project));
+
+      builder.path(path, visible ? { width: EDGE_WIDTH } : { width: DASHED_EDGE_WIDTH, dashed: EDGE_DASH });
+    });
+  });
+};
+
+/** Конус: обод основания по видимости и две силуэтные образующие от вершины к точкам касания. */
+const renderCones = ({ scene, builder, project }: FigureContext): void => {
+  const view = viewDirection3d(scene.angleY, scene.angleZ);
+
+  scene.cones.forEach((cone) => {
+    const base = vertexOf(scene.vertices, cone.base);
+    const apex = vertexOf(scene.vertices, cone.apex);
+
+    if (!base || !apex) return;
+
+    const outline = coneOutline(toVec3(base), toVec3(apex), cone.radius, view);
+
+    if (!outline) return;
+
+    renderRim(builder, project, outline.rim);
+
+    const top = project(apex);
+
+    outline.tangents.forEach((tangent) => builder.line(top, project(tangent), { width: BODY_WIDTH }));
+  });
+};
+
+/** Шар: силуэт замкнутой линией, экватор — передняя половина сплошной, задняя пунктиром. */
+const renderSpheres = ({ scene, builder, project }: FigureContext): void => {
+  const view = viewDirection3d(scene.angleY, scene.angleZ);
+
+  scene.spheres.forEach((sphere) => {
+    const center = vertexOf(scene.vertices, sphere.center);
+    const outline = center ? sphereOutline(toVec3(center), sphere.radius, view) : null;
+
+    if (!outline) return;
+
+    renderRim(builder, project, outline.equator);
+    builder.path(polylinePath(outline.silhouette.map(project), true), { width: BODY_WIDTH });
+  });
+};
+
 const isEdgeHighlighted = (highlight: GeometryHighlight | null, from: string, to: string): boolean =>
   highlight?.type === 'edge'
   && ((highlight.from === from && highlight.to === to) || (highlight.from === to && highlight.to === from));
@@ -519,7 +620,7 @@ const renderTextLabels = ({ scene, viewport, builder, placed, project }: FigureC
 const renderFigure = (context: FigureContext): void => {
   const layers: Array<(context: FigureContext) => void> = [
     context.scene.type === '3d' ? renderBackdrop3d : renderBackdrop2d,
-    ...(context.scene.type === '3d' ? [renderSections, renderCylinders] : []),
+    ...(context.scene.type === '3d' ? [renderSections, renderCylinders, renderCones, renderSpheres] : []),
     renderEdges,
     renderAngles,
     renderAngleDraft,

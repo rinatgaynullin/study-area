@@ -194,6 +194,93 @@ describe('конструктор планиметрии', () => {
     expect(planimetry.getScene().vertices).toMatchObject({ A: [-1, 1] });
   });
 
+  /** Треугольник A(0,0), B(4,0), C(0,3) кликами; выделено ребро по клику в `at`. */
+  const selectTriangleEdge = (planimetry: SceneEditor, at: [number, number]): void => {
+    const canvas = canvasOf(planimetry);
+
+    pickTool(planimetry, 'segment');
+    click(canvas, [0, 0]);
+    click(canvas, [4, 0]);
+    click(canvas, [4, 0]);
+    click(canvas, [0, 3]);
+    click(canvas, [0, 3]);
+    click(canvas, [0, 0]);
+    pickTool(planimetry, 'select');
+    click(canvas, at);
+  };
+
+  const prop = (planimetry: SceneEditor, name: string): HTMLInputElement => {
+    const field = planimetry.element.querySelector<HTMLInputElement>(`[data-prop="${name}"]`);
+
+    if (!field) throw new Error(`Нет поля ${name}`);
+
+    return field;
+  };
+
+  const setProp = (field: HTMLInputElement, value: string): void => {
+    field.value = value;
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  it('поле «Длина» показывает длину выделенного отрезка', () => {
+    const planimetry = create();
+
+    selectTriangleEdge(planimetry, [2, 1.5]);
+    expect(prop(planimetry, 'length').value).toBe('5');
+  });
+
+  it('поле «Длина» двигает конец вдоль отрезка, второй конец остаётся на месте', () => {
+    const planimetry = create();
+
+    selectTriangleEdge(planimetry, [2, 0]);
+    setProp(prop(planimetry, 'length'), '8');
+
+    const [a, b] = [(planimetry.getScene().vertices as Record<string, [number, number]>).A, (planimetry.getScene().vertices as Record<string, [number, number]>).B];
+
+    expect(a).toEqual([0, 0]);
+    expect(Math.abs(Math.hypot((b?.[0] ?? 0) - 0, (b?.[1] ?? 0) - 0) - 8)).toBeLessThan(0.02);
+    expect(b?.[1]).toBe(0);
+    expect(prop(planimetry, 'length').value).toBe('8');
+  });
+
+  it('«Подвижный конец» выбирает, какая точка двигается', () => {
+    const planimetry = create();
+
+    selectTriangleEdge(planimetry, [2, 0]);
+    setProp(prop(planimetry, 'lengthEnd'), 'from');
+    setProp(prop(planimetry, 'length'), '8');
+
+    const { A, B } = planimetry.getScene().vertices as Record<string, [number, number]>;
+
+    expect(B).toEqual([4, 0]);
+    expect(Math.abs(Math.hypot((B?.[0] ?? 0) - (A?.[0] ?? 0), (B?.[1] ?? 0) - (A?.[1] ?? 0)) - 8)).toBeLessThan(0.02);
+    expect(A?.[0]).toBe(-4);
+  });
+
+  it('изменение длины отменяется одним шагом', () => {
+    const planimetry = create();
+    const canvas = canvasOf(planimetry);
+
+    selectTriangleEdge(planimetry, [2, 0]);
+    setProp(prop(planimetry, 'length'), '8');
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(planimetry.getScene().vertices).toEqual({ A: [0, 0], B: [4, 0], C: [0, 3] });
+  });
+
+  it('нулевая, отрицательная и пустая длина сцену не меняют', () => {
+    const planimetry = create();
+
+    selectTriangleEdge(planimetry, [2, 0]);
+
+    const before = JSON.stringify(planimetry.getScene());
+
+    ['0', '-2', ''].forEach((value) => {
+      setProp(prop(planimetry, 'length'), value);
+      expect(JSON.stringify(planimetry.getScene())).toBe(before);
+      expect(prop(planimetry, 'length').value).toBe('4');
+    });
+  });
+
   it('выбор точки показывает свойства; переименование тянет рёбра и углы; удаление чистит связи', () => {
     const planimetry = create();
     const canvas = canvasOf(planimetry);
@@ -353,7 +440,7 @@ describe('диалог с конструктором', () => {
     editor.core.setHTML('<div data-geometry-data=\'{"type":"3d","vertices":{"S":[0,0,2],"A":[0,0,0]},"edges":[["S","A"]]}\'></div>');
     editor.element
       .querySelector<HTMLElement>('.rte-content .rte-drawing')
-      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     dialog = openDialog();
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Стереометрия');
   });

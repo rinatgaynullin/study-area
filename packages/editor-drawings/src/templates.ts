@@ -30,15 +30,16 @@ export const DRAWING_TEMPLATES: DrawingTemplate[] = [
     scene: {
       type: '3d',
       vertices: { A: [0, 0, 0], B: [3, 0, 0], C: [3, 3, 0], D: [0, 3, 0], S: [1.5, 1.5, 3.5] },
+      // При виде (15°, −30°) дальняя вершина основания — A: пунктиром идут её рёбра.
       edges: [
-        ['A', 'B'],
+        { from: 'A', to: 'B', style: 'dashed' },
         ['B', 'C'],
         ['C', 'D'],
         { from: 'D', to: 'A', style: 'dashed' },
-        ['S', 'A'],
+        { from: 'S', to: 'A', style: 'dashed' },
         ['S', 'B'],
         ['S', 'C'],
-        { from: 'S', to: 'D', style: 'dashed' },
+        ['S', 'D'],
       ],
       labels: { S: 'above', A: 'below left', B: 'below right', C: 'right', D: 'left' },
       angleY: 15,

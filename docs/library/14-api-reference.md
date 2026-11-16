@@ -246,7 +246,8 @@ const AttachmentNode: Node<AttachmentOptions>; const ATTACHMENT_NODE_NAME = 'att
 interface AudioOptions { t: Translate; HTMLAttributes: Record<string, unknown> }
 interface AttachmentOptions { t: Translate; HTMLAttributes: Record<string, unknown> }
 // Команды TipTap: insertFormula({ mathml, type? }), updateFormula({ pos, mathml, type? }), deleteFormulaAt(pos),
-// insertAudio(attributes), insertAttachment(attributes)
+// insertAudio(attributes), insertAttachment(attributes), moveBlockUp(), moveBlockDown()
+//   (ставят выделенный блочный атом — картинку, чертёж, аудио, вложение — на блок выше или ниже; `Alt-ArrowUp` / `Alt-ArrowDown`)
 ```
 
 ### Медиа
@@ -473,15 +474,22 @@ const worldToSvg: (point: Point, scale: number, cx: number, cy: number) => SvgPo
 const svgToWorld: (point: SvgPoint, scale: number, cx: number, cy: number) => Vec2;
 const rotatePoint3d: (point: Point, angleY: number, angleZ: number) => Vec3;
 const projectOblique: (point: Vec3, scale: number, cx: number, cy: number) => SvgPoint;
+// Тела вращения (render/round-bodies.ts): все точки — Vec3 мира
+const circle3d: (center: Vec3, axis: Vec3, radius: number, segments: number) => Vec3[];   // окружность в плоскости ⟂ axis
+const coneOutline: (base: Vec3, apex: Vec3, radius: number, view: Vec3, segments?: number) => ConeOutline | null;   // { rim, tangents }: обод с видимостью точек и точки касания силуэтных образующих
+const sphereOutline: (center: Vec3, radius: number, view: Vec3, segments?: number) => SphereOutline | null;   // { silhouette, equator }
+const visibilityRuns: (rim: RimPoint[]) => VisibilityRun[];   // обод → серии подряд видимых или скрытых точек (сплошные и пунктирные дуги)
 const fitViewport: (points: Vec2[], options: FitOptions) => Viewport;
 const latexToSvgTspans: (latex: string) => string;                        // экранированная разметка <tspan>
 const latexToPlainText: (latex: string) => string;
 
 type DrawingKind = 'geometry' | 'physics';
 interface GeometryScene { type: '2d' | '3d' | 'plot_2d'; vertices: Record<string, Point>; edges: GeometryEdge[]; angles: GeometryAngle[];
-  labels: Record<string, string>; textLabels: GeometryTextLabel[]; sections: GeometrySection[]; cylinders: GeometryCylinder[]; plots: Plot[];
+  labels: Record<string, string>; textLabels: GeometryTextLabel[]; sections: GeometrySection[]; cylinders: GeometryCylinder[]; cones: GeometryCone[]; spheres: GeometrySphere[]; plots: Plot[];
   angleY: number; angleZ: number; scale?: number; offsetX: number; offsetY: number; showGrid: boolean; showAxes: boolean; showAxesTicks: boolean;
   axes: { xLabel: string; yLabel: string } }
+interface GeometryCone { base: string; apex: string; radius: number }   // прямой круговой конус; основание ⟂ оси base → apex
+interface GeometrySphere { center: string; radius: number }
 interface PhysicsScene { type: 'physics'; scale?: number; offsetX: number; offsetY: number; showGrid: boolean; elements: PhysicsElement[] }
 interface PhysicsElement { id: string; type: PhysicsElementType; label?: string; color?: string; dashed?: boolean; points?: Vec2[]; center?: Vec2; coords?: Vec2; … }
 type GeometryHighlight = { type: 'edge'; from; to } | { type: 'vertex' | 'vertex_draft'; id } | { type: 'angle'; id } | { type: 'section'; vertices }

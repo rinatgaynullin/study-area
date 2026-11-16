@@ -59,6 +59,91 @@ describe('geometryToTikz: 3D', () => {
     expect(out).toMatch(/\\draw\[hidden\] \(\[shift=\{\([\d.]+:1\)\}\]O1\) arc\[/);
     expect(out.match(/-- \(\[shift=/g)?.length).toBe(2);
   });
+
+  /** Строки блока от заголовка до следующего комментария. */
+  const block = (out: string, heading: string): string[] => {
+    const lines = out.split('\n').map((line) => line.trim());
+    const start = lines.indexOf(heading);
+    const rest = lines.slice(start + 1);
+    const end = rest.findIndex((line) => line.startsWith('%'));
+
+    if (start < 0) return [];
+
+    return end < 0 ? rest : rest.slice(0, end);
+  };
+
+  it('конус с вертикальной осью: скрытая и видимая дуги основания, две образующие от вершины', () => {
+    const out = geometry({
+      type: '3d',
+      vertices: { O: [0, 0, 0], S: [0, 0, 4] },
+      cones: [{ base: 'O', apex: 'S', radius: 2 }],
+    });
+    const lines = block(out, '% Конусы');
+
+    expect(lines).toHaveLength(4);
+    expect(lines.filter((line) => /^\\draw\[hidden\] \(\[shift=\{\(-?[\d.]+:2\)\}\]O\) arc\[/.test(line))).toHaveLength(1);
+    expect(lines.filter((line) => /^\\draw\[visible\] \(\[shift=\{\(-?[\d.]+:2\)\}\]O\) arc\[/.test(line))).toHaveLength(1);
+    expect(lines.filter((line) => /^\\draw\[visible\] \(S\) -- \(\[shift=\{\(-?[\d.]+:2\)\}\]O\);$/.test(line))).toHaveLength(2);
+    // Скрытая дуга — задняя и короче половины окружности.
+    const hidden = /start angle=(-?[\d.]+), end angle=(-?[\d.]+)/.exec(lines[0] ?? '');
+
+    expect(Number(hidden?.[2]) - Number(hidden?.[1])).toBeGreaterThan(0);
+    expect(Number(hidden?.[2]) - Number(hidden?.[1])).toBeLessThan(180);
+    expect(out.indexOf('% Цилиндры')).toBe(-1);
+  });
+
+  it('конус: без точек касания — целая окружность, наклонная ось — ломаные', () => {
+    const inverted = block(geometry({ type: '3d', vertices: { O: [0, 0, 4], S: [0, 0, 0] }, cones: [{ base: 'O', apex: 'S', radius: 1 }] }), '% Конусы');
+
+    expect(inverted).toContain('\\draw[visible] (O) circle (1);');
+    expect(inverted.filter((line) => line.includes('[hidden]'))).toHaveLength(0);
+
+    const tilted = block(geometry({ type: '3d', vertices: { O: [0, 0, 0], S: [3, 0, 1] }, cones: [{ base: 'O', apex: 'S', radius: 1 }] }), '% Конусы');
+
+    expect(tilted.length).toBeGreaterThan(0);
+    expect(tilted.every((line) => !line.includes(' arc['))).toBe(true);
+    expect(tilted.filter((line) => /^\\draw\[visible\] \(S\) -- \(-?[\d.]+,-?[\d.]+,-?[\d.]+\);$/.test(line))).toHaveLength(2);
+  });
+
+  it('шар: замкнутый силуэт, скрытая и видимая дуги экватора', () => {
+    const out = geometry({ type: '3d', vertices: { C: [4, 4, 2] }, spheres: [{ center: 'C', radius: 1.5 }] });
+    const lines = block(out, '% Шары');
+
+    expect(lines).toHaveLength(3);
+    expect(lines.filter((line) => /^\\draw\[hidden\] \(\[shift=\{\([\d.]+:1\.5\)\}\]C\) arc\[/.test(line))).toHaveLength(1);
+    expect(lines.filter((line) => /^\\draw\[visible\] \(\[shift=\{\(-?[\d.]+:1\.5\)\}\]C\) arc\[/.test(line))).toHaveLength(1);
+
+    const silhouette = lines.find((line) => line.includes('plot[smooth cycle]')) ?? '';
+
+    expect(silhouette).toMatch(/^\\draw\[visible\] plot\[smooth cycle\] coordinates \{(\(-?[\d.]+,-?[\d.]+,-?[\d.]+\) ?){24}\};$/);
+  });
+
+  it('имена вершин из прототипа объекта у конусов и шаров не находят вершину', () => {
+    const raw = { type: '3d', vertices: { O: [0, 0, 0], S: [0, 0, 4] }, edges: [['O', 'S']] };
+    const out = geometry({
+      ...raw,
+      cones: [{ base: 'constructor', apex: 'S' }, { base: 'O', apex: 'toString' }],
+      spheres: [{ center: 'hasOwnProperty' }],
+    });
+
+    expect(out).not.toContain('NaN');
+    expect(out).toBe(geometry(raw));
+  });
+
+  it('порядок блоков: цилиндры, конусы, шары, рёбра', () => {
+    const out = geometry({
+      type: '3d',
+      vertices: { O1: [0, 0, 0], O2: [0, 0, 2], O: [3, 0, 0], S: [3, 0, 3], C: [0, 3, 1] },
+      edges: [['O1', 'O2']],
+      cylinders: [{ base: 'O1', top: 'O2', radius: 1 }],
+      cones: [{ base: 'O', apex: 'S', radius: 1 }],
+      spheres: [{ center: 'C', radius: 1 }],
+    });
+    const order = ['% Цилиндры', '% Конусы', '% Шары', '% Рёбра'].map((heading) => out.indexOf(heading));
+
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
 });
 
 describe('geometryToTikz: 2D', () => {

@@ -22,5 +22,15 @@ export {
   resolveGeometryViewport,
   type GeometryRenderOptions,
 } from './geometry-svg';
+export {
+  circle3d,
+  coneOutline,
+  sphereOutline,
+  visibilityRuns,
+  type ConeOutline,
+  type RimPoint,
+  type SphereOutline,
+  type VisibilityRun,
+} from './round-bodies';
 export { collectPhysicsPoints, renderPhysicsSvg, type PhysicsRenderOptions } from './physics-svg';
 export { parsePgfplotsTikz } from './pgfplots';

@@ -4,9 +4,12 @@ import type {
   AxisTick,
   DrawingKind,
   GeometryAngle,
+  GeometryCone,
+  GeometryCylinder,
   GeometryEdge,
   GeometryScene,
   GeometrySceneType,
+  GeometrySphere,
   PhysicsElement,
   PhysicsElementType,
   PhysicsScene,
@@ -241,10 +244,17 @@ const collectLooseCircles = (raw: Raw): Plot[] => {
   });
 };
 
-const detectGeometryType = (raw: Raw, vertices: Record<string, Point>, plots: Plot[]): GeometrySceneType => {
+/**
+ * Тип сцены. `hasRoundBodies` — есть цилиндр, конус или шар: тело вращения
+ * бывает только в 3D, даже если все вершины лежат в плоскости z = 0. Графики
+ * важнее: сцена с `plots` определяется, как раньше.
+ */
+const detectGeometryType = (raw: Raw, vertices: Record<string, Point>, plots: Plot[], hasRoundBodies: boolean): GeometrySceneType => {
   if (raw.type === 'plot_2d') return 'plot_2d';
 
   if (raw.type === '2d') return '2d';
+
+  if (hasRoundBodies && plots.length === 0) return '3d';
 
   const names = Object.keys(vertices);
 
@@ -264,6 +274,9 @@ const detectGeometryType = (raw: Raw, vertices: Record<string, Point>, plots: Pl
   return plots.length > 0 ? 'plot_2d' : '2d';
 };
 
+/** Радиус тела вращения: модуль числа, ноль и мусор — единица. */
+const bodyRadius = (value: Raw): number => Math.abs(asNumber(value.radius, 1)) || 1;
+
 export const EMPTY_GEOMETRY_SCENE: GeometryScene = {
   type: '2d',
   vertices: {},
@@ -273,6 +286,8 @@ export const EMPTY_GEOMETRY_SCENE: GeometryScene = {
   textLabels: [],
   sections: [],
   cylinders: [],
+  cones: [],
+  spheres: [],
   plots: [],
   angleY: 0,
   angleZ: 0,
@@ -346,17 +361,37 @@ export const normalizeGeometryScene = (raw: unknown): GeometryScene => {
     .filter((section): section is NonNullable<typeof section> => section !== null && section.vertices.length >= 3);
 
   const cylinders = (Array.isArray(raw.cylinders) ? raw.cylinders : [])
-    .map((value) =>
+    .map((value): GeometryCylinder | null =>
       isRecord(value) && typeof value.base === 'string' && typeof value.top === 'string'
-        ? { base: value.base, top: value.top, radius: Math.abs(asNumber(value.radius, 1)) || 1 }
+        ? { base: value.base, top: value.top, radius: bodyRadius(value) }
         : null,
     )
-    .filter((cylinder): cylinder is NonNullable<typeof cylinder> => cylinder !== null);
+    .filter((cylinder): cylinder is GeometryCylinder => cylinder !== null);
+
+  const cones = (Array.isArray(raw.cones) ? raw.cones : [])
+    .map((value): GeometryCone | null =>
+      isRecord(value) && typeof value.base === 'string' && typeof value.apex === 'string'
+        ? { base: value.base, apex: value.apex, radius: bodyRadius(value) }
+        : null,
+    )
+    .filter((cone): cone is GeometryCone => cone !== null);
+
+  const spheres = (Array.isArray(raw.spheres) ? raw.spheres : [])
+    .map((value): GeometrySphere | null =>
+      isRecord(value) && typeof value.center === 'string' ? { center: value.center, radius: bodyRadius(value) } : null,
+    )
+    .filter((sphere): sphere is GeometrySphere => sphere !== null);
+
+  // Тело считается, только если все его вершины есть в сцене: иначе рисовать нечего.
+  const hasVertex = (name: string): boolean => Object.hasOwn(vertices, name);
+  const hasRoundBodies = cylinders.some((cylinder) => hasVertex(cylinder.base) && hasVertex(cylinder.top))
+    || cones.some((cone) => hasVertex(cone.base) && hasVertex(cone.apex))
+    || spheres.some((sphere) => hasVertex(sphere.center));
 
   const axes = isRecord(raw.axes) ? raw.axes : {};
 
   const scene: GeometryScene = {
-    type: detectGeometryType(raw, vertices, plots),
+    type: detectGeometryType(raw, vertices, plots, hasRoundBodies),
     vertices,
     edges,
     angles,
@@ -364,6 +399,8 @@ export const normalizeGeometryScene = (raw: unknown): GeometryScene => {
     textLabels,
     sections,
     cylinders,
+    cones,
+    spheres,
     plots,
     angleY: asNumber(raw.angleY, 0),
     angleZ: asNumber(raw.angleZ, 0),

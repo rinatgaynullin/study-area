@@ -52,6 +52,40 @@ export const rotatePoint3d = (point: Point, angleY: number, angleZ: number): Vec
   return [x, y, z];
 };
 
+/** Обратный к `rotatePoint3d` поворот: из координат вида обратно в координаты сцены. */
+export const unrotatePoint3d = (point: Vec3, angleY: number, angleZ: number): Vec3 => {
+  let [x, y, z] = point;
+
+  if (angleY) {
+    const cos = Math.cos(toRadians(angleY));
+    const sin = Math.sin(toRadians(angleY));
+
+    [x, z] = [x * cos - z * sin, x * sin + z * cos];
+  }
+
+  if (angleZ) {
+    const cos = Math.cos(toRadians(angleZ));
+    const sin = Math.sin(toRadians(angleZ));
+
+    [x, y] = [x * cos + y * sin, -x * sin + y * cos];
+  }
+
+  return [x, y, z];
+};
+
+/**
+ * Направление на зрителя в координатах сцены (не единичное): точки, которые
+ * отличаются на этот вектор, сливаются на картинке, а ближе к зрителю та, что
+ * дальше вдоль него. Грань с внешней нормалью `n` обращена к зрителю, когда
+ * `n · viewDirection3d(...) > 0`.
+ */
+export const viewDirection3d = (angleY: number, angleZ: number): Vec3 =>
+  unrotatePoint3d(
+    [1, Math.cos(OBLIQUE_ANGLE) * OBLIQUE_FACTOR, Math.sin(OBLIQUE_ANGLE) * OBLIQUE_FACTOR],
+    angleY,
+    angleZ,
+  );
+
 /**
  * Кабинетная проекция уже повёрнутой точки: ось x уходит в глубину под 45°
  * вдвое короче, y идёт вправо, z — вверх.

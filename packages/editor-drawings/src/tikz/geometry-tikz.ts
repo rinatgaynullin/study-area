@@ -8,7 +8,9 @@ import type {
   Point,
   SqrtPlot,
   Vec2,
+  Vec3,
 } from '../scene/types';
+import { coneOutline, sphereOutline, toVec3, visibilityRuns, type VisibilityRun } from '../render/round-bodies';
 import {
   anchorTowards,
   leftNormal,
@@ -31,7 +33,7 @@ import {
  * векторы осей (`x`/`y`/`z` в опциях картинки, поэтому координаты пишутся
  * трёхмерными, а проекцию делает сам TikZ), планиметрия с `\pic{angle}` и
  * графики функций в `axis` pgfplots. Вход уже нормализован, но ссылки на
- * вершины в сечениях, цилиндрах и текстовых подписях не проверены — такие
+ * вершины в сечениях, телах вращения и текстовых подписях не проверены — такие
  * элементы просто пропускаются.
  */
 
@@ -49,6 +51,14 @@ const PREAMBLE_PLOT = '% requires: \\usepackage{pgfplots} \\pgfplotsset{compat=1
  * проходят образующие цилиндра. Зависит только от вектора оси x.
  */
 const SILHOUETTE_ANGLE = (Math.atan2(1, X_VECTOR[0]) * 180) / Math.PI;
+
+/**
+ * Направление на зрителя для этих векторов осей: точки, отличающиеся на него,
+ * сливаются на канвасе. Углы сцены TikZ-картинка не учитывает.
+ */
+const TIKZ_VIEW: Vec3 = [1, -X_VECTOR[0], -X_VECTOR[1]];
+/** Точек на силуэте шара: `smooth cycle` сглаживает и этого хватает. */
+const SPHERE_SILHOUETTE_POINTS = 24;
 
 const ANGLE_RADII: Record<string, number[]> & { single: number[] } = {
   single: [0.4],
@@ -240,6 +250,104 @@ const cylinderLines = (ctx: Context): string[] =>
     }),
   );
 
+/** Вершина по имени без значений из прототипа (имя `constructor` и т. п. — нет вершины). */
+const vertexOf = (vertices: Record<string, Point>, name: string): Point | undefined =>
+  Object.hasOwn(vertices, name) ? vertices[name] : undefined;
+
+/** Угол (в градусах) точки `point` вокруг `center` в плоскости xy. */
+const planeAngle = (center: Vec3, point: Vec3): number => (Math.atan2(point[1] - center[1], point[0] - center[0]) * 180) / Math.PI;
+
+const runStyle = (run: VisibilityRun): string => (run.visible ? 'visible' : 'hidden');
+
+/** Сначала скрытые серии, чтобы видимые легли поверх. */
+const hiddenFirst = (runs: VisibilityRun[]): VisibilityRun[] => [
+  ...runs.filter((run) => !run.visible),
+  ...runs.filter((run) => run.visible),
+];
+
+/**
+ * Конус с вертикальной осью: основание в плоскости xy, поэтому дуги — `arc`,
+ * как у цилиндра, а концы дуг — точки касания силуэтных образующих. Обход
+ * обода идёт против часовой, если вершина выше основания, иначе по часовой.
+ * Ось не вертикальна — дуги и образующие ломаными по точкам контура.
+ */
+const coneLines = (ctx: Context): string[] =>
+  withHeading(
+    '% Конусы',
+    ctx.scene.cones.flatMap((cone) => {
+      const basePoint = vertexOf(ctx.scene.vertices, cone.base);
+      const apexPoint = vertexOf(ctx.scene.vertices, cone.apex);
+
+      if (!basePoint || !apexPoint) return [];
+
+      const base = toVec3(basePoint);
+      const apex = toVec3(apexPoint);
+      const outline = coneOutline(base, apex, cone.radius, TIKZ_VIEW);
+
+      if (!outline) return [];
+
+      const runs = hiddenFirst(visibilityRuns(outline.rim));
+      const vertical = Math.hypot(apex[0] - base[0], apex[1] - base[1]) < 1e-6;
+
+      if (!vertical) {
+        return [
+          ...runs.map((run) => `\\draw[${runStyle(run)}] ${run.points.map(xyz).join(' -- ')};`),
+          ...outline.tangents.map((tangent) => `\\draw[visible] ${ref(ctx, cone.apex)} -- ${xyz(tangent)};`),
+        ];
+      }
+
+      const radius = num(cone.radius);
+      const rim = (angle: number): string => `([shift={(${num(angle)}:${radius})}]${bare(ctx, cone.base)})`;
+      const counterclockwise = apex[2] > base[2];
+      const arcs = runs.length > 1
+        ? runs.flatMap((run) => {
+          const first = run.points[0];
+          const last = run.points[run.points.length - 1];
+
+          if (!first || !last) return [];
+
+          const start = planeAngle(base, first);
+          const turn = (((planeAngle(base, last) - start) % 360) + 360) % 360;
+          const end = counterclockwise ? start + turn : start + turn - 360;
+
+          return [`\\draw[${runStyle(run)}] ${rim(start)} arc[start angle=${num(start)}, end angle=${num(end)}, radius=${radius}];`];
+        })
+        : [`\\draw[visible] ${ref(ctx, cone.base)} circle (${radius});`];
+
+      return [
+        ...arcs,
+        ...outline.tangents.map((tangent) => `\\draw[visible] ${ref(ctx, cone.apex)} -- ${rim(planeAngle(base, tangent))};`),
+      ];
+    }),
+  );
+
+/**
+ * Шар: силуэт — гладкая замкнутая кривая по точкам большой окружности,
+ * перпендикулярной направлению на зрителя; экватор — как основание цилиндра.
+ */
+const sphereLines = (ctx: Context): string[] =>
+  withHeading(
+    '% Шары',
+    ctx.scene.spheres.flatMap((sphere) => {
+      const centerPoint = vertexOf(ctx.scene.vertices, sphere.center);
+      const outline = centerPoint ? sphereOutline(toVec3(centerPoint), sphere.radius, TIKZ_VIEW, SPHERE_SILHOUETTE_POINTS) : null;
+
+      if (!outline) return [];
+
+      const radius = num(sphere.radius);
+      const front = num(SILHOUETTE_ANGLE - 180);
+      const back = num(SILHOUETTE_ANGLE);
+      const backEnd = num(SILHOUETTE_ANGLE + 180);
+      const rim = (angle: string): string => `([shift={(${angle}:${radius})}]${bare(ctx, sphere.center)})`;
+
+      return [
+        `\\draw[hidden] ${rim(back)} arc[start angle=${back}, end angle=${backEnd}, radius=${radius}];`,
+        `\\draw[visible] ${rim(front)} arc[start angle=${front}, end angle=${back}, radius=${radius}];`,
+        `\\draw[visible] plot[smooth cycle] coordinates {${outline.silhouette.map(xyz).join(' ')}};`,
+      ];
+    }),
+  );
+
 const edgeLines3d = (ctx: Context): string[] => {
   const rank = (edge: GeometryEdge): number => (edge.style === 'dashed' ? 0 : 1);
   const sorted = [...ctx.scene.edges].sort((a, b) => rank(a) - rank(b));
@@ -256,6 +364,8 @@ const render3d = (ctx: Context): string => {
     ...Object.entries(vertices).map(([name, point]) => `\\coordinate ${ref(ctx, name)} at ${xyz(point)};`),
     ...sectionLines(ctx),
     ...cylinderLines(ctx),
+    ...coneLines(ctx),
+    ...sphereLines(ctx),
     ...edgeLines3d(ctx),
     ...angleLines(ctx),
     ...textLabelLines(ctx),

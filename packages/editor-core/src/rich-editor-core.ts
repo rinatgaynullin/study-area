@@ -24,6 +24,7 @@ import {
 import { createI18n, type I18n } from './i18n';
 import { prepareIncomingHtml } from './prepare-html';
 import { StrictTextStyle } from './extensions/strict-text-style';
+import { MoveBlock } from './extensions/move-block';
 import { LegacyHighlight } from './legacy/legacy-highlight';
 import { whenFormulasReady } from './formula/mathjax';
 import { normalizeMathML } from './formula/mathml';
@@ -168,8 +169,13 @@ export class RichEditorCore {
           HTMLAttributes: { rel: 'noopener noreferrer' },
         },
         codeBlock: { HTMLAttributes: { class: 'rte-code-block' } },
+        // Линия места вставки при переносе узла. Плагин пишет цвет в инлайновый
+        // `background-color`; у переменной темы есть запасное значение, чтобы
+        // линию было видно и у ядра без интерфейса, где токенов `.rte-root` нет.
+        dropcursor: { class: 'rte-dropcursor', width: 2, color: 'var(--rte-color-primary, currentColor)' },
       }),
       StrictTextStyle,
+      MoveBlock,
       Color,
       // Размер шрифта из инлайнового стиля. Без него разметка старого
       // редактора теряет кегль: текст в 72px отрисовывается базовым.
