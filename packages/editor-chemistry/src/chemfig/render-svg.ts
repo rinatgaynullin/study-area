@@ -179,6 +179,8 @@ const drawRing = (canvas: SvgCanvas, ring: ChemRing): void => {
   vertices.forEach((vertex, index) => {
     const next = vertices[(index + 1) % ring.size];
 
+    if (!next) return;
+
     canvas.bond({
       type: ring.bonds[index] ?? '-',
       x1: vertex.x,

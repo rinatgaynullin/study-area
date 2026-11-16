@@ -166,7 +166,7 @@ export const ceToLatex = (source: string): string => {
 
         const conditions = /^->\s*\[(.*?)\]$/.exec(operator);
 
-        if (conditions) return ` \\xrightarrow{\\text{${conditions[1].replace(/\^o/g, '^\\circ').trim()}}} `;
+        if (conditions) return ` \\xrightarrow{\\text{${(conditions[1] ?? '').replace(/\^o/g, '^\\circ').trim()}}} `;
 
         return part;
       }
@@ -179,8 +179,10 @@ export const ceToLatex = (source: string): string => {
       let prefix = '';
 
       if (coefficient) {
-        prefix = `${coefficient[1]} `;
-        formula = coefficient[2].trim();
+        const [, number = '', rest = ''] = coefficient;
+
+        prefix = `${number} `;
+        formula = rest.trim();
       }
 
       if (!formula) return prefix.trim();

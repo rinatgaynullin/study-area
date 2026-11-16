@@ -52,11 +52,12 @@ const isSeparatorRow = (line: string): boolean => {
 
 /** Строка — часть таблицы, если это разделитель или рядом строка с тем же числом ячеек. */
 const isTableLine = (lines: string[], index: number): boolean => {
-  const cells = parseTableRow(lines[index]);
+  const line = lines[index];
+  const cells = line === undefined ? null : parseTableRow(line);
 
-  if (!cells) return false;
+  if (!line || !cells) return false;
 
-  if (isSeparatorRow(lines[index])) return true;
+  if (isSeparatorRow(line)) return true;
 
   const neighbours = [lines[index - 1], lines[index + 1]].filter((line): line is string => line !== undefined);
 
@@ -100,7 +101,7 @@ class MarkdownBlocks {
 
       if (bullet || ordered) {
         this.closeTable();
-        this.pushListItem(bullet ? 'ul' : 'ol', bullet ? bullet[1] : ordered![2], ordered ? Number(ordered[1]) : 1);
+        this.pushListItem(bullet ? 'ul' : 'ol', (bullet ? bullet[1] : ordered?.[2]) ?? '', ordered ? Number(ordered[1]) : 1);
 
         return;
       }
@@ -178,9 +179,10 @@ class MarkdownBlocks {
     const heading = HEADING.exec(line);
 
     if (heading) {
-      const level = Math.min(heading[1].length, 3);
+      const [, hashes = '', title = ''] = heading;
+      const level = Math.min(hashes.length, 3);
 
-      this.out.push(`<h${level}>${this.inline(heading[2])}</h${level}>`);
+      this.out.push(`<h${level}>${this.inline(title)}</h${level}>`);
 
       return;
     }

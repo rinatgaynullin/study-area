@@ -1,4 +1,4 @@
-import type { Vec2 } from '../scene/types';
+import type { Vec2, Vec3 } from '../scene/types';
 
 /** Геометрия на плоскости для конструкторов: расстояния, проекции, подбор кривых. */
 
@@ -53,6 +53,9 @@ export const roundTo = (value: number, digits = 2): number => Number(value.toFix
 export const roundPoint = (p: Vec2, digits = 2): Vec2 => [roundTo(p[0], digits), roundTo(p[1], digits)];
 
 // ---------------------------------------------------------- подбор фигур
+
+/** Матрица 3×3 по строкам — для систем, решаемых методом Крамера. */
+type Matrix3 = [Vec3, Vec3, Vec3];
 
 export interface LineFit {
   k: number;
@@ -121,13 +124,13 @@ export const fitCircle = (points: Vec2[]): CircleFit | null => {
   });
 
   // Решаем A·[a b c]ᵀ = rhs для x² + y² + a·x + b·y + c = 0 методом Крамера.
-  const matrix = [
+  const matrix: Matrix3 = [
     [sxx, sxy, sx],
     [sxy, syy, sy],
     [sx, sy, n],
   ];
-  const rhs = [-sxz, -syz, -sz];
-  const det = (m: number[][]): number =>
+  const rhs: Vec3 = [-sxz, -syz, -sz];
+  const det = (m: Matrix3): number =>
     m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
     - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
     + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
@@ -135,7 +138,17 @@ export const fitCircle = (points: Vec2[]): CircleFit | null => {
 
   if (Math.abs(main) < 1e-9) return null;
 
-  const replace = (column: number): number[][] => matrix.map((row, i) => row.map((value, j) => (j === column ? rhs[i] : value)));
+  const replace = (column: number): Matrix3 => {
+    // Строка с элементом из `rhs` вместо столбца `column`.
+    const swap = ([x, y, z]: Vec3, value: number): Vec3 => [
+      column === 0 ? value : x,
+      column === 1 ? value : y,
+      column === 2 ? value : z,
+    ];
+
+    return [swap(matrix[0], rhs[0]), swap(matrix[1], rhs[1]), swap(matrix[2], rhs[2])];
+  };
+
   const a = det(replace(0)) / main;
   const b = det(replace(1)) / main;
   const c = det(replace(2)) / main;
@@ -164,13 +177,13 @@ export const fitParabola = (points: Vec2[]): ParabolaFit | null => {
 
   const n = points.length;
   const s = (fx: (p: Vec2) => number): number => points.reduce((sum, p) => sum + fx(p), 0);
-  const matrix = [
+  const matrix: Matrix3 = [
     [s(([x]) => x ** 4), s(([x]) => x ** 3), s(([x]) => x ** 2)],
     [s(([x]) => x ** 3), s(([x]) => x ** 2), s(([x]) => x)],
     [s(([x]) => x ** 2), s(([x]) => x), n],
   ];
-  const rhs = [s(([x, y]) => x * x * y), s(([x, y]) => x * y), s(([, y]) => y)];
-  const det = (m: number[][]): number =>
+  const rhs: Vec3 = [s(([x, y]) => x * x * y), s(([x, y]) => x * y), s(([, y]) => y)];
+  const det = (m: Matrix3): number =>
     m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
     - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
     + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
@@ -178,7 +191,17 @@ export const fitParabola = (points: Vec2[]): ParabolaFit | null => {
 
   if (Math.abs(main) < 1e-9) return null;
 
-  const replace = (column: number): number[][] => matrix.map((row, i) => row.map((value, j) => (j === column ? rhs[i] : value)));
+  const replace = (column: number): Matrix3 => {
+    // Строка с элементом из `rhs` вместо столбца `column`.
+    const swap = ([x, y, z]: Vec3, value: number): Vec3 => [
+      column === 0 ? value : x,
+      column === 1 ? value : y,
+      column === 2 ? value : z,
+    ];
+
+    return [swap(matrix[0], rhs[0]), swap(matrix[1], rhs[1]), swap(matrix[2], rhs[2])];
+  };
+
   const a = det(replace(0)) / main;
   const b = det(replace(1)) / main;
   const c = det(replace(2)) / main;
@@ -210,6 +233,8 @@ export const recognizeStroke = (points: Vec2[]): RecognizedShape => {
   const tolerance = span * 0.06;
   const first = points[0];
   const last = points[points.length - 1];
+
+  if (!first || !last) return { type: 'freehand', points };
 
   const line = fitLine(points);
 

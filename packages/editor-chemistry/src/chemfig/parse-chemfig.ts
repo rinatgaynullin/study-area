@@ -33,7 +33,7 @@ export const unwrapChemfig = (code: string): string => {
   const trimmed = code.trim();
   const match = /^\\{1,2}chemfig\s*\{([\s\S]*)\}$/.exec(trimmed);
 
-  return match ? match[1].trim() : trimmed;
+  return match?.[1]?.trim() ?? trimmed;
 };
 
 /**

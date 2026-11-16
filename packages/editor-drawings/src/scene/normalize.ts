@@ -253,6 +253,8 @@ const detectGeometryType = (raw: Raw, vertices: Record<string, Point>, plots: Pl
     const hasDepth = names.some((name) => {
       const point = vertices[name];
 
+      if (!point) return false;
+
       return point.length === 3 && Math.abs(point[2]) > 0.001;
     });
 
@@ -517,9 +519,11 @@ const normalizePhysicsElement = (raw: Raw): PhysicsElement | null => {
     element.width = element.width ?? 0.8;
     element.height = element.height ?? 0.6;
 
-    if (Array.isArray(raw.rect) && raw.rect.length >= 4 && raw.rect.every(isFiniteNumber)) {
-      const [x1, y1, x2, y2] = raw.rect as number[];
+    const rect = Array.isArray(raw.rect) && raw.rect.every(isFiniteNumber) ? raw.rect : [];
+    const [x1, y1, x2, y2] = rect;
 
+    // Четвёртое число есть — значит, в `rect` не меньше четырёх чисел.
+    if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
       element.center = [(x1 + x2) / 2, (y1 + y2) / 2];
       element.width = Math.abs(x2 - x1);
       element.height = Math.abs(y2 - y1);

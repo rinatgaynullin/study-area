@@ -50,7 +50,11 @@ const PREAMBLE_PLOT = '% requires: \\usepackage{pgfplots} \\pgfplotsset{compat=1
  */
 const SILHOUETTE_ANGLE = (Math.atan2(1, X_VECTOR[0]) * 180) / Math.PI;
 
-const ANGLE_RADII: Record<string, number[]> = { single: [0.4], double: [0.4, 0.5], triple: [0.4, 0.5, 0.6] };
+const ANGLE_RADII: Record<string, number[]> & { single: number[] } = {
+  single: [0.4],
+  double: [0.4, 0.5],
+  triple: [0.4, 0.5, 0.6],
+};
 
 /** Засечки равенства: половина длины и шаг между соседними, в единицах мира. */
 const TICK_HALF = 0.1;
@@ -126,7 +130,13 @@ const angleLines = (ctx: Context): string[] => {
 
   ctx.scene.angles.forEach((angle) => {
     const [p, v, q] = angle.points;
-    const [a, b, c] = [p, v, q].map((name) => canvas(ctx, ctx.scene.vertices[name]));
+    const pointP = ctx.scene.vertices[p];
+    const pointV = ctx.scene.vertices[v];
+    const pointQ = ctx.scene.vertices[q];
+
+    if (!pointP || !pointV || !pointQ) return;
+
+    const [a, b, c] = [canvas(ctx, pointP), canvas(ctx, pointV), canvas(ctx, pointQ)];
     const start = Math.atan2(a[1] - b[1], a[0] - b[0]);
     const end = Math.atan2(c[1] - b[1], c[0] - b[0]);
     const sweep = (((((end - start) * 180) / Math.PI) % 360) + 360) % 360;
@@ -243,7 +253,7 @@ const edgeLines3d = (ctx: Context): string[] => {
 const render3d = (ctx: Context): string => {
   const { vertices } = ctx.scene;
   const body = [
-    ...Object.keys(vertices).map((name) => `\\coordinate ${ref(ctx, name)} at ${xyz(vertices[name])};`),
+    ...Object.entries(vertices).map(([name, point]) => `\\coordinate ${ref(ctx, name)} at ${xyz(point)};`),
     ...sectionLines(ctx),
     ...cylinderLines(ctx),
     ...edgeLines3d(ctx),
@@ -273,8 +283,13 @@ const tickLines = (ctx: Context): string[] =>
     '% Засечки равенства',
     ctx.scene.edges.flatMap((edge) => {
       const count = edge.ticks ?? 0;
-      const a = canvas(ctx, ctx.scene.vertices[edge.from]);
-      const b = canvas(ctx, ctx.scene.vertices[edge.to]);
+      const from = ctx.scene.vertices[edge.from];
+      const to = ctx.scene.vertices[edge.to];
+
+      if (!from || !to) return [];
+
+      const a = canvas(ctx, from);
+      const b = canvas(ctx, to);
       const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
 
       if (count <= 0 || length === 0) return [];
@@ -297,8 +312,8 @@ const plotLines2d = (ctx: Context): string[] =>
     ctx.scene.plots.flatMap((plot) => {
       const color = tikzColor(plot.color);
       const style = options('thick', color && `color=${color}`, plot.style === 'dashed' && 'dashed');
-      const label = (at: Vec2, anchor = 'above right'): string[] =>
-        plot.label ? [`\\node[${anchor}] at ${xy(at)} {${mathLabel(plot.label)}};`] : [];
+      const label = (at: Vec2 | undefined, anchor = 'above right'): string[] =>
+        plot.label && at ? [`\\node[${anchor}] at ${xy(at)} {${mathLabel(plot.label)}};`] : [];
 
       switch (plot.type) {
         case 'circle': {
@@ -332,7 +347,7 @@ const plotLines2d = (ctx: Context): string[] =>
 const render2d = (ctx: Context): string => {
   const { vertices } = ctx.scene;
   const body = [
-    ...Object.keys(vertices).map((name) => `\\coordinate ${ref(ctx, name)} at ${xy([vertices[name][0], vertices[name][1]])};`),
+    ...Object.entries(vertices).map(([name, point]) => `\\coordinate ${ref(ctx, name)} at ${xy([point[0], point[1]])};`),
     ...edgeLines2d(ctx),
     ...tickLines(ctx),
     ...angleLines(ctx),

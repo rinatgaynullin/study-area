@@ -66,7 +66,13 @@ const RIGHT_ANGLE_TOLERANCE = 1.5;
 const LABEL_POSITIONS = ['above', 'below', 'left', 'right', 'above left', 'above right', 'below left', 'below right'];
 const ANGLE_STYLES: AngleStyle[] = ['single', 'double', 'triple', 'right'];
 
-const SECTION_FILLS: Array<{ value: string; labelKey: string }> = [
+interface SectionFill {
+  value: string;
+  labelKey: string;
+}
+
+/** Первая заливка — заливка по умолчанию, поэтому список непустой. */
+const SECTION_FILLS: [SectionFill, ...SectionFill[]] = [
   { value: 'rgba(16, 185, 129, 0.25)', labelKey: 'drawings_stereo_fill_green' },
   { value: 'rgba(37, 99, 235, 0.25)', labelKey: 'drawings_stereo_fill_blue' },
   { value: 'rgba(249, 115, 22, 0.25)', labelKey: 'drawings_stereo_fill_orange' },
@@ -201,8 +207,8 @@ const nextVertexName = (used: Record<string, unknown>): string => {
 
 /** Угол между лучами `vertex→a` и `vertex→b` в пространстве, градусы 0–180. */
 const angle3d = (vertex: Vec3, a: Vec3, b: Vec3): number => {
-  const u = [a[0] - vertex[0], a[1] - vertex[1], a[2] - vertex[2]];
-  const w = [b[0] - vertex[0], b[1] - vertex[1], b[2] - vertex[2]];
+  const u: Vec3 = [a[0] - vertex[0], a[1] - vertex[1], a[2] - vertex[2]];
+  const w: Vec3 = [b[0] - vertex[0], b[1] - vertex[1], b[2] - vertex[2]];
   const length = Math.hypot(...u) * Math.hypot(...w);
 
   if (length === 0) return 0;
@@ -219,9 +225,12 @@ const insidePolygon = (point: SvgPoint, polygon: SvgPoint[]): boolean => {
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
     const a = polygon[i];
     const b = polygon[j];
-    const straddles = a.y > point.y !== b.y > point.y;
 
-    if (straddles && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    if (a && b) {
+      const straddles = a.y > point.y !== b.y > point.y;
+
+      if (straddles && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    }
   }
 
   return inside;
@@ -632,9 +641,9 @@ class StereometryEditor implements SceneEditor {
       (at) => `<circle cx="${fmt(at.x)}" cy="${fmt(at.y)}" r="9" fill="none" stroke="${DRAFT_COLOR}" stroke-width="2" stroke-dasharray="3 3" />`,
     );
 
-    if (this.tool === 'segment' && placed.length === 1 && this.cursor) {
-      const [from] = placed;
+    const [from] = placed;
 
+    if (this.tool === 'segment' && from && placed.length === 1 && this.cursor) {
       parts.push(
         `<line x1="${fmt(from.x)}" y1="${fmt(from.y)}" x2="${fmt(this.cursor.x)}" y2="${fmt(this.cursor.y)}" stroke="${DRAFT_COLOR}" stroke-width="1.5" stroke-dasharray="4 3" />`,
       );
@@ -818,9 +827,13 @@ class StereometryEditor implements SceneEditor {
   /** Сечение выбирается кликом внутри его контура; из нескольких берётся последнее — оно сверху. */
   private sectionAt(at: SvgPoint): number | null {
     for (let index = this.state.sections.length - 1; index >= 0; index -= 1) {
-      const polygon = this.state.sections[index].vertices.map((name) => this.project(name)).filter((point): point is SvgPoint => point !== null);
+      const section = this.state.sections[index];
 
-      if (polygon.length >= 3 && insidePolygon(at, polygon)) return index;
+      if (section) {
+        const polygon = section.vertices.map((name) => this.project(name)).filter((point): point is SvgPoint => point !== null);
+
+        if (polygon.length >= 3 && insidePolygon(at, polygon)) return index;
+      }
     }
 
     return null;
@@ -977,15 +990,25 @@ class StereometryEditor implements SceneEditor {
 
   // ----------------------------------------------------------- инструменты
 
-  /** Точка на ребре в доле `t` его проекции под курсором; ребро делится на два. */
-  private addPointOnEdge(index: number, at: SvgPoint): string {
+  /**
+   * Точка на ребре в доле `t` его проекции под курсором; ребро делится на два.
+   * `null`, если ребра или его концов в сцене нет.
+   */
+  private addPointOnEdge(index: number, at: SvgPoint): string | null {
     const target = this.state.edges[index];
+
+    if (!target) return null;
+
     const a = this.project(target.from);
     const b = this.project(target.to);
     const from = this.state.vertices[target.from];
     const to = this.state.vertices[target.to];
+
+    if (!from || !to) return null;
+
     const t = a && b ? clamp(projectOnSegment(toVec2(at), toVec2(a), toVec2(b)).t, EDGE_POINT_MIN_T, EDGE_POINT_MAX_T) : 0.5;
-    const point: Vec3 = [0, 1, 2].map((axis) => roundTo(from[axis] + t * (to[axis] - from[axis]))) as Vec3;
+    const lerp = (axis: 0 | 1 | 2): number => roundTo(from[axis] + t * (to[axis] - from[axis]));
+    const point: Vec3 = [lerp(0), lerp(1), lerp(2)];
     const name = nextVertexName(this.state.vertices);
 
     this.commit((state) => {
@@ -1018,8 +1041,9 @@ class StereometryEditor implements SceneEditor {
     if (existing) return existing;
 
     const index = this.edgeAt(info.svg);
+    const onEdge = index === null ? null : this.addPointOnEdge(index, info.svg);
 
-    return index === null ? this.addGroundPoint(info) : this.addPointOnEdge(index, info.svg);
+    return onEdge ?? this.addGroundPoint(info);
   }
 
   private addPoint(info: PointerInfo): void {
@@ -1054,7 +1078,7 @@ class StereometryEditor implements SceneEditor {
 
     this.draft = [];
 
-    if (from === name) {
+    if (from === undefined || from === name) {
       this.renderOverlay();
 
       return;
@@ -1120,7 +1144,11 @@ class StereometryEditor implements SceneEditor {
   /** Прямой угол — сразу уголком: его в стереометрии отмечают чаще всего. */
   private addAngle(points: [string, string, string]): void {
     this.commit((state) => {
-      const degrees = angle3d(state.vertices[points[1]], state.vertices[points[0]], state.vertices[points[2]]);
+      const [a, vertex, b] = points.map((name) => state.vertices[name]);
+
+      if (!a || !vertex || !b) return;
+
+      const degrees = angle3d(vertex, a, b);
 
       state.angles.push({ points, style: Math.abs(degrees - 90) < RIGHT_ANGLE_TOLERANCE ? 'right' : 'single' });
       this.selection = { type: 'angle', index: state.angles.length - 1 };
@@ -1201,7 +1229,9 @@ class StereometryEditor implements SceneEditor {
       this.properties.appendChild(propertyField(t('drawings_prop_style'), style));
       on(style, 'change', () => {
         this.commit((draft) => {
-          draft.edges[selection.index].style = style.value === 'dashed' ? 'dashed' : 'solid';
+          const draftEdge = draft.edges[selection.index];
+
+          if (draftEdge) draftEdge.style = style.value === 'dashed' ? 'dashed' : 'solid';
         });
       });
     } else if (selection.type === 'section') {
@@ -1219,7 +1249,9 @@ class StereometryEditor implements SceneEditor {
       this.properties.appendChild(propertyField(t('drawings_stereo_prop_fill'), fill));
       on(fill, 'change', () => {
         this.commit((draft) => {
-          draft.sections[selection.index].fill = fill.value;
+          const draftSection = draft.sections[selection.index];
+
+          if (draftSection) draftSection.fill = fill.value;
         });
       });
     } else if (selection.type === 'angle') {
@@ -1233,15 +1265,20 @@ class StereometryEditor implements SceneEditor {
       this.properties.append(propertyField(t('drawings_prop_style'), style), propertyField(t('drawings_prop_label'), label));
       on(style, 'change', () => {
         this.commit((draft) => {
-          draft.angles[selection.index].style = style.value as AngleStyle;
+          const draftAngle = draft.angles[selection.index];
+
+          if (draftAngle) draftAngle.style = style.value as AngleStyle;
         });
       });
       on(label, 'change', () => {
         this.commit((draft) => {
           const text = label.value.trim();
+          const draftAngle = draft.angles[selection.index];
 
-          if (text) draft.angles[selection.index].label = text;
-          else delete draft.angles[selection.index].label;
+          if (!draftAngle) return;
+
+          if (text) draftAngle.label = text;
+          else delete draftAngle.label;
         });
       });
     }
@@ -1347,9 +1384,10 @@ class StereometryEditor implements SceneEditor {
     const coords = el('div', {
       class: 'rte-stereo__coords',
       children: axisKeys.map((key, axis) => {
+        // axis — индекс одного из трёх ключей осей: у Vec3 координата по нему есть всегда.
         const input = el('input', {
           class: 'rte-input',
-          attrs: { type: 'number', step: '0.5', value: String(roundTo(point[axis])), 'data-axis': ['x', 'y', 'z'][axis] },
+          attrs: { type: 'number', step: '0.5', value: String(roundTo(point[axis] ?? 0)), 'data-axis': ['x', 'y', 'z'][axis] },
         });
 
         on(input, 'change', () => {
@@ -1380,7 +1418,11 @@ class StereometryEditor implements SceneEditor {
     }
 
     this.commit((state) => {
-      state.vertices[to] = state.vertices[from];
+      const vertex = state.vertices[from];
+
+      if (!vertex) return;
+
+      state.vertices[to] = vertex;
       delete state.vertices[from];
 
       if (state.labels[from]) {

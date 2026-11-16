@@ -170,8 +170,11 @@ const dot = (svg: SvgBuilder, at: SvgPoint, radius: number, color: string): void
 
 const paper = { fill: PAPER_FILL, className: PAPER_CLASS };
 
-const twoPoints = (element: PhysicsElement): [Vec2, Vec2] | null =>
-  element.points && element.points.length >= 2 ? [element.points[0], element.points[1]] : null;
+const twoPoints = (element: PhysicsElement): [Vec2, Vec2] | null => {
+  const [first, second] = element.points ?? [];
+
+  return first && second ? [first, second] : null;
+};
 
 /** Цвета, которые нейросеть ставит «по умолчанию»: для сил и ускорений они заменяются на свои. */
 const isDefaultInk = (color: string | undefined): boolean =>
@@ -352,7 +355,8 @@ const renderBalloon: ElementRenderer = (svg, element, ctx, style) => {
 
   const at = ctx.toSvg(element.center);
   const radius = (element.radius ?? 0.6) * ctx.scale;
-  const ropeEnd = element.points && element.points.length > 0 ? ctx.toSvg(element.points[0]) : null;
+  const [ropePoint] = element.points ?? [];
+  const ropeEnd = ropePoint ? ctx.toSvg(ropePoint) : null;
 
   if (style.highlighted) svg.ellipse(at, radius + 4, radius * 1.25 + 4, outline);
 
@@ -593,25 +597,34 @@ const renderCircuitComponent: ElementRenderer = (svg, element, ctx, style) => {
 
 /** Волнистый провод: синусоида поперёк каждого отрезка с шагом в пиксель. */
 const wavyPath = (points: SvgPoint[]): string => {
-  const samples: SvgPoint[] = [points[0]];
+  const [first] = points;
+
+  if (!first) return '';
+
+  const samples: SvgPoint[] = [first];
 
   for (let index = 0; index < points.length - 1; index += 1) {
     const from = points[index];
     const to = points[index + 1];
-    const direction = segmentDirection(from, to);
 
-    if (direction && direction.length >= 1) {
-      const count = Math.min(Math.floor(direction.length), MAX_WAVE_SAMPLES);
-      const step = direction.length / count;
+    if (from && to) {
+      const direction = segmentDirection(from, to);
 
-      for (let sample = 1; sample <= count; sample += 1) {
-        const along = sample * step;
+      if (direction && direction.length >= 1) {
+        const count = Math.min(Math.floor(direction.length), MAX_WAVE_SAMPLES);
+        const step = direction.length / count;
 
-        samples.push(shiftPoint(from, direction, along, WAVE_AMPLITUDE * Math.sin((2 * Math.PI * along) / WAVE_PERIOD)));
+        for (let sample = 1; sample <= count; sample += 1) {
+          const along = sample * step;
+
+          samples.push(
+            shiftPoint(from, direction, along, WAVE_AMPLITUDE * Math.sin((2 * Math.PI * along) / WAVE_PERIOD)),
+          );
+        }
       }
-    }
 
-    samples.push(to);
+      samples.push(to);
+    }
   }
 
   return polylinePath(samples);
@@ -661,7 +674,10 @@ const renderFieldLine: ElementRenderer = (svg, element, ctx, style) => {
   const points = element.points.map(ctx.toSvg);
 
   for (let index = 0; index < points.length - 1; index += 1) {
-    drawMidArrowLine(svg, points[index], points[index + 1], { color, width: 1, headSize: 6, dashed: style.dashed });
+    const from = points[index];
+    const to = points[index + 1];
+
+    if (from && to) drawMidArrowLine(svg, from, to, { color, width: 1, headSize: 6, dashed: style.dashed });
   }
 };
 
@@ -801,19 +817,24 @@ const renderRay: ElementRenderer = (svg, element, ctx, style) => {
   const points = element.points.map(ctx.toSvg);
 
   for (let index = 0; index < points.length - 1; index += 1) {
-    if (element.dashed) {
-      drawMidArrowLine(svg, points[index], points[index + 1], {
-        color: element.color ?? RAY_DASHED_COLOR,
-        width: 1,
-        headSize: 6,
-        dashed: true,
-      });
-    } else {
-      drawMidArrowLine(svg, points[index], points[index + 1], {
-        color: element.color ?? (index > 0 ? RAY_NEXT_COLOR : RAY_FIRST_COLOR),
-        width: style.highlighted ? 2.5 : 1.3,
-        headSize: 7,
-      });
+    const from = points[index];
+    const to = points[index + 1];
+
+    if (from && to) {
+      if (element.dashed) {
+        drawMidArrowLine(svg, from, to, {
+          color: element.color ?? RAY_DASHED_COLOR,
+          width: 1,
+          headSize: 6,
+          dashed: true,
+        });
+      } else {
+        drawMidArrowLine(svg, from, to, {
+          color: element.color ?? (index > 0 ? RAY_NEXT_COLOR : RAY_FIRST_COLOR),
+          width: style.highlighted ? 2.5 : 1.3,
+          headSize: 7,
+        });
+      }
     }
   }
 };

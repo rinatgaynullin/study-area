@@ -20,7 +20,7 @@ export interface DrawingsContentOptions {
 
 /** Переводчик по таблицам возможности: нужный язык, затем русский, затем ключ. */
 const translatorFor = (locale: string) => (key: string): string =>
-  DRAWINGS_MESSAGES[locale]?.[key] ?? DRAWINGS_MESSAGES.ru[key] ?? key;
+  DRAWINGS_MESSAGES[locale]?.[key] ?? DRAWINGS_MESSAGES.ru?.[key] ?? key;
 
 /**
  * Оживляет чертежи в отрисованном документе: SVG рисуется по JSON на месте,

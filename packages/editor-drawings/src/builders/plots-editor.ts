@@ -33,7 +33,13 @@ const TEMPLATE_COLORS: Record<TemplateId, string> = {
   sqrt: '#8b5cf6',
 };
 
-const NAMED_COLORS: Array<{ id: string; value: string }> = [
+interface NamedColor {
+  id: string;
+  value: string;
+}
+
+/** Первый цвет — цвет по умолчанию, поэтому список непустой. */
+const NAMED_COLORS: [NamedColor, ...NamedColor[]] = [
   { id: 'blue', value: '#3b82f6' },
   { id: 'red', value: '#ef4444' },
   { id: 'green', value: '#10b981' },
@@ -294,15 +300,23 @@ const shadingPolygon = (plot: Extract<PlotItem, { type: 'shading' }>): Vec2[] =>
 
 /** Расстояние до ломаной по отрезкам: выборка кривой, штрих карандаша, контур штриховки. */
 const distanceToPolyline = (p: Vec2, points: Vec2[], closed = false): number => {
-  if (points.length === 0) return Infinity;
+  const [first] = points;
+  const last = points[points.length - 1];
 
-  if (points.length === 1) return distance(p, points[0]);
+  if (!first || !last) return Infinity;
+
+  if (points.length === 1) return distance(p, first);
 
   let best = Infinity;
 
-  for (let i = 1; i < points.length; i += 1) best = Math.min(best, distanceToSegment(p, points[i - 1], points[i]));
+  for (let i = 1; i < points.length; i += 1) {
+    const start = points[i - 1];
+    const end = points[i];
 
-  if (closed) best = Math.min(best, distanceToSegment(p, points[points.length - 1], points[0]));
+    if (start && end) best = Math.min(best, distanceToSegment(p, start, end));
+  }
+
+  if (closed) best = Math.min(best, distanceToSegment(p, last, first));
 
   return best;
 };
@@ -312,10 +326,15 @@ const isInsidePolygon = ([x, y]: Vec2, polygon: Vec2[]): boolean => {
   let inside = false;
 
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
+    const current = polygon[i];
+    const previous = polygon[j];
 
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    if (current && previous) {
+      const [xi, yi] = current;
+      const [xj, yj] = previous;
+
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
   }
 
   return inside;
@@ -329,8 +348,12 @@ const isInsidePolygon = ([x, y]: Vec2, polygon: Vec2[]): boolean => {
 const curveRuns = (plot: CurvePlot): Vec2[][] => {
   const runs: Vec2[][] = [[]];
   const push = (point: Vec2 | null): void => {
-    if (point) runs[runs.length - 1].push(point);
-    else if (runs[runs.length - 1].length > 0) runs.push([]);
+    const run = runs[runs.length - 1];
+
+    if (!run) return;
+
+    if (point) run.push(point);
+    else if (run.length > 0) runs.push([]);
   };
   const inDomain = (x: number): boolean => !plot.domain || (x >= plot.domain[0] && x <= plot.domain[1]);
 
@@ -655,8 +678,9 @@ class PlotsEditor implements SceneEditor {
         parts.push(`<polyline points="${pointsAttr(points)}" fill="none" stroke="${DRAFT_COLOR}" stroke-width="1.5" stroke-dasharray="4 3" />`);
       }
 
-      if (this.cursor) {
-        const last = points[points.length - 1];
+      const last = points[points.length - 1];
+
+      if (this.cursor && last) {
         const to = toSvg(this.cursor);
 
         parts.push(`<line x1="${fmt(last.x)}" y1="${fmt(last.y)}" x2="${fmt(to.x)}" y2="${fmt(to.y)}" stroke="${DRAFT_COLOR}" stroke-width="1" stroke-dasharray="3 3" />`);
@@ -849,7 +873,7 @@ class PlotsEditor implements SceneEditor {
     if (this.stroke) {
       const last = this.stroke[this.stroke.length - 1];
 
-      if (distance(last, info.world) >= STROKE_MIN_STEP) this.stroke.push(info.world);
+      if (last && distance(last, info.world) >= STROKE_MIN_STEP) this.stroke.push(info.world);
 
       this.renderOverlay();
 
@@ -1350,9 +1374,14 @@ class PlotsEditor implements SceneEditor {
   /** Два числовых поля в строку: координаты точки или границы области. */
   private appendPair(label: string, values: [string, string], apply: (values: [string, string]) => void): void {
     const inputs = values.map((value) => el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value } }));
+    const [first, second] = inputs;
     const pair = el('div', { class: 'rte-plots__pair', children: inputs });
 
-    inputs.forEach((input) => input.addEventListener('change', () => apply([inputs[0].value, inputs[1].value])));
+    inputs.forEach((input) =>
+      input.addEventListener('change', () => {
+        if (first && second) apply([first.value, second.value]);
+      }),
+    );
     this.properties.appendChild(propertyField(label, pair));
   }
 

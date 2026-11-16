@@ -340,10 +340,16 @@ const polylineDistance = (point: Vec2, points: Vec2[], closed = false): number =
   });
 
   for (let index = 0; index < points.length - 1; index += 1) {
-    best = Math.min(best, distanceToSegment(point, points[index], points[index + 1]));
+    const start = points[index];
+    const end = points[index + 1];
+
+    if (start && end) best = Math.min(best, distanceToSegment(point, start, end));
   }
 
-  if (closed && points.length > 2) best = Math.min(best, distanceToSegment(point, points[points.length - 1], points[0]));
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  if (closed && points.length > 2 && first && last) best = Math.min(best, distanceToSegment(point, last, first));
 
   return best;
 };
@@ -674,11 +680,13 @@ class PhysicsEditor implements SceneEditor {
     const aligned =
       rawElements.length === normalized.elements.length
       && rawElements.every((candidate, index) => {
-        if (!isRecord(candidate)) return false;
+        const element = normalized.elements[index];
+
+        if (!isRecord(candidate) || !element) return false;
 
         const type = candidate.type;
 
-        return type === normalized.elements[index].type || (typeof type === 'string' && !PHYSICS_TYPES.has(type));
+        return type === element.type || (typeof type === 'string' && !PHYSICS_TYPES.has(type));
       });
 
     const legacyThermo =
@@ -925,6 +933,7 @@ class PhysicsEditor implements SceneEditor {
   private distanceTo(item: PhysicsItem, point: Vec2): number {
     const pixel = 1 / this.canvas.viewport.scale;
     const points = item.points ?? [];
+    const [firstPoint, secondPoint] = points;
     const { center, coords } = item;
     let best = polylineDistance(point, points, item.type === 'prism');
 
@@ -977,16 +986,16 @@ class PhysicsEditor implements SceneEditor {
         if (center) best = Math.min(best, distanceToSegment(point, center, [center[0], center[1] + (item.height ?? 1)]));
         break;
       case 'arc_surface':
-        if (center && points.length >= 2) best = Math.min(best, arcDistance(point, center, points[0], points[1]));
+        if (center && firstPoint && secondPoint) best = Math.min(best, arcDistance(point, center, firstPoint, secondPoint));
         break;
       case 'angle':
-        if (center && points.length >= 2) {
+        if (center && firstPoint && secondPoint) {
           const radius = (item.arcRadius ?? 32) / ANGLE_ARC_BASE_SCALE;
 
           best = Math.min(
             best,
-            distanceToSegment(point, center, points[0]),
-            distanceToSegment(point, center, points[1]),
+            distanceToSegment(point, center, firstPoint),
+            distanceToSegment(point, center, secondPoint),
             Math.abs(distance(point, center) - radius),
           );
         }
@@ -1002,8 +1011,8 @@ class PhysicsEditor implements SceneEditor {
         break;
       }
       case 'thermo_process':
-        if (item.subtype === 'isotherm' && points.length >= 2) {
-          best = Math.min(best, polylineDistance(point, isothermSamples(points[0], points[1])));
+        if (item.subtype === 'isotherm' && firstPoint && secondPoint) {
+          best = Math.min(best, polylineDistance(point, isothermSamples(firstPoint, secondPoint)));
         }
         break;
       case 'charge':
@@ -1088,10 +1097,15 @@ class PhysicsEditor implements SceneEditor {
       const points = item.points ?? [];
 
       for (let index = 0; index < points.length - 1; index += 1) {
-        const projected = projectOnSegment(point, points[index], points[index + 1]).point;
-        const d = distance(point, projected);
+        const start = points[index];
+        const end = points[index + 1];
 
-        if (d <= segmentRadius && (bestSegment === null || d < bestSegment.d)) bestSegment = { at: projected, d };
+        if (start && end) {
+          const projected = projectOnSegment(point, start, end).point;
+          const d = distance(point, projected);
+
+          if (d <= segmentRadius && (bestSegment === null || d < bestSegment.d)) bestSegment = { at: projected, d };
+        }
       }
     });
 
@@ -1283,10 +1297,12 @@ class PhysicsEditor implements SceneEditor {
         points[handle.index] = target;
 
         // Дуга рисуется радиусом первой точки: вторая держится на той же окружности.
-        if (item.type === 'arc_surface' && item.center && points.length >= 2) {
-          const other = handle.index === 0 ? 1 : 0;
+        const other = handle.index === 0 ? 1 : 0;
+        const otherPoint = points[other];
+
+        if (item.type === 'arc_surface' && item.center && otherPoint) {
           const radius = distance(item.center, target);
-          const direction = toRadians(angleOf(item.center, points[other]));
+          const direction = toRadians(angleOf(item.center, otherPoint));
 
           points[other] = [item.center[0] + radius * Math.cos(direction), item.center[1] + radius * Math.sin(direction)];
         }
@@ -1626,7 +1642,11 @@ class PhysicsEditor implements SceneEditor {
           const trimmed = text.value.trim();
 
           update((next) => {
-            next[index] = trimmed ? { val: next[index].val, label: trimmed } : { val: next[index].val };
+            const current = next[index];
+
+            if (!current) return;
+
+            next[index] = trimmed ? { val: current.val, label: trimmed } : { val: current.val };
           });
         }),
       );

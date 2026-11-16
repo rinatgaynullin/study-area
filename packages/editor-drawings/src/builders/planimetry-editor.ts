@@ -199,7 +199,7 @@ class PlanimetryEditor implements SceneEditor {
       let center = plot.centerVertex;
 
       if (!center || !(center in vertices)) {
-        center = Object.keys(vertices).find((name) => distance(vertices[name], plot.center) < 0.01) ?? nextVertexName(vertices, 'O');
+        center = Object.entries(vertices).find(([, vertex]) => distance(vertex, plot.center) < 0.01)?.[0] ?? nextVertexName(vertices, 'O');
         vertices[center] = [plot.center[0], plot.center[1]];
       }
 
@@ -351,14 +351,17 @@ class PlanimetryEditor implements SceneEditor {
       parts.push(`<circle cx="${fmt(at.x)}" cy="${fmt(at.y)}" r="9" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="3 3" />`);
     });
 
-    if (this.cursor && this.draft.length > 0 && (this.tool === 'segment' || this.tool === 'circle')) {
-      const from = this.canvas.toSvg(this.state.vertices[this.draft[0]]);
+    const [anchorName] = this.draft;
+    const anchor = anchorName === undefined ? undefined : this.state.vertices[anchorName];
+
+    if (this.cursor && anchor && (this.tool === 'segment' || this.tool === 'circle')) {
+      const from = this.canvas.toSvg(anchor);
       const to = this.canvas.toSvg(this.cursor);
 
       if (this.tool === 'segment') {
         parts.push(`<line x1="${fmt(from.x)}" y1="${fmt(from.y)}" x2="${fmt(to.x)}" y2="${fmt(to.y)}" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="4 3" />`);
       } else {
-        const radius = distance(this.state.vertices[this.draft[0]], this.cursor) * this.canvas.viewport.scale;
+        const radius = distance(anchor, this.cursor) * this.canvas.viewport.scale;
 
         parts.push(`<circle cx="${fmt(from.x)}" cy="${fmt(from.y)}" r="${fmt(radius)}" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="4 3" />`);
       }
@@ -696,7 +699,7 @@ class PlanimetryEditor implements SceneEditor {
 
     this.draft = [];
 
-    if (from === name) {
+    if (from === undefined || from === name) {
       this.renderOverlay();
 
       return;
@@ -718,7 +721,14 @@ class PlanimetryEditor implements SceneEditor {
     }
 
     const [center] = this.draft;
-    const radius = roundTo(Math.max(0.25, distance(this.state.vertices[center], this.snap(info.world, info))), 2);
+
+    if (center === undefined) return;
+
+    const centerPoint = this.state.vertices[center];
+
+    if (!centerPoint) return;
+
+    const radius = roundTo(Math.max(0.25, distance(centerPoint, this.snap(info.world, info))), 2);
 
     this.draft = [];
     circleCount += 1;
@@ -751,8 +761,12 @@ class PlanimetryEditor implements SceneEditor {
     }
 
     this.commit((state) => {
+      const [a, vertex, b] = points.map((name) => state.vertices[name]);
+
+      if (!a || !vertex || !b) return;
+
       // Прямой угол — сразу уголком: так рисуют чаще всего.
-      const degrees = angleBetween(state.vertices[points[1]], state.vertices[points[0]], state.vertices[points[2]]);
+      const degrees = angleBetween(vertex, a, b);
 
       state.angles.push({ points, style: Math.abs(degrees - 90) < 1.5 ? 'right' : 'single' });
       this.selection = { type: 'angle', index: state.angles.length - 1 };
@@ -767,6 +781,8 @@ class PlanimetryEditor implements SceneEditor {
     this.commit((state) => {
       const edge = state.edges[index];
 
+      if (!edge) return;
+
       edge.ticks = ((edge.ticks ?? 0) + 1) % 5;
     });
   }
@@ -775,7 +791,11 @@ class PlanimetryEditor implements SceneEditor {
     const edge = this.edgeAt(info.world);
 
     if (edge !== null) {
-      const { from, to } = this.state.edges[edge];
+      const segment = this.state.edges[edge];
+
+      if (!segment) return;
+
+      const { from, to } = segment;
 
       this.commit((state) => {
         state.textLabels.push({ text: '?', position: [from, to], offset: 'right' });
@@ -900,14 +920,18 @@ class PlanimetryEditor implements SceneEditor {
       this.disposer.add(
         on(style, 'change', () => {
           this.commit((draft) => {
-            draft.edges[selection.index].style = style.value === 'dashed' ? 'dashed' : 'solid';
+            const draftEdge = draft.edges[selection.index];
+
+            if (draftEdge) draftEdge.style = style.value === 'dashed' ? 'dashed' : 'solid';
           });
         }),
       );
       this.disposer.add(
         on(ticks, 'change', () => {
           this.commit((draft) => {
-            draft.edges[selection.index].ticks = Number(ticks.value) || undefined;
+            const draftEdge = draft.edges[selection.index];
+
+            if (draftEdge) draftEdge.ticks = Number(ticks.value) || undefined;
           });
         }),
       );
@@ -923,14 +947,18 @@ class PlanimetryEditor implements SceneEditor {
       this.disposer.add(
         on(style, 'change', () => {
           this.commit((draft) => {
-            draft.angles[selection.index].style = style.value as AngleStyle;
+            const draftAngle = draft.angles[selection.index];
+
+            if (draftAngle) draftAngle.style = style.value as AngleStyle;
           });
         }),
       );
       this.disposer.add(
         on(label, 'change', () => {
           this.commit((draft) => {
-            draft.angles[selection.index].label = label.value.trim() || undefined;
+            const draftAngle = draft.angles[selection.index];
+
+            if (draftAngle) draftAngle.label = label.value.trim() || undefined;
           });
         }),
       );
@@ -950,14 +978,18 @@ class PlanimetryEditor implements SceneEditor {
           if (!Number.isFinite(value) || value <= 0) return;
 
           this.commit((draft) => {
-            draft.circles[selection.index].radius = roundTo(value);
+            const draftCircle = draft.circles[selection.index];
+
+            if (draftCircle) draftCircle.radius = roundTo(value);
           });
         }),
       );
       this.disposer.add(
         on(label, 'change', () => {
           this.commit((draft) => {
-            draft.circles[selection.index].label = label.value.trim() || undefined;
+            const draftCircle = draft.circles[selection.index];
+
+            if (draftCircle) draftCircle.label = label.value.trim() || undefined;
           });
         }),
       );
@@ -972,7 +1004,9 @@ class PlanimetryEditor implements SceneEditor {
       this.disposer.add(
         on(text, 'change', () => {
           this.commit((draft) => {
-            draft.textLabels[selection.index].text = text.value;
+            const draftLabel = draft.textLabels[selection.index];
+
+            if (draftLabel) draftLabel.text = text.value;
           });
         }),
       );
@@ -994,7 +1028,11 @@ class PlanimetryEditor implements SceneEditor {
     }
 
     this.commit((state) => {
-      state.vertices[to] = state.vertices[from];
+      const vertex = state.vertices[from];
+
+      if (!vertex) return;
+
+      state.vertices[to] = vertex;
       delete state.vertices[from];
 
       if (state.labels[from]) {

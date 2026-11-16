@@ -23,12 +23,13 @@ const findVertexOnEdge = (scene: GeometryScene, edge: GeometryEdge): string | nu
     if (name === edge.from || name === edge.to) return false;
 
     const offset = [0, 1, 2].map((axis) => coordinate(point, axis) - coordinate(from, axis));
-    const t = offset.reduce((sum, value, axis) => sum + value * direction[axis], 0) / lengthSquared;
+    // `offset` и `direction` — по трём осям каждый, так что `?? 0` не срабатывает.
+    const t = offset.reduce((sum, value, axis) => sum + value * (direction[axis] ?? 0), 0) / lengthSquared;
 
     if (t < 0.01 || t > 0.99) return false;
 
     const distanceSquared = offset.reduce((sum, value, axis) => {
-      const delta = value - t * direction[axis];
+      const delta = value - t * (direction[axis] ?? 0);
 
       return sum + delta * delta;
     }, 0);

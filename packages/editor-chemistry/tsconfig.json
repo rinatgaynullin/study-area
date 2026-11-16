@@ -1,11 +1,21 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "paths": {
-      "@rich-editor/core/viewer": ["../editor-core/src/viewer.ts"],
-      "@rich-editor/core": ["../editor-core/src/index.ts"]
-    }
+      "@rich-editor/core/viewer": [
+        "../editor-core/src/viewer.ts"
+      ],
+      "@rich-editor/core": [
+        "../editor-core/src/index.ts"
+      ]
+    },
+    "noUncheckedIndexedAccess": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts"
+  ]
 }

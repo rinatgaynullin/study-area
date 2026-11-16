@@ -58,7 +58,12 @@ const CIRCUIT_KEYS: Record<string, string> = {
   diode: 'D',
 };
 
-const HATCH_SIDES: Record<string, Vec2> = { top: [0, 1], bottom: [0, -1], left: [-1, 0], right: [1, 0] };
+const HATCH_SIDES: Record<string, Vec2> & { bottom: Vec2 } = {
+  top: [0, 1],
+  bottom: [0, -1],
+  left: [-1, 0],
+  right: [1, 0],
+};
 
 const DEGREES = 180 / Math.PI;
 
@@ -71,8 +76,11 @@ const fromPolar = (center: Vec2, angle: number, radius: number): Vec2 => [
   center[1] + radius * Math.sin(angle / DEGREES),
 ];
 
-const pair = (element: PhysicsElement): [Vec2, Vec2] | undefined =>
-  element.points && element.points.length >= 2 ? [element.points[0], element.points[1]] : undefined;
+const pair = (element: PhysicsElement): [Vec2, Vec2] | undefined => {
+  const [first, second] = element.points ?? [];
+
+  return first && second ? [first, second] : undefined;
+};
 
 const colorOption = (element: PhysicsElement, fallback?: string): string | undefined => {
   const color = tikzColor(element.color) ?? fallback;
@@ -92,7 +100,11 @@ const midArrowSegments = (points: Vec2[], ctx: Context, ...style: Array<string |
   ctx.libraries.add('decorations.markings');
   ctx.styles.add(MIDARROW_STYLE);
 
-  return points.slice(1).map((point, index) => `\\draw${options(...style, 'midarrow')} ${xy(points[index])} -- ${xy(point)};`);
+  return points.slice(1).flatMap((point, index) => {
+    const previous = points[index];
+
+    return previous ? [`\\draw${options(...style, 'midarrow')} ${xy(previous)} -- ${xy(point)};`] : [];
+  });
 };
 
 /**
@@ -282,7 +294,9 @@ const HANDLERS: Record<PhysicsElementType, Handler> = {
     // Центр и два луча — или три точки, где вершина посередине.
     const points = element.points ?? [];
     const center = element.center ?? (points.length >= 3 ? points[1] : undefined);
-    const rays: [Vec2, Vec2] | undefined = element.center ? pair(element) : points.length >= 3 ? [points[0], points[2]] : undefined;
+    const [first, , third] = points;
+    const outerRays: [Vec2, Vec2] | undefined = first && third ? [first, third] : undefined;
+    const rays = element.center ? pair(element) : outerRays;
 
     if (!center || !rays) return [];
 
@@ -408,7 +422,8 @@ const HANDLERS: Record<PhysicsElementType, Handler> = {
     const stroke = options('->', 'thick', colorOption(element), dashedOption(element));
     const curve = element.subtype === 'isotherm' ? isothermPoints(points, thermoOrigin(points, ctx)) : undefined;
     const path = curve ? `plot[smooth] coordinates {${curve.map(xy).join(' ')}}` : `${xy(points[0])} -- ${xy(points[1])}`;
-    const middle = curve ? curve[Math.floor(curve.length / 2)] : polylineMidpoint(points);
+    // У изотермы всегда `steps + 1` точек, так что середина есть; запасное — только без кривой.
+    const middle = curve?.[Math.floor(curve.length / 2)] ?? polylineMidpoint(points);
 
     return [`\\draw${stroke} ${path};`, ...labelNode(element.label, middle, 'above right')];
   },
@@ -477,14 +492,15 @@ const HANDLERS: Record<PhysicsElementType, Handler> = {
 
   field_line: (element, ctx) => {
     const points = element.points ?? [];
+    const last = points[points.length - 1];
 
-    if (points.length < 2) return [];
+    if (points.length < 2 || !last) return [];
 
     const bySubtype = element.subtype === 'electric' ? 'blue' : element.subtype === 'magnetic' ? 'green!60!black' : undefined;
 
     return [
       ...midArrowSegments(points, ctx, colorOption(element, bySubtype), dashedOption(element)),
-      ...labelNode(element.label, points[points.length - 1], 'above right'),
+      ...labelNode(element.label, last, 'above right'),
     ];
   },
 
@@ -574,12 +590,13 @@ const HANDLERS: Record<PhysicsElementType, Handler> = {
 
   ray: (element, ctx) => {
     const points = element.points ?? [];
+    const last = points[points.length - 1];
 
-    if (points.length < 2) return [];
+    if (points.length < 2 || !last) return [];
 
     return [
       ...midArrowSegments(points, ctx, 'thick', colorOption(element, 'orange'), dashedOption(element)),
-      ...labelNode(element.label, points[points.length - 1], 'above right'),
+      ...labelNode(element.label, last, 'above right'),
     ];
   },
 
