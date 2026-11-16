@@ -116,7 +116,10 @@ class PlanimetryEditor implements SceneEditor {
 
   private tool: Tool = 'select';
 
-  private selection: Selection = null;
+  private currentSelection: Selection = null;
+
+  /** Какой конец отрезка двигает поле «Длина»; не часть сцены и истории, при смене выделения — `to`. */
+  private lengthEnd: 'from' | 'to' = 'to';
 
   /** Точки, уже выбранные текущим инструментом: начало отрезка, центр, стороны угла. */
   private draft: string[] = [];
@@ -124,6 +127,15 @@ class PlanimetryEditor implements SceneEditor {
   private cursor: Vec2 | null = null;
 
   private drag: { id: string; moved: boolean } | null = null;
+
+  private get selection(): Selection {
+    return this.currentSelection;
+  }
+
+  private set selection(value: Selection) {
+    this.currentSelection = value;
+    this.lengthEnd = 'to';
+  }
 
   constructor(context: SceneEditorContext) {
     this.t = context.t;
@@ -869,6 +881,28 @@ class PlanimetryEditor implements SceneEditor {
     this.render();
   }
 
+  /** Тянет подвижный конец ребра вдоль отрезка до длины `value`; неверное значение сцену не меняет. */
+  private resizeEdge(index: number, value: number, input: HTMLInputElement): void {
+    const edge = this.state.edges[index];
+    const fixedName = this.lengthEnd === 'from' ? edge?.to : edge?.from;
+    const movingName = this.lengthEnd === 'from' ? edge?.from : edge?.to;
+    const fixed = fixedName ? this.state.vertices[fixedName] : undefined;
+    const moving = movingName ? this.state.vertices[movingName] : undefined;
+    const current = fixed && moving ? distance(fixed, moving) : 0;
+
+    if (!fixed || !moving || !movingName || !Number.isFinite(value) || value <= 0 || current === 0) {
+      input.value = String(roundTo(current));
+
+      return;
+    }
+
+    const factor = value / current;
+
+    this.commit((draft) => {
+      draft.vertices[movingName] = [roundTo(fixed[0] + (moving[0] - fixed[0]) * factor), roundTo(fixed[1] + (moving[1] - fixed[1]) * factor)];
+    });
+  }
+
   // --------------------------------------------------------- панель свойств
 
   private renderProperties(): void {
@@ -916,7 +950,35 @@ class PlanimetryEditor implements SceneEditor {
       );
       const ticks = selectControl([0, 1, 2, 3, 4].map((value) => ({ value: String(value), label: String(value) })), String(edge.ticks ?? 0));
 
-      this.properties.append(propertyField(t('drawings_prop_style'), style), propertyField(t('drawings_prop_ticks'), ticks));
+      const fromPoint = state.vertices[edge.from];
+      const toPoint = state.vertices[edge.to];
+      const currentLength = fromPoint && toPoint ? distance(fromPoint, toPoint) : 0;
+      const length = el('input', {
+        class: 'rte-input',
+        attrs: { type: 'number', step: '0.5', min: '0.01', value: String(roundTo(currentLength)), 'data-prop': 'length' },
+      });
+      const lengthEnd = selectControl(
+        [
+          { value: 'from', label: edge.from },
+          { value: 'to', label: edge.to },
+        ],
+        this.lengthEnd,
+      );
+
+      lengthEnd.dataset.prop = 'lengthEnd';
+
+      this.properties.append(
+        propertyField(t('drawings_prop_style'), style),
+        propertyField(t('drawings_prop_ticks'), ticks),
+        propertyField(t('drawings_prop_length'), length),
+        propertyField(t('drawings_prop_length_end'), lengthEnd),
+      );
+      this.disposer.add(
+        on(lengthEnd, 'change', () => {
+          this.lengthEnd = lengthEnd.value === 'from' ? 'from' : 'to';
+        }),
+      );
+      this.disposer.add(on(length, 'change', () => this.resizeEdge(selection.index, Number(length.value), length)));
       this.disposer.add(
         on(style, 'change', () => {
           this.commit((draft) => {
