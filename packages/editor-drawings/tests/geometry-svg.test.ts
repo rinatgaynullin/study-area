@@ -21,6 +21,14 @@ const labels = (svg: string): string[] =>
 const vertexDots = (svg: string): Array<[number, number]> =>
   [...svg.matchAll(/<circle cx="([^"]+)" cy="([^"]+)" r="3"/g)].map((match) => [Number(match[1]), Number(match[2])]);
 
+/** Углы вида (наклон, поворот), при которых тела вращения обязаны рисоваться верно. */
+const VIEW_ANGLES: Array<[number, number]> = [
+  [0, 0],
+  [15, -30],
+  [-40, 120],
+  [85, 170],
+];
+
 const README_TRIANGLE = {
   type: '2d',
   vertices: { A: [0, 0], B: [4, 0], C: [0, 3] },
@@ -222,6 +230,80 @@ describe('renderGeometrySvg: стереометрия', () => {
     expect((paths.find((path) => / Z"/.test(path)) ?? '').match(/ L /g)).toHaveLength(31);
   });
 
+  const coneSvg = (angleY: number, angleZ: number): string =>
+    renderGeometrySvg(
+      normalizeGeometryScene({
+        type: '3d',
+        vertices: { O: [0, 0, 0], S: [0, 0, 4] },
+        cones: [{ base: 'O', apex: 'S', radius: 2 }],
+        angleY,
+        angleZ,
+        showGrid: false,
+      }),
+    );
+
+  it('конус: обод сплошной и пунктирной частью, две образующие из проекции вершины', () => {
+    const svg = coneSvg(15, -30);
+    const paths = tags(svg, 'path');
+    const lines = figureLines(svg);
+    const apex = vertexDots(svg)[1];
+
+    expect(paths.filter((path) => path.includes('stroke-dasharray'))).toHaveLength(1);
+    expect(paths.filter((path) => !path.includes('stroke-dasharray'))).toHaveLength(1);
+    expect(lines).toHaveLength(2);
+    lines.forEach((line) => expect(line).toContain(`x1="${apex?.[0]}" y1="${apex?.[1]}"`));
+  });
+
+  it('конус при других углах: снизу обод виден целиком, круто сверху образующих нет', () => {
+    // Снизу (−40, 120) видно основание: обод сплошной, образующие остаются.
+    const below = coneSvg(-40, 120);
+
+    expect(tags(below, 'path').filter((path) => path.includes('stroke-dasharray'))).toHaveLength(0);
+    expect(tags(below, 'path')).toHaveLength(1);
+    expect(figureLines(below)).toHaveLength(2);
+
+    // Почти сверху (85, 170) боковая поверхность обращена к зрителю везде.
+    const above = coneSvg(85, 170);
+
+    expect(tags(above, 'path')).toHaveLength(1);
+    expect(tags(above, 'path')[0]).not.toContain('stroke-dasharray');
+    expect(figureLines(above)).toHaveLength(0);
+
+    // Сбоку (0, 0): та же картина, что в виде по умолчанию.
+    const side = coneSvg(0, 0);
+
+    expect(tags(side, 'path').filter((path) => path.includes('stroke-dasharray'))).toHaveLength(1);
+    expect(figureLines(side)).toHaveLength(2);
+  });
+
+  it('шар: замкнутый силуэт и пунктирная часть экватора', () => {
+    VIEW_ANGLES.forEach(([angleY, angleZ]) => {
+      const svg = renderGeometrySvg(
+        normalizeGeometryScene({ type: '3d', vertices: { C: [4, 4, 2] }, spheres: [{ center: 'C', radius: 1.5 }], angleY, angleZ, showGrid: false }),
+      );
+      const paths = tags(svg, 'path');
+
+      expect(paths.filter((path) => / Z"/.test(path))).toHaveLength(1);
+      expect(paths.filter((path) => path.includes('stroke-dasharray'))).toHaveLength(1);
+      expect(paths.filter((path) => !path.includes('stroke-dasharray') && !/ Z"/.test(path))).toHaveLength(1);
+    });
+  });
+
+  it('сфера и конус с несуществующей вершиной пропускаются', () => {
+    const svg = renderGeometrySvg(
+      normalizeGeometryScene({
+        type: '3d',
+        vertices: { O: [0, 0, 0], S: [0, 0, 4] },
+        cones: [{ base: 'O', apex: 'Q', radius: 2 }],
+        spheres: [{ center: 'Q' }],
+        showGrid: false,
+      }),
+    );
+
+    expect(tags(svg, 'path')).toHaveLength(0);
+    expect(figureLines(svg)).toHaveLength(0);
+  });
+
   it('showAxes даёт оси X/Y/Z со стрелками, showGrid — сетку плоскости', () => {
     const svg = renderGeometrySvg(normalizeGeometryScene({ ...PYRAMID, showAxes: true, showGrid: true }));
 
@@ -336,6 +418,33 @@ describe('autoFit и viewport', () => {
     const hyperbola = normalizeGeometryScene({ type: 'plot_2d', plots: [{ type: 'hyperbola', center: [0, 0], k: 2 }] });
 
     expect(collectGeometryPoints(hyperbola)).toEqual(expect.arrayContaining([[0, 0], [1, 2], [-1, -2], [2, 1], [-2, -1]]));
+  });
+
+  it('шар радиуса 3 в начале координат вписывается целиком', () => {
+    VIEW_ANGLES.forEach(([angleY, angleZ]) => {
+      const svg = renderGeometrySvg(
+        normalizeGeometryScene({ type: '3d', vertices: { O: [0, 0, 0] }, spheres: [{ center: 'O', radius: 3 }], angleY, angleZ, showGrid: false }),
+        { autoFit: true },
+      );
+      const silhouette = tags(svg, 'path').find((path) => / Z"/.test(path)) ?? '';
+      const points = [...silhouette.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((match) => [Number(match[1]), Number(match[2])]);
+
+      expect(points.length).toBeGreaterThan(0);
+      points.forEach(([x, y]) => {
+        expect(x).toBeGreaterThanOrEqual(0);
+        expect(x).toBeLessThanOrEqual(300);
+        expect(y).toBeGreaterThanOrEqual(0);
+        expect(y).toBeLessThanOrEqual(300);
+      });
+    });
+  });
+
+  it('ободы цилиндров и конусов участвуют во вписывании', () => {
+    const cylinder = normalizeGeometryScene({ vertices: { A: [0, 0, 0], B: [0, 4, 0] }, cylinders: [{ base: 'A', top: 'B', radius: 2 }] });
+    const cone = normalizeGeometryScene({ type: '3d', vertices: { O: [0, 0, 0], S: [0, 0, 4] }, cones: [{ base: 'O', apex: 'S', radius: 2 }] });
+
+    expect(collectGeometryPoints(cylinder)).toHaveLength(2 + 64);
+    expect(collectGeometryPoints(cone)).toHaveLength(2 + 32);
   });
 
   it('пустая сцена с autoFit получает запасной масштаб', () => {

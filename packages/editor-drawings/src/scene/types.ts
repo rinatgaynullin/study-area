@@ -61,6 +61,19 @@ export interface GeometryCylinder {
   radius: number;
 }
 
+/** Прямой круговой конус: основание — круг радиуса `radius` с центром `base` в плоскости, перпендикулярной оси `base → apex`. */
+export interface GeometryCone {
+  base: string;
+  apex: string;
+  radius: number;
+}
+
+/** Шар с центром в вершине `center`. */
+export interface GeometrySphere {
+  center: string;
+  radius: number;
+}
+
 export type PlotStyle = 'solid' | 'dashed';
 
 interface PlotBase {
@@ -153,6 +166,8 @@ export interface GeometryScene {
   /** Только 3D. */
   sections: GeometrySection[];
   cylinders: GeometryCylinder[];
+  cones: GeometryCone[];
+  spheres: GeometrySphere[];
   plots: Plot[];
   /** Повороты 3D-сцены в градусах. */
   angleY: number;

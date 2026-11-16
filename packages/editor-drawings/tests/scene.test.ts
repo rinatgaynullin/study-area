@@ -63,6 +63,41 @@ describe('нормализация геометрии', () => {
     ]);
   });
 
+  it('разбирает конусы и шары: радиус по умолчанию 1, записи без имён вершин отбрасываются', () => {
+    const scene = normalizeGeometryScene({
+      type: '3d',
+      vertices: { O: [0, 0, 0], S: [0, 0, 4], C: [4, 4, 2] },
+      cones: [{ base: 'O', apex: 'S', radius: 2 }, { base: 'O', apex: 'S' }, { base: 'O', apex: 'S', radius: -3 }, { base: 'O' }, { base: 1, apex: 'S' }, null, 'x'],
+      spheres: [{ center: 'C', radius: 1.5 }, { center: 'C', radius: 0 }, { center: 7 }, {}, []],
+    });
+
+    expect(scene.cones).toEqual([
+      { base: 'O', apex: 'S', radius: 2 },
+      { base: 'O', apex: 'S', radius: 1 },
+      { base: 'O', apex: 'S', radius: 3 },
+    ]);
+    expect(scene.spheres).toEqual([
+      { center: 'C', radius: 1.5 },
+      { center: 'C', radius: 1 },
+    ]);
+    expect(normalizeGeometryScene({ type: '3d', cones: 'нет', spheres: {} })).toMatchObject({ cones: [], spheres: [] });
+    expect(normalizeGeometryScene(null)).toMatchObject({ cones: [], spheres: [] });
+  });
+
+  it('тело вращения делает сцену трёхмерной даже без глубины у вершин', () => {
+    const sphere = normalizeGeometryScene({ type: '3d', vertices: { O: [0, 0, 0] }, spheres: [{ center: 'O', radius: 3 }] });
+    const lying = normalizeGeometryScene({ vertices: { A: [0, 0], B: [4, 0] }, cylinders: [{ base: 'A', top: 'B', radius: 1 }] });
+    const cone = normalizeGeometryScene({ vertices: { O: [0, 0, 0], S: [3, 0, 0] }, cones: [{ base: 'O', apex: 'S' }] });
+    const broken = normalizeGeometryScene({ vertices: { A: [0, 0], B: [4, 0] }, cylinders: [{ base: 'A' }], spheres: [{}] });
+
+    expect(sphere.type).toBe('3d');
+    expect(lying.type).toBe('3d');
+    expect(cone.type).toBe('3d');
+    expect(broken.type).toBe('2d');
+    expect(normalizeGeometryScene({ vertices: { A: [0, 0], B: [4, 0], C: [0, 3] } }).type).toBe('2d');
+    expect(normalizeGeometryScene({ type: '2d', vertices: { O: [0, 0] }, spheres: [{ center: 'O' }] }).type).toBe('2d');
+  });
+
   it('понижает 3D с нулевой глубиной до 2D и распознаёт графики', () => {
     expect(normalizeGeometryScene({ type: '3d', vertices: { A: [0, 0, 0], B: [1, 0, 0] } }).type).toBe('2d');
     expect(normalizeGeometryScene({ type: '3d', vertices: { A: [0, 0, 0], S: [1, 1, 3] } }).type).toBe('3d');
