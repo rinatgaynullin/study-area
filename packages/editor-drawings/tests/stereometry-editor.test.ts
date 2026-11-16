@@ -13,7 +13,7 @@ import {
 import { STEREOMETRY_MESSAGES } from '../src/builders/stereometry-messages';
 import type { SceneEditor } from '../src/builders/types';
 import { DRAWINGS_MESSAGES } from '../src/messages';
-import type { Viewport } from '../src/render/coords';
+import { project3dToPlane, type Viewport } from '../src/render/coords';
 import { resolveGeometryViewport } from '../src/render/geometry-svg';
 import { normalizeGeometryScene } from '../src/scene/normalize';
 import type { Point } from '../src/scene/types';
@@ -732,8 +732,24 @@ describe('конструктор стереометрии', () => {
     clickVertex(canvas, [1, 2, 2]);
     expect(stereo.getScene().vertices).toEqual({ A: [1, 2, 2] });
 
+    // Поставленная точка выделена, но поле высоты остаётся первым блоком панели,
+    // и вторая точка подряд встаёт на ту же высоту без Esc.
+    expect(propsOf(stereo).firstElementChild?.querySelector('input[data-prop="pointHeight"]')).not.toBeNull();
+    expect(viewField(stereo, 'pointHeight').value).toBe('2');
+    expect(nameField(stereo)).toBe('A');
+    pointerAt(canvas, 'pointermove', svgOf([-2, 1, 2]));
+    expect(canvas.querySelector('.rte-sketch__overlay line')).not.toBeNull();
+    clickVertex(canvas, [-2, 1, 2]);
+    expect(stereo.getScene().vertices).toEqual({ A: [1, 2, 2], B: [-2, 1, 2] });
+
     // Высота живёт в инструменте: после снятия выделения поле помнит её.
     press(canvas, 'Escape');
+    expect(viewField(stereo, 'pointHeight').value).toBe('2');
+
+    // «Сечение» в пустоте точек не ставит — поля у него нет; у «Отрезка» есть.
+    pickTool(stereo, 'section');
+    expect(propsOf(stereo).querySelector('input[data-prop="pointHeight"]')).toBeNull();
+    pickTool(stereo, 'segment');
     expect(viewField(stereo, 'pointHeight').value).toBe('2');
 
     // Шаблон сбрасывает высоту в 0, и подсказки больше нет.
@@ -844,6 +860,181 @@ describe('конструктор стереометрии', () => {
     expect(propsOf(stereo).querySelector('select')).not.toBeNull();
     expect(arrow('ArrowRight')).toBe(true);
     expect(stereo.getScene().angleZ).toBe(-15);
+  });
+
+  it('ползунок увели и вернули без change: жест закрыт, отмена правок идёт по шагам', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    const slide = (value: string, ...events: string[]): void => {
+      const slider = viewField(stereo, 'angleZRange');
+
+      slider.value = value;
+      events.forEach((type) => slider.dispatchEvent(new Event(type, { bubbles: true })));
+    };
+
+    pickTemplate(stereo, 'pyramid4');
+    slide('40', 'input');
+    slide('-30', 'input');
+    pickTool(stereo, 'point');
+    clickAt(canvas, EMPTY_CORNER);
+    expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(6);
+
+    // Снова тянем ползунок: это новый жест со своим шагом истории.
+    pickTool(stereo, 'select');
+    press(canvas, 'Escape');
+    slide('50', 'input', 'change');
+    expect(stereo.getScene().angleZ).toBe(50);
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(-30);
+    expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(6);
+    // Увели и вернули — не правка: следующая отмена убирает только точку, затем шаблон.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(5);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
+  it('ползунок закрывает жест по отпусканию и потере фокуса', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid4');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    ['pointerup', 'keyup', 'blur'].forEach((type, index) => {
+      const slider = viewField(stereo, 'angleZRange');
+
+      slider.value = String(10 * (index + 1));
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event(type));
+      expect(changes).toBe(index + 1);
+    });
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(20);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(10);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(-30);
+  });
+
+  it('Alt посреди перетаскивания: (x, y) остаются сдвинутыми, меняется только z', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid4');
+    pickTool(stereo, 'select');
+
+    const grab = { x: 3, y: 2 };
+    const at = svgOf([0, 0, 5.5]);
+    const moved = svgOf([1.5, -1, 5.5]);
+    const lifted = svgOf([1.5, -1, 7]);
+
+    pointerAt(canvas, 'pointerdown', { x: at.x + grab.x, y: at.y + grab.y });
+    pointerAt(canvas, 'pointermove', { x: moved.x + grab.x, y: moved.y + grab.y });
+    expect(vertexOf(stereo, 'S')).toEqual([1.5, -1, 5.5]);
+    // Зажали Alt на месте: вершина не прыгает к началу жеста.
+    pointerAt(canvas, 'pointermove', { x: moved.x + grab.x, y: moved.y + grab.y }, { altKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([1.5, -1, 5.5]);
+    pointerAt(canvas, 'pointermove', { x: lifted.x + grab.x, y: lifted.y + grab.y }, { altKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([1.5, -1, 7]);
+    // Отпустили Alt: высота остаётся новой, дальше сдвиг по горизонтали на z = 7.
+    pointerAt(canvas, 'pointermove', { x: lifted.x + grab.x, y: lifted.y + grab.y });
+    expect(vertexOf(stereo, 'S')).toEqual([1.5, -1, 7]);
+
+    const further = svgOf([2.5, 0, 7]);
+
+    pointerAt(canvas, 'pointermove', { x: further.x + grab.x, y: further.y + grab.y });
+    expect(vertexOf(stereo, 'S')).toEqual([2.5, 0, 7]);
+    pointerAt(canvas, 'pointerup', { x: further.x + grab.x, y: further.y + grab.y });
+
+    // Весь жест — один шаг истории.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([0, 0, 5.5]);
+  });
+
+  it('плоскость почти с ребра: вершина по горизонтали не едет, точка в пустоте не ставится', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    // Наклон −18°: определитель обратной проекции около 0,027 (< 0,05), но не ноль.
+    const shallow = { angleY: -18, angleZ: -30 };
+    const [a, c] = project3dToPlane([1, 0, 0], shallow.angleY, shallow.angleZ);
+    const [b, d] = project3dToPlane([0, 1, 0], shallow.angleY, shallow.angleZ);
+
+    expect(Math.abs(a * d - b * c)).toBeLessThan(0.05);
+    expect(Math.abs(a * d - b * c)).toBeGreaterThan(0.01);
+
+    stereo.load({ type: '3d', vertices: { A: [0, 0, 0], B: [3, 0, 0], C: [0, 3, 2] }, edges: [['A', 'B']], ...shallow });
+    view = fittedViewport(stereo);
+    pickTool(stereo, 'select');
+
+    const from = svgOf([0, 3, 2], shallow);
+
+    dragFrom(canvas, from, { x: from.x + 30, y: from.y + 12 });
+    expect(vertexOf(stereo, 'C')).toEqual([0, 3, 2]);
+
+    // Вертикальный сдвиг с Alt при этом работает.
+    dragFrom(canvas, from, svgOf([0, 3, 3], shallow), { altKey: true });
+    expect(vertexOf(stereo, 'C')).toEqual([0, 3, 3]);
+
+    // Клик в пустоту в «Точке» и «Отрезке» новой вершины не даёт.
+    pickTool(stereo, 'point');
+    clickAt(canvas, EMPTY_CORNER);
+    pickTool(stereo, 'segment');
+    clickAt(canvas, EMPTY_CORNER);
+    expect(Object.keys(stereo.getScene().vertices as object)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('отмена и повтор посреди жеста игнорируются', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTemplate(stereo, 'pyramid4');
+
+    // Вращение.
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
+    pointerAt(canvas, 'pointermove', { x: 16, y: 6 });
+    pointerAt(canvas, 'pointermove', { x: 26, y: 6 });
+    expect(stereo.getScene().angleZ).toBeCloseTo(-22);
+    press(canvas, 'z', { ctrlKey: true });
+    press(canvas, 'y', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBeCloseTo(-22);
+    pointerAt(canvas, 'pointerup', { x: 26, y: 6 });
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(-30);
+
+    // Перетаскивание вершины: отмена не возвращает её и не воскрешает удалённое.
+    pickTool(stereo, 'select');
+
+    const at = svgOf([0, 0, 5.5]);
+    const target = svgOf([1, 1, 5.5]);
+
+    pointerAt(canvas, 'pointerdown', at);
+    pointerAt(canvas, 'pointermove', target);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([1, 1, 5.5]);
+    pointerAt(canvas, 'pointerup', target);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(vertexOf(stereo, 'S')).toEqual([0, 0, 5.5]);
+
+    // Ползунок.
+    press(canvas, 'Escape');
+
+    const slider = viewField(stereo, 'angleZRange');
+
+    slider.value = '40';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    press(canvas, 'z', { ctrlKey: true });
+    press(canvas, 'z', { ctrlKey: true, shiftKey: true });
+    expect(stereo.getScene().angleZ).toBe(40);
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(stereo.getScene().angleZ).toBe(40);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().angleZ).toBe(-30);
   });
 
   it('отложенный клик не ломает построения: отрезок в пустоту, сечение с двойным кликом', () => {
