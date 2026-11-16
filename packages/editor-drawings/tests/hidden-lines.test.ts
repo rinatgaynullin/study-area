@@ -5,6 +5,7 @@ import {
   hiddenLineStyles,
   supportPlanes,
   type HiddenLinesInput,
+  type SupportPlane,
 } from '../src/builders/hidden-lines';
 import type { Vec3 } from '../src/scene/types';
 
@@ -194,27 +195,27 @@ describe('вырожденные сцены', () => {
     const extraPoints = spherePoints(3, 1, MAX_HULL_POINTS);
 
     expect(extraPoints.length).toBeGreaterThan(MAX_HULL_POINTS);
-    expect(supportPlanes(extraPoints)).toEqual([]);
+    expect(supportPlanes(extraPoints).planes).toEqual([]);
     expect(hiddenLineStyles(scene({ O: [0, 0, 0], M: [0, 0, 3] }, 'OM', { extraPoints }))).toBeNull();
   });
 
   it('повторы точек не мешают расчёту', () => {
     const vertices = cube(6);
 
-    expect(supportPlanes([...Object.values(vertices), ...Object.values(vertices)])).toHaveLength(6);
+    expect(supportPlanes([...Object.values(vertices), ...Object.values(vertices)]).planes).toHaveLength(6);
   });
 });
 
 describe('опорные плоскости', () => {
   it('у куба ровно 6 плоскостей, у пирамиды с квадратным основанием — 5', () => {
-    expect(supportPlanes(Object.values(cube(6)))).toHaveLength(6);
-    expect(supportPlanes([...Object.values(BASE_SQUARE), [0, 0, 5.5]])).toHaveLength(5);
+    expect(supportPlanes(Object.values(cube(6))).planes).toHaveLength(6);
+    expect(supportPlanes([...Object.values(BASE_SQUARE), [0, 0, 5.5]]).planes).toHaveLength(5);
   });
 
   it('нормали единичные и смотрят наружу', () => {
     const points = Object.values(cube(6));
 
-    supportPlanes(points).forEach(({ normal, offset }) => {
+    supportPlanes(points).planes.forEach(({ normal, offset }) => {
       expect(Math.hypot(...normal)).toBeCloseTo(1, 9);
       points.forEach((point) => {
         expect(normal[0] * point[0] + normal[1] * point[1] + normal[2] * point[2]).toBeLessThanOrEqual(offset + 1e-9);
@@ -225,7 +226,7 @@ describe('опорные плоскости', () => {
   it('hiddenLineStyles совпадает с supportPlanes + classifyEdges', () => {
     const vertices: Record<string, Vec3> = { ...BASE_SQUARE, S: [0, 0, 5.5], O: [0, 0, 0] };
     const edges = edgesOf('AB BC CD DA SA SB SC SD SO OA');
-    const planes = supportPlanes(Object.values(vertices));
+    const hull = supportPlanes(Object.values(vertices));
     const views: Array<[number, number]> = [
       [ANGLE_Y, ANGLE_Z],
       [-40, 120],
@@ -233,7 +234,7 @@ describe('опорные плоскости', () => {
     ];
 
     views.forEach(([angleY, angleZ]) => {
-      expect(classifyEdges(planes, vertices, edges, angleY, angleZ)).toEqual(
+      expect(classifyEdges(hull, vertices, edges, angleY, angleZ)).toEqual(
         hiddenLineStyles({ vertices, edges, angleY, angleZ }),
       );
     });
@@ -253,5 +254,109 @@ describe('опорные плоскости', () => {
       expect(dashedOf(scene(cube(0.01), PRISM_EDGES, { angleY, angleZ }))).toEqual(expected);
       expect(dashedOf(scene(cube(1000), PRISM_EDGES, { angleY, angleZ }))).toEqual(expected);
     });
+  });
+});
+
+describe('точки на рёбрах с координатами, округлёнными до 0,01', () => {
+  /** Пирамида со стороной основания 3 и вершиной над его центром. */
+  const PYRAMID: Record<string, Vec3> = {
+    A: [0, 0, 0],
+    B: [3, 0, 0],
+    C: [3, 3, 0],
+    D: [0, 3, 0],
+    S: [1.5, 1.5, 3.5],
+  };
+
+  const vertex = (name: string): Vec3 => PYRAMID[name] ?? [0, 0, 0];
+
+  const along = (from: Vec3, to: Vec3, t: number): Vec3 => [
+    from[0] + (to[0] - from[0]) * t,
+    from[1] + (to[1] - from[1]) * t,
+    from[2] + (to[2] - from[2]) * t,
+  ];
+
+  /** Единичная нормаль боковой грани `S, p, q`, смотрящая наружу (от центра основания). */
+  const outwardNormal = (p: Vec3, q: Vec3): Vec3 => {
+    const s = vertex('S');
+    const u: Vec3 = [p[0] - s[0], p[1] - s[1], p[2] - s[2]];
+    const v: Vec3 = [q[0] - s[0], q[1] - s[1], q[2] - s[2]];
+    const n: Vec3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const length = Math.hypot(...n);
+    const towardCenter = n[0] * (1.5 - s[0]) + n[1] * (1.5 - s[1]) + n[2] * (0 - s[2]);
+    const sign = towardCenter > 0 ? -1 : 1;
+
+    return [(sign * n[0]) / length, (sign * n[1]) / length, (sign * n[2]) / length];
+  };
+
+  /**
+   * Положения точки, какими их может дать конструктор: координаты, округлённые вниз и вверх,
+   * и точное положение, сдвинутое по нормали грани внутрь и наружу на 0,005.
+   */
+  const variants = (rounded: Vec3[], exact: Vec3, normal: Vec3): Vec3[] => {
+    const shifted = (distance: number): Vec3 => [
+      exact[0] + normal[0] * distance,
+      exact[1] + normal[1] * distance,
+      exact[2] + normal[2] * distance,
+    ];
+
+    return [...rounded, shifted(0.005), shifted(-0.005)];
+  };
+
+  /** Середина SB — точные координаты, они же округлённые. */
+  const M: Vec3 = [2.25, 0.75, 1.75];
+
+  it('точка на видимом ребре SC: её отрезки на видимой грани — сплошные', () => {
+    const exact = along(vertex('S'), vertex('C'), 1 / 3);
+    const normal = outwardNormal(vertex('B'), vertex('C'));
+    const points = variants(
+      [
+        [2, 2, 2.33],
+        [2, 2, 2.34],
+      ],
+      exact,
+      normal,
+    );
+
+    expect(points).toHaveLength(4);
+    points.forEach((K) => {
+      const vertices: Record<string, Vec3> = { ...PYRAMID, K, M };
+
+      expect(dashedOf(scene(vertices, 'AB BC CD DA SA SB SD SK KC KM'))).toEqual(['AB', 'DA', 'SA']);
+    });
+  });
+
+  it('точка на скрытом ребре SA: её отрезки на скрытой грани — пунктир', () => {
+    const exact = along(vertex('S'), vertex('A'), 1 / 3);
+    const normal = outwardNormal(vertex('A'), vertex('B'));
+    const points = variants(
+      [
+        [1, 1, 2.33],
+        [1, 1, 2.34],
+      ],
+      exact,
+      normal,
+    );
+
+    points.forEach((L) => {
+      const vertices: Record<string, Vec3> = { ...PYRAMID, L, M };
+
+      expect(dashedOf(scene(vertices, 'AB BC CD DA SB SC SD SL LA LM'))).toEqual(['AB', 'DA', 'LA', 'LM', 'SL']);
+    });
+  });
+
+  it('допуск растёт с размахом точек, но не больше 0,02', () => {
+    expect(supportPlanes(Object.values(cube(0.01))).tolerance).toBeCloseTo(0.0002, 12);
+    expect(supportPlanes(Object.values(cube(6))).tolerance).toBe(0.02);
+    expect(supportPlanes(Object.values(cube(1000))).tolerance).toBe(0.02);
+  });
+
+  it('пирамида с точкой на ребре сохраняет настоящие грани опорными', () => {
+    const K: Vec3 = [2, 2, 2.34];
+    const { planes } = supportPlanes([...Object.values(PYRAMID), K]);
+    const normal = outwardNormal(vertex('B'), vertex('C'));
+    const isFaceSBC = (plane: SupportPlane): boolean =>
+      plane.normal.every((component, axis) => Math.abs(component - (normal[axis] ?? 0)) < 1e-9);
+
+    expect(planes.some(isFaceSBC)).toBe(true);
   });
 });

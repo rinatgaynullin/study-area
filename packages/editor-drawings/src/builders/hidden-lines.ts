@@ -13,6 +13,15 @@ export interface SupportPlane {
   offset: number;
 }
 
+/**
+ * Опорные плоскости оболочки вместе с допуском «точка на плоскости», с которым
+ * они найдены: `classifyEdges` проверяет концы рёбер с тем же допуском.
+ */
+export interface SupportHull {
+  planes: SupportPlane[];
+  tolerance: number;
+}
+
 export interface HiddenLinesInput {
   vertices: Record<string, Vec3>;
   edges: Array<{ from: string; to: string }>;
@@ -27,8 +36,15 @@ export const MAX_HULL_POINTS = 160;
 
 /** Точки, которые ближе этого по каждой координате, считаются одной. */
 const SAME_POINT_TOLERANCE = 1e-6;
-/** Допуск совпадения нормалей при отбрасывании повторов плоскостей. */
-const SAME_NORMAL_TOLERANCE = 1e-6;
+/** Шаг округления компонент нормали в ключе плоскости. */
+const NORMAL_KEY_STEP = 1e-6;
+/** Шаг округления смещения в ключе плоскости — доля размаха сцены. */
+const OFFSET_KEY_STEP = 1e-6;
+/**
+ * Сколько точек (вразброс) проверить до поиска плоскости среди найденных:
+ * секущие плоскости почти всегда отсеиваются уже на них.
+ */
+const QUICK_SCAN_POINTS = 8;
 /** Плоскость, у которой проекция направления взгляда на нормаль меньше этого, видна с ребра. */
 const EDGE_ON_TOLERANCE = 1e-6;
 
@@ -53,8 +69,15 @@ const spanOf = (points: Vec3[]): number => {
   return Math.max(...axes.map((values) => Math.max(...values) - Math.min(...values)));
 };
 
-/** Допуск «точка на плоскости» в единицах сцены: одинаково строгий для маленьких и больших тел. */
-const toleranceFor = (span: number): number => 1e-7 * (1 + span);
+/** Строгий допуск для повторов точек и троек на одной прямой: одинаковый для маленьких и больших тел. */
+const strictTolerance = (span: number): number => 1e-7 * (1 + span);
+
+/**
+ * Допуск «точка на плоскости». Конструктор округляет координаты до 0,01, и точка
+ * на наклонной грани отходит от её плоскости почти на столько же; у мелких тел
+ * допуск сжимается вместе с размахом.
+ */
+const planeTolerance = (span: number): number => Math.min(0.02, 0.02 * span);
 
 const isSamePoint = (a: Vec3, b: Vec3): boolean =>
   Math.abs(a[0] - b[0]) <= SAME_POINT_TOLERANCE &&
@@ -68,16 +91,70 @@ const uniquePoints = (points: Vec3[]): Vec3[] =>
     return unique;
   }, []);
 
-/** Плоскость уже найдена — с любой ориентацией нормали. */
-const isKnownPlane = (planes: SupportPlane[], normal: Vec3, offset: number, eps: number): boolean =>
-  planes.some((plane) => {
-    const cosine = dot(plane.normal, normal);
+/** Округлённые нормаль и смещение плоскости: по ним опознаются повторы. */
+type PlaneKey = [number, number, number, number];
 
-    if (cosine > 1 - SAME_NORMAL_TOLERANCE) return Math.abs(plane.offset - offset) <= eps;
-    if (cosine < -1 + SAME_NORMAL_TOLERANCE) return Math.abs(plane.offset + offset) <= eps;
+/** Совпадает ли `a` с ключом `b`, взятым со знаком `sign` (−1 — та же плоскость с обратной нормалью). */
+const sameKey = (a: PlaneKey, b: PlaneKey, sign: number): boolean =>
+  a[0] === sign * b[0] && a[1] === sign * b[1] && a[2] === sign * b[2] && a[3] === sign * b[3];
 
-    return false;
-  });
+/** Числовой хэш ключа со знаком `sign` для корзины: совпадение хэша ещё не значит совпадения ключа. */
+const hashOf = (key: PlaneKey, sign: number): number =>
+  (sign * key[0] * 73856093) ^ (sign * key[1] * 19349663) ^ (sign * key[2] * 83492791) ^ (sign * key[3] * 50331653);
+
+/**
+ * Найденные опорные плоскости с поиском повторов за постоянное время: одна грань,
+ * найденная по разным тройкам, даёт тот же округлённый ключ. Ключи разложены по
+ * корзинам числового хэша, чтобы не строить строку на каждую тройку.
+ */
+class PlaneIndex {
+  readonly planes: SupportPlane[] = [];
+
+  private readonly buckets = new Map<number, PlaneKey[]>();
+
+  constructor(private readonly offsetStep: number) {}
+
+  /**
+   * Плоскость уже найдена — с любой ориентацией нормали. Быстрая предпроверка:
+   * округление обратной нормали может разойтись с её ключом на половинке шага,
+   * тогда повтор отсеет `add`.
+   */
+  has(normal: Vec3, offset: number): boolean {
+    const key = this.keyOf(normal, offset);
+
+    return this.includes(key, 1) || this.includes(key, -1);
+  }
+
+  /** Запоминает опорную плоскость с нормалью наружу, если её ещё нет. */
+  add(plane: SupportPlane): void {
+    const key = this.keyOf(plane.normal, plane.offset);
+
+    if (this.includes(key, 1)) return;
+
+    const hash = hashOf(key, 1);
+    const bucket = this.buckets.get(hash);
+
+    if (bucket) bucket.push(key);
+    else this.buckets.set(hash, [key]);
+
+    this.planes.push(plane);
+  }
+
+  private keyOf(normal: Vec3, offset: number): PlaneKey {
+    return [
+      Math.round(normal[0] / NORMAL_KEY_STEP),
+      Math.round(normal[1] / NORMAL_KEY_STEP),
+      Math.round(normal[2] / NORMAL_KEY_STEP),
+      Math.round(offset / this.offsetStep),
+    ];
+  }
+
+  private includes(key: PlaneKey, sign: number): boolean {
+    const bucket = this.buckets.get(hashOf(key, sign));
+
+    return bucket ? bucket.some((other) => sameKey(other, key, sign)) : false;
+  }
+}
 
 /**
  * С какой стороны плоскости лежат точки: 1 или −1; 0 — все на плоскости;
@@ -98,54 +175,101 @@ const sideOfPoints = (normal: Vec3, offset: number, points: Vec3[], eps: number)
   return side;
 };
 
+/** Общая сторона двух групп точек; `null`, если группы по разные стороны или одна из них не опорная. */
+const joinSides = (first: number | null, second: number | null): number | null => {
+  if (first === null || second === null) return null;
+  if (first !== 0 && second !== 0 && first !== second) return null;
+
+  return first === 0 ? second : first;
+};
+
+const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+
+/**
+ * Те же точки вразброс. Выборки окружностей и сфер идут подряд по контуру, и
+ * плоскость, срезающая край тела, видит сначала длинную серию точек с одной
+ * стороны; вразброс точки с другой стороны попадаются раньше, и проверка
+ * сторон выходит быстрее. На результат порядок не влияет.
+ */
+const scattered = (points: Vec3[]): Vec3[] => {
+  const count = points.length;
+  // Шаг около золотого сечения, взаимно простой с числом точек: обходит все точки по разу.
+  let stride = Math.max(1, Math.round(count * 0.618));
+
+  while (gcd(stride, count) !== 1) stride += 1;
+
+  return points.map((_, index) => points[(index * stride) % count] ?? [0, 0, 0]);
+};
+
+/** Точки для проверки сторон: сначала несколько вразброс, затем остальные. */
+interface ScanPoints {
+  quick: Vec3[];
+  rest: Vec3[];
+}
+
+/** Допуски перебора троек. */
+interface HullTolerances {
+  /** Точка на плоскости. */
+  plane: number;
+  /** Тройка на одной прямой: площадь параллелограмма меньше этого. */
+  area: number;
+}
+
 /**
  * Проверяет плоскость тройки и, если она опорная и новая, добавляет её с
  * нормалью наружу. Возвращает `true`, когда все точки лежат в этой плоскости:
  * оболочки тогда нет.
  */
 const addTriplePlane = (
-  planes: SupportPlane[],
+  index: PlaneIndex,
   triple: [Vec3, Vec3, Vec3],
-  points: Vec3[],
-  eps: number,
-  areaEps: number,
+  points: ScanPoints,
+  tolerances: HullTolerances,
 ): boolean => {
   const [a, b, c] = triple;
   const product = cross(subtract(b, a), subtract(c, a));
-  const length = Math.hypot(...product);
+  const length = Math.sqrt(dot(product, product));
 
   // Тройка на одной прямой плоскости не задаёт.
-  if (length < areaEps) return false;
+  if (length < tolerances.area) return false;
 
   const normal = scaleVector(product, 1 / length);
   const offset = dot(normal, a);
+  const quickSide = sideOfPoints(normal, offset, points.quick, tolerances.plane);
 
-  if (isKnownPlane(planes, normal, offset, eps)) return false;
+  // Секущая плоскость или грань, уже найденная по другой тройке: полный обход не нужен.
+  if (quickSide === null || index.has(normal, offset)) return false;
 
-  const side = sideOfPoints(normal, offset, points, eps);
+  const side = joinSides(quickSide, sideOfPoints(normal, offset, points.rest, tolerances.plane));
 
   if (side === 0) return true;
-  if (side === -1) planes.push({ normal, offset });
-  if (side === 1) planes.push({ normal: scaleVector(normal, -1), offset: -offset });
+  if (side === -1) index.add({ normal, offset });
+  if (side === 1) index.add({ normal: scaleVector(normal, -1), offset: -offset });
 
   return false;
 };
 
 /**
- * Опорные плоскости выпуклой оболочки точек, без повторов. Пустой массив, если точек меньше
- * четырёх, все они лежат в одной плоскости или их больше MAX_HULL_POINTS.
+ * Опорные плоскости выпуклой оболочки точек, без повторов, и допуск «точка на плоскости»
+ * по размаху всех точек. Плоскостей нет, если точек меньше четырёх, все они лежат в одной
+ * плоскости или их больше MAX_HULL_POINTS.
  */
-export const supportPlanes = (points: Vec3[]): SupportPlane[] => {
+export const supportPlanes = (points: Vec3[]): SupportHull => {
   const unique = uniquePoints(points);
   const count = unique.length;
-
-  if (count < 4 || count > MAX_HULL_POINTS) return [];
-
   const span = spanOf(unique);
-  const eps = toleranceFor(span);
-  // Векторное произведение — площадь, её допуск тоже масштабируем от размера сцены.
-  const areaEps = eps * (1 + span);
-  const planes: SupportPlane[] = [];
+  const tolerance = planeTolerance(span);
+
+  if (count < 4 || count > MAX_HULL_POINTS) return { planes: [], tolerance };
+
+  const tolerances: HullTolerances = {
+    plane: tolerance,
+    // Векторное произведение — площадь, её допуск тоже масштабируем от размера сцены.
+    area: strictTolerance(span) * (1 + span),
+  };
+  const index = new PlaneIndex(OFFSET_KEY_STEP * span);
+  const order = scattered(unique);
+  const scan: ScanPoints = { quick: order.slice(0, QUICK_SCAN_POINTS), rest: order.slice(QUICK_SCAN_POINTS) };
   let flat = false;
 
   for (let i = 0; i < count && !flat; i += 1) {
@@ -155,17 +279,17 @@ export const supportPlanes = (points: Vec3[]): SupportPlane[] => {
         const b = unique[j];
         const c = unique[k];
 
-        if (a && b && c) flat = addTriplePlane(planes, [a, b, c], unique, eps, areaEps);
+        if (a && b && c) flat = addTriplePlane(index, [a, b, c], scan, tolerances);
       }
     }
   }
 
-  return flat ? [] : planes;
+  return { planes: flat ? [] : index.planes, tolerance };
 };
 
 /** Те же стили по уже посчитанным плоскостям: чтобы при вращении не пересчитывать оболочку. */
 export const classifyEdges = (
-  planes: SupportPlane[],
+  hull: SupportHull,
   vertices: Record<string, Vec3>,
   edges: Array<{ from: string; to: string }>,
   angleY: number,
@@ -173,9 +297,8 @@ export const classifyEdges = (
 ): EdgeStyle[] => {
   const direction = viewDirection3d(angleY, angleZ);
   const view = scaleVector(direction, 1 / Math.hypot(...direction));
-  const eps = toleranceFor(spanOf(Object.values(vertices)));
   const onPlane = (plane: SupportPlane, point: Vec3): boolean =>
-    Math.abs(dot(plane.normal, point) - plane.offset) <= eps;
+    Math.abs(dot(plane.normal, point) - plane.offset) <= hull.tolerance;
 
   return edges.map(({ from, to }): EdgeStyle => {
     const start = vertices[from];
@@ -183,7 +306,7 @@ export const classifyEdges = (
 
     if (!start || !end) return 'solid';
 
-    const carriers = planes.filter((plane) => onPlane(plane, start) && onPlane(plane, end));
+    const carriers = hull.planes.filter((plane) => onPlane(plane, start) && onPlane(plane, end));
 
     // Ни одна грань не содержит отрезок целиком — он проходит внутри тела.
     if (carriers.length === 0) return 'dashed';
@@ -198,9 +321,9 @@ export const classifyEdges = (
  * Ребро с несуществующей вершиной получает 'solid'.
  */
 export const hiddenLineStyles = (input: HiddenLinesInput): EdgeStyle[] | null => {
-  const planes = supportPlanes([...Object.values(input.vertices), ...(input.extraPoints ?? [])]);
+  const hull = supportPlanes([...Object.values(input.vertices), ...(input.extraPoints ?? [])]);
 
-  if (planes.length === 0) return null;
+  if (hull.planes.length === 0) return null;
 
-  return classifyEdges(planes, input.vertices, input.edges, input.angleY, input.angleZ);
+  return classifyEdges(hull, input.vertices, input.edges, input.angleY, input.angleZ);
 };
