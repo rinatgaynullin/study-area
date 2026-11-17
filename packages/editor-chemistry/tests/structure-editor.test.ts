@@ -89,7 +89,7 @@ describe('конструктор структуры: сборка', () => {
     const builder = mount();
 
     expect(builder.getCode()).toBe('');
-    expect(hint(builder)).toBe('Выбери группу справа и нажми на плюс');
+    expect(hint(builder)).toBe('Выбери группу в списке и нажми на плюс');
     expect(button(builder, 'button[data-group="CH_3"]').getAttribute('aria-pressed')).toBe('true');
     expect(button(builder, 'button[data-group="CH_3"]').textContent).toBe('CH₃');
 
@@ -97,7 +97,9 @@ describe('конструктор структуры: сборка', () => {
 
     expect(builder.getCode()).toBe('CH_3');
     expect(builder.element.querySelector('.rte-chem-builder__canvas svg')).not.toBeNull();
-    expect(hint(builder)).toBe('Нажми на плюс, чтобы присоединить группу. Группу можно заменить справа');
+    expect(hint(builder)).toBe(
+      'Нажми на плюс, чтобы присоединить группу. Выделенную группу можно заменить другой из списка',
+    );
   });
 
   it('этанол тремя нажатиями: код разбирается, три атома и две одинарные связи, картинка как у шаблона', () => {
@@ -429,7 +431,7 @@ describe('конструктор структуры: вершина кольца
       'Присоединить группу: вниз-вправо',
     );
 
-    // Порядок обхода: атомы, затем «плюсы» выделенного.
+    // Порядок обхода: атомы, затем «плюсы» выделенного (связей ещё нет).
     const focusable = [...builder.element.querySelectorAll('.rte-chem-builder__overlay [tabindex="0"]')];
 
     expect(focusable[0]?.hasAttribute('data-atom')).toBe(true);
@@ -483,5 +485,66 @@ describe('конструктор структуры: вершина кольца
     builder.setLocked(false);
     click(find(builder, '[data-action="start"]'));
     expect(builder.getCode()).toBe('CH_3');
+  });
+});
+
+describe('конструктор структуры: связи с клавиатуры', () => {
+  it('связи — кнопки после атомов и до «плюсов», с подписью для читалки', () => {
+    const builder = mount();
+
+    buildEthanol(builder);
+
+    const kinds = [...builder.element.querySelectorAll('.rte-chem-builder__overlay [tabindex="0"]')].map((item) => {
+      if (item.hasAttribute('data-atom')) return 'atom';
+
+      return item.hasAttribute('data-bond') ? 'bond' : 'plus';
+    });
+
+    expect(kinds).toEqual(['atom', 'atom', 'atom', 'bond', 'bond', 'plus', 'plus', 'plus', 'plus', 'plus', 'plus', 'plus']);
+
+    const bond = find(builder, '[data-bond="0"]');
+
+    expect(bond.getAttribute('role')).toBe('button');
+    expect(bond.getAttribute('aria-label')).toBe('Связь CH₃ – CH₂: одинарная');
+    expect(find(builder, '[data-bond="1"]').getAttribute('aria-label')).toBe('Связь CH₂ – OH: одинарная');
+  });
+
+  it('Enter выделяет связь, смена типа и удаление оставляют фокус на осмысленном элементе', () => {
+    const builder = mount();
+
+    buildEthanol(builder);
+    keydown(find(builder, '[data-bond="0"]'), 'Enter');
+
+    expect(find(builder, '[data-bond="0"]').getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement?.getAttribute('data-bond')).toBe('0');
+    expect(hint(builder)).toBe('Выбери тип связи или удали её');
+
+    const double = button(builder, 'button[data-set-bond="="]');
+
+    double.focus();
+    click(double);
+    expect(builder.getCode()).toBe('CH_3=[:0]CH_2-[:0]OH');
+    expect(find(builder, '[data-bond="0"]').getAttribute('aria-label')).toBe('Связь CH₃ – CH₂: двойная');
+    expect(document.activeElement).toBe(double);
+
+    // Пробел на второй связи, Delete убирает её с веткой; фокус — на атоме, от которого она шла.
+    keydown(find(builder, '[data-bond="1"]'), ' ');
+    keydown(find(builder, '[data-bond="1"]'), 'Delete');
+    expect(builder.getCode()).toBe('CH_3=[:0]CH_2');
+    expect(document.activeElement?.getAttribute('data-atom')).toBe('1');
+
+    // Escape снимает выделение, фокус остаётся на той же связи.
+    keydown(find(builder, '[data-bond="0"]'), 'Enter');
+    keydown(find(builder, '[data-bond="0"]'), 'Escape');
+    expect(find(builder, '[data-bond="0"]').getAttribute('aria-pressed')).toBe('false');
+    expect(document.activeElement?.getAttribute('data-bond')).toBe('0');
+  });
+
+  it('у кольца стороны подписаны безымянным углеродом', () => {
+    const builder = mount();
+
+    click(button(builder, 'button[data-ring="benzene"]'));
+    expect(find(builder, '[data-bond="0"]').getAttribute('aria-label')).toBe('Связь C – C: одинарная');
+    expect(find(builder, '[data-atom="0"]').getAttribute('aria-label')).toBe('Атом C');
   });
 });
