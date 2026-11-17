@@ -266,6 +266,107 @@ describe('диалог формул', () => {
     expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(false);
   });
 
+  it('шаблон, нажатый до загрузки поля, не попадает в формулу, открытую после закрытия', async () => {
+    mountEditor();
+    openMathDialog();
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!.click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(openDialog()).toBeNull();
+
+    openMathDialog();
+
+    const field = await waitForField();
+
+    // Даём отложенной вставке шанс сработать, если бы она осталась.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+
+    expect(field.value).toBe('');
+    expect(openDialog()!.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+  });
+
+  it('повторное открытие во время загрузки не создаёт второе поле', async () => {
+    const created = vi.spyOn(FakeMathfield.prototype, 'insert');
+
+    mountEditor();
+    openMathDialog();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    openMathDialog();
+
+    const field = await waitForField();
+
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!.click();
+
+    // Шаблон попал в то самое поле, что стоит в диалоге, и ровно один раз.
+    expect(created).toHaveBeenCalledTimes(1);
+    expect(field.value).toContain('\\frac');
+    expect(document.querySelectorAll('fake-math-field')).toHaveLength(1);
+  });
+
+  it('при сбое конвертера в поле не остаётся прошлая формула', async () => {
+    const editor = mountEditor('<p>x</p>');
+
+    // Первая формула — с TeX-аннотацией: открывается без конвертера.
+    openMathDialog();
+
+    const field = await waitForField();
+
+    typeIntoField(field, 'a+b');
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-button--primary')!.click();
+    await vi.waitFor(() => {
+      expect(openDialog()).toBeNull();
+    });
+
+    // Вторая — чужая, без аннотации: конвертер (подделка) её не переводит.
+    editor.core.insertFormula(
+      '<math xmlns="http://www.w3.org/1998/Math/MathML"><mi>y</mi></math>',
+      'math',
+    );
+
+    const nodes = editor.element.querySelectorAll<HTMLElement>('.rte-content .rte-formula');
+
+    nodes[0]!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(field.value).toBe('a+b');
+    });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    nodes[1]!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('.rte-formula-editor__status')?.textContent).toBe(
+        'Эту формулу не получилось открыть. Напиши её заново',
+      );
+    });
+    expect(field.value).toBe('');
+    expect(openDialog()!.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+  });
+
+  it('нажатие на категорию оставляет фокус в поле только на сенсорном устройстве', async () => {
+    const pressCategory = (): boolean => {
+      const event = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+
+      openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__category')!.dispatchEvent(event);
+
+      return event.defaultPrevented;
+    };
+
+    mountEditor();
+    openMathDialog();
+    await waitForField();
+    expect(pressCategory()).toBe(false);
+
+    ui?.destroy();
+    host?.remove();
+
+    stubCoarsePointer();
+    mountEditor();
+    openMathDialog();
+    await waitForField();
+    expect(pressCategory()).toBe(true);
+  });
+
   it('у химии «Частых» нет: первой остаётся прежняя категория', async () => {
     mountEditor();
     openMathDialog();

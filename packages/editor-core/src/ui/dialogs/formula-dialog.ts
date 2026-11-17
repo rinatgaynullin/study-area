@@ -241,6 +241,9 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   /** Шаблон, нажатый, пока MathLive ещё грузился: вставится, когда поле будет готово. */
   private pendingTemplate: FormulaTemplate | null = null;
 
+  /** Идущая загрузка MathLive: повторное открытие во время неё второе поле не создаёт. */
+  private fieldLoading: Promise<void> | null = null;
+
   /**
    * Номер последнего запуска отрисовки. Рендер асинхронный, а вкладку можно
    * переключить раньше, чем он закончится: ответы прошлых запусков отбрасываем
@@ -718,11 +721,23 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   }
 
   /** MathLive тяжёлый и работает только в браузере — грузим при первом показе. */
-  private async ensureMathfield(): Promise<void> {
-    if (this.field || typeof window === 'undefined') return;
+  private ensureMathfield(): Promise<void> {
+    if (this.field || typeof window === 'undefined') return Promise.resolve();
 
+    // Объявляется при каждом открытии: `open()` сбрасывает статус, а загрузка
+    // могла начаться ещё при прошлом.
     this.setStatus('loading');
 
+    if (!this.fieldLoading) {
+      this.fieldLoading = this.loadMathfield().finally(() => {
+        this.fieldLoading = null;
+      });
+    }
+
+    return this.fieldLoading;
+  }
+
+  private async loadMathfield(): Promise<void> {
     try {
       const { MathfieldElement: MathfieldConstructor } = await import('mathlive');
 
@@ -788,6 +803,11 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     // хватает шаблонов. Пустой список прячет кнопку меню и гасит контекстное
     // меню. Задаётся после монтирования: до него MathLive бросает исключение.
     this.field.menuItems = [];
+    // Поле одно на все открытия диалога. Пока новая формула переводится в
+    // LaTeX, в нём не должна оставаться прошлая: при сбое конвертера её
+    // сохранили бы на место текущей.
+    this.field.value = '';
+    this.setLatex('');
 
     // Диалог могли закрыть, пока грузился MathLive: тогда отключать клавиатуру
     // будет некому — не подключаемся.
@@ -856,6 +876,8 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   /** Модалка закрылась — любым путём: Escape, крестик, подложка, кнопки. */
   private readonly onModalClose = (): void => {
     this.keyboardLift.detach();
+    // Шаблон ждал поля для этой формулы — в следующую он попасть не должен.
+    this.pendingTemplate = null;
   };
 
   private readonly onMathTabClick = (): void => {
