@@ -201,7 +201,7 @@ describe('конструктор стереометрии', () => {
     expect(scene.showGrid).toBeUndefined();
     expect(scene.showAxes).toBeUndefined();
     expect(canvasOf(stereo).querySelector('svg')).not.toBeNull();
-    expect(stereo.element.querySelector('.rte-builder__hint')?.textContent).toContain('Левая кнопка двигает полотно, правая — поворачивает фигуру');
+    expect(stereo.element.querySelector('.rte-builder__hint')?.textContent).toContain('Левая кнопка мыши двигает чертёж, правая поворачивает фигуру');
   });
 
   it('шаблоны дают ожидаемые вершины, рёбра и тела вращения', () => {
@@ -684,7 +684,7 @@ describe('конструктор стереометрии', () => {
     expect(propsOf(stereo).querySelector('select')).not.toBeNull();
 
     clickAt(canvas, EMPTY_CORNER);
-    expect([...propsOf(stereo).querySelectorAll('.rte-builder__props-title')].map((title) => title.textContent)).toEqual(['Параметры фигуры', 'Вид']);
+    expect([...propsOf(stereo).querySelectorAll('.rte-builder__props-title')].map((title) => title.textContent)).toEqual(['Размеры фигуры', 'Вид']);
     expect(propsOf(stereo).querySelector('input[data-prop="angleY"]')).not.toBeNull();
   });
 
@@ -1327,7 +1327,7 @@ describe('конструктор стереометрии', () => {
     press(canvas, 'Escape');
     expect(Object.keys(stereo.getScene().vertices as object)).toHaveLength(6);
     expect(templateField(stereo, 'height')).toBeNull();
-    expect(propsOf(stereo).querySelector('.rte-builder__props-title')?.textContent).not.toBe('Параметры фигуры');
+    expect(propsOf(stereo).querySelector('.rte-builder__props-title')?.textContent).not.toBe('Размеры фигуры');
 
     // Отмена точки возвращает фигуру шаблона — и блок вместе с ней.
     press(canvas, 'z', { ctrlKey: true });

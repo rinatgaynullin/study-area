@@ -57,6 +57,8 @@ export interface ModalOptions {
   closeLabel: string;
   /** Широкая раскладка для редактора формул с галереей шаблонов. */
   wide?: boolean;
+  /** Окно на весь экран: тело растягивается на всю высоту (конструктор чертежей). */
+  fill?: boolean;
   onClose?(): void;
 }
 
@@ -127,8 +129,14 @@ class ModalController implements Modal {
       children: [icon('close', 18)],
     });
 
+    const panelClasses = ['rte-modal__panel'];
+
+    if (options.wide) panelClasses.push('rte-modal__panel--wide');
+
+    if (options.fill) panelClasses.push('rte-modal__panel--fill');
+
     this.panel = el('div', {
-      class: options.wide ? 'rte-modal__panel rte-modal__panel--wide' : 'rte-modal__panel',
+      class: panelClasses.join(' '),
       // Имя диалога — его заголовок: без него читалка объявляет просто «диалог».
       // tabindex −1 — чтобы панель можно было сфокусировать, когда в ней нет
       // ничего фокусируемого (например, пока грузится редактор формул).

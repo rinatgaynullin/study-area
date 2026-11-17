@@ -556,7 +556,10 @@ class PlotsEditor implements SceneEditor {
       children: [
         el('div', { class: 'rte-builder__bar', children: [this.tools.element, actions] }),
         palette,
-        el('div', { class: 'rte-builder__body', children: [this.canvas.element, this.properties] }),
+        el('div', {
+          class: 'rte-builder__body',
+          children: [el('div', { class: 'rte-builder__stage', children: [this.canvas.element] }), this.properties],
+        }),
         this.hint,
       ],
     });

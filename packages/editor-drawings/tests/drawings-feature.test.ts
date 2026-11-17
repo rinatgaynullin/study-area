@@ -1,6 +1,12 @@
 import { createRichContent, createRichEditor, type RichContent, type RichEditorUi } from '@rich-editor/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DRAWINGS_MESSAGES, createDrawingsContent, createDrawingsFeature, drawingsContent } from '../src';
+import {
+  DRAWINGS_MESSAGES,
+  createDrawingsContent,
+  createDrawingsFeature,
+  drawingsContent,
+  type DrawingsFeatureOptions,
+} from '../src';
 
 let ui: RichEditorUi | undefined;
 let viewer: RichContent | undefined;
@@ -15,13 +21,13 @@ afterEach(() => {
   host = undefined;
 });
 
-const mountEditor = (options: Record<string, unknown> = {}): RichEditorUi => {
+const mountEditor = (options: Record<string, unknown> = {}, feature: DrawingsFeatureOptions = {}): RichEditorUi => {
   host = document.createElement('div');
   document.body.appendChild(host);
   ui = createRichEditor({
     element: host,
     content: '<p>привет</p>',
-    features: [createDrawingsFeature()],
+    features: [createDrawingsFeature(feature)],
     ...options,
   });
 
@@ -138,7 +144,7 @@ describe('узлы чертежей в редакторе', () => {
 
 describe('возможность целиком: кнопки, диалог, подписи', () => {
   it('кнопка «Чертёж» открывает диалог; шаблон даёт превью и TikZ; вставка кладёт узел', () => {
-    const editor = mountEditor();
+    const editor = mountEditor({}, { json: true });
 
     toolbarButton('Чертёж').click();
 
@@ -160,8 +166,8 @@ describe('возможность целиком: кнопки, диалог, п�
     expect(html).toContain('data-tikz-code=');
   });
 
-  it('переключатель вида меняет заголовок и шаблоны; физическая схема вставляется своим узлом', () => {
-    const editor = mountEditor();
+  it('кнопка «Физическая схема» даёт свой заголовок и шаблоны; схема вставляется своим узлом', () => {
+    const editor = mountEditor({}, { json: true });
 
     toolbarButton('Физическая схема').click();
 
@@ -180,7 +186,7 @@ describe('возможность целиком: кнопки, диалог, п�
   });
 
   it('нечитаемый JSON объявляется ошибкой, но сохраняется как есть', () => {
-    const editor = mountEditor();
+    const editor = mountEditor({}, { json: true });
 
     toolbarButton('Чертёж').click();
 
@@ -212,7 +218,9 @@ describe('возможность целиком: кнопки, диалог, п�
     const dialog = openDialog();
 
     expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Изменить физическую схему');
-    expect(dialog.querySelector<HTMLElement>('.rte-drawing-dialog__kinds')?.hidden).toBe(true);
+    // У физики одна вкладка: строка вкладок не нужна, выбирать вид нельзя.
+    expect(dialog.querySelector('.rte-drawing-dialog__kinds')).toBeNull();
+    expect(dialog.querySelector<HTMLElement>('.rte-drawing-dialog__head')?.hidden).toBe(true);
     expect(dialog.querySelector<HTMLElement>('.rte-button--danger')?.hidden).toBe(false);
 
     dialog.querySelector<HTMLButtonElement>('.rte-button--danger')?.click();
@@ -228,6 +236,147 @@ describe('возможность целиком: кнопки, диалог, п�
     editor.setLocale('ru');
     expect(toolbarButton('Чертёж')).toBeInstanceOf(HTMLButtonElement);
     expect(Object.keys(DRAWINGS_MESSAGES.en).sort()).toEqual(Object.keys(DRAWINGS_MESSAGES.ru).sort());
+  });
+});
+
+describe('раскладка диалога', () => {
+  const activeTab = (dialog: HTMLElement): string | null | undefined =>
+    dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
+
+  it('окно на весь экран; вкладки — в строке шапки диалога', () => {
+    mountEditor();
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+    const head = dialog.querySelector('.rte-drawing-dialog__head');
+
+    expect(dialog.querySelector('.rte-modal__panel')?.classList.contains('rte-modal__panel--fill')).toBe(true);
+    expect(head?.querySelector('.rte-drawing-dialog__tabs[role="tablist"]')).not.toBeNull();
+    expect(head?.children).toHaveLength(1);
+  });
+
+  it('по умолчанию нет ни JSON, ни образцов, ни предпросмотра, ни TikZ', () => {
+    mountEditor();
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+
+    expect(dialog.querySelector('[data-tab="json"]')).toBeNull();
+    expect(dialog.querySelector('.rte-drawing-dialog__templates')).toBeNull();
+    expect(dialog.querySelector('.rte-drawing-dialog__preview')).toBeNull();
+    expect(dialog.querySelector('textarea')).toBeNull();
+    expect(dialog.querySelector('details')).toBeNull();
+  });
+
+  it('с опцией json служебное свёрнуто на конструкторе и раскрыто на вкладке JSON; статус снаружи', () => {
+    mountEditor({}, { json: true });
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+    const more = dialog.querySelector<HTMLDetailsElement>('details.rte-drawing-dialog__more');
+
+    expect(more?.querySelector('.rte-drawing-dialog__templates')).not.toBeNull();
+    expect(more?.querySelector('.rte-drawing-dialog__preview')).not.toBeNull();
+    expect(more?.querySelector('textarea[readonly]')).not.toBeNull();
+    expect(more?.querySelector('summary')?.textContent).toBe('Шаблоны, предпросмотр и код TikZ');
+    expect(dialog.querySelector('.rte-drawing-dialog__status')?.closest('details')).toBeNull();
+    expect(more?.open).toBe(false);
+
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
+    expect(more?.open).toBe(true);
+    expect(dialog.querySelector('.rte-drawing-dialog')?.classList.contains('rte-drawing-dialog--json')).toBe(true);
+
+    dialog.querySelector<HTMLButtonElement>('[data-tab="planimetry"]')?.click();
+    expect(more?.open).toBe(false);
+    expect(dialog.querySelector('.rte-drawing-dialog')?.classList.contains('rte-drawing-dialog--json')).toBe(false);
+  });
+
+  it('вкладки нового чертежа — четыре конструктора; «Физика» делает чертёж физической схемой', () => {
+    const editor = mountEditor();
+
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+
+    expect([...dialog.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+      'Планиметрия',
+      'Стереометрия',
+      'Графики',
+      'Физика',
+    ]);
+    expect(dialog.querySelector('input[type="radio"]')).toBeNull();
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Чертёж');
+
+    dialog.querySelector<HTMLButtonElement>('[data-tab="physics"]')?.click();
+
+    expect(activeTab(dialog)).toBe('Физика');
+    expect(dialog.querySelector('.rte-builder--physics')).not.toBeNull();
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Физическая схема');
+
+    dialog.querySelector<HTMLButtonElement>('.rte-builder__palette button[data-element]')?.click();
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+
+    const html = editor.core.getHTML();
+
+    expect(html).toContain('data-physics-data=');
+    expect(html).not.toContain('data-geometry-data=');
+
+    // Обратно на геометрию — и заголовок обратно.
+    toolbarButton('Чертёж').click();
+    dialog.querySelector<HTMLButtonElement>('[data-tab="physics"]')?.click();
+    dialog.querySelector<HTMLButtonElement>('[data-tab="stereometry"]')?.click();
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Чертёж');
+  });
+
+  const BROKEN_HTML = '<div data-geometry-data="{vertices: [1,"></div>';
+
+  const editBroken = (editor: RichEditorUi): HTMLElement => {
+    editor.core.setHTML(BROKEN_HTML);
+    editor.element
+      .querySelector<HTMLElement>('.rte-content .rte-drawing')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    return openDialog();
+  };
+
+  it('нечитаемая сцена без JSON: чистый конструктор и просьба нарисовать заново; вставка заменяет узел', () => {
+    const editor = mountEditor();
+    const dialog = editBroken(editor);
+    const status = dialog.querySelector<HTMLElement>('.rte-drawing-dialog__status');
+
+    expect(activeTab(dialog)).toBe('Планиметрия');
+    // Пустое полотно: ни вершин, ни отрезков — только сетка и оси (и узор штриховки в `<defs>`).
+    const drawn = [
+      ...dialog.querySelectorAll('.rte-sketch__layer circle, .rte-sketch__layer line:not(.rte-drawing__grid):not(.rte-drawing__axis)'),
+    ].filter((shape) => !shape.closest('defs'));
+
+    expect(drawn).toEqual([]);
+    expect(status?.hidden).toBe(false);
+    expect(status?.textContent).toBe('Не получилось прочитать чертёж. Нарисуй его заново');
+    expect(status?.classList.contains('rte-drawing-dialog__status--error')).toBe(true);
+
+    // Новый чертёж: точка на полотне — и «Сохранить» заменяет битый узел.
+    const canvas = dialog.querySelector<HTMLElement>('.rte-sketch');
+
+    dialog.querySelector<HTMLButtonElement>('button[data-tool="point"]')?.click();
+    canvas?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 100, clientY: 100 }));
+    canvas?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 100, clientY: 100 }));
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+
+    const html = editor.core.getHTML();
+
+    expect(html).not.toContain('{vertices: [1,');
+    expect(html).toContain('data-geometry-data=');
+    expect(editor.element.querySelectorAll('.rte-content .rte-drawing')).toHaveLength(1);
+  });
+
+  it('нечитаемая сцена с JSON: как раньше — данные в поле JSON, без просьбы нарисовать заново', () => {
+    const editor = mountEditor({}, { json: true });
+    const dialog = editBroken(editor);
+
+    expect(activeTab(dialog)).toBe('Планиметрия');
+    expect(dialog.querySelector<HTMLTextAreaElement>('textarea:not([readonly])')?.value).toBe('{vertices: [1,');
+    expect(dialog.querySelector('.rte-drawing-dialog__status')?.textContent).not.toContain('Нарисуй');
   });
 });
 

@@ -6,7 +6,7 @@
  * достаточно смонтировать готовый интерфейс.
  */
 // Стили и шрифты MathLive приезжают вместе с createRichEditor.
-import { createRichEditor } from '@rich-editor/core';
+import { createRichEditor, type RichEditorUi } from '@rich-editor/core';
 // Вьюер берётся из отдельного входа: страница только для чтения не тянет TipTap.
 import { createRichContent } from '@rich-editor/core/viewer';
 import { createChemistryFeature } from '@rich-editor/chemistry';
@@ -30,14 +30,40 @@ const ocrFeature = createOcrFeature({
   recognize: async () => ({ text: HTML_SAMPLES.find((sample) => sample.id === 'ocr')?.html ?? '' }),
 });
 
-const editor = createRichEditor({
-  element: host,
-  content: '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>',
-  minHeight: '280px',
-  features: [createChemistryFeature(), createDrawingsFeature({ scans: ocrFeature.scans }), ocrFeature],
-  onChange: (html) => void viewer.update({ html }),
-});
+/**
+ * Редактор собирается заново, когда меняется флажок JSON: возможности
+ * читаются один раз при создании. Документ переезжает в новый экземпляр.
+ */
+const mountEditor = (content: string, json: boolean): RichEditorUi =>
+  createRichEditor({
+    element: host,
+    content,
+    minHeight: '280px',
+    features: [createChemistryFeature(), createDrawingsFeature({ scans: ocrFeature.scans, json }), ocrFeature],
+    onChange: (html) => void viewer.update({ html }),
+  });
+
+let editor = mountEditor('<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>', false);
 void viewer.update({ html: editor.core.getHTML() });
 
 // Для проверки из тестов: даём доступ к документу.
 Object.assign(window, { vanillaEditor: editor });
+
+// Вкладка JSON, образцы и TikZ в диалоге чертежа — инструменты разработчика.
+const jsonToggle = document.createElement('input');
+
+jsonToggle.type = 'checkbox';
+
+const jsonLabel = document.createElement('label');
+
+jsonLabel.className = 'demo__check';
+jsonLabel.append(jsonToggle, ' JSON в диалоге чертежа');
+host.before(jsonLabel);
+
+jsonToggle.addEventListener('change', () => {
+  const content = editor.core.getHTML();
+
+  editor.destroy();
+  editor = mountEditor(content, jsonToggle.checked);
+  Object.assign(window, { vanillaEditor: editor });
+});

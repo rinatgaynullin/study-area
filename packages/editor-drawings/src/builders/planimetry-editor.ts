@@ -191,7 +191,10 @@ class PlanimetryEditor implements SceneEditor {
       class: 'rte-builder rte-builder--planimetry',
       children: [
         el('div', { class: 'rte-builder__bar', children: [this.tools.element, actions] }),
-        el('div', { class: 'rte-builder__body', children: [this.canvas.element, this.properties] }),
+        el('div', {
+          class: 'rte-builder__body',
+          children: [el('div', { class: 'rte-builder__stage', children: [this.canvas.element] }), this.properties],
+        }),
         this.hint,
       ],
     });

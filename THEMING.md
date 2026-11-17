@@ -144,6 +144,7 @@ the link dialog, the colour input, scrollbars — follow.
 | --- | --- | --- |
 | `--rte-modal-width` | `480px` | Link, table and recorder dialogs |
 | `--rte-modal-width-wide` | `860px` | The formula dialog |
+| `--rte-modal-width-fill` | `1280px` | Full-screen dialogs (the drawing editor); full width and height on screens up to 640 px |
 | `--rte-modal-padding-x` | `32px` | Horizontal padding of dialog header, body and footer; `20px` on screens up to 640 px |
 | `--rte-modal-padding-y` | `16px` | Vertical padding of dialog header, body and footer |
 | `--rte-popover-padding` | `12px` | Link popover padding |

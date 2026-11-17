@@ -17,6 +17,7 @@ import { stereometryEditorFactory } from './builders/stereometry-editor';
 import type { RawScene, SceneEditor, SceneEditorFactory } from './builders/types';
 import { readScene, renderDrawingPreview } from './paint-drawing';
 import { parseSceneJson, stringifyScene } from './scene/json';
+import { hasDrawableContent } from './scene/normalize';
 import type { DrawingKind, GeometryScene, PhysicsScene } from './scene/types';
 import { DRAWING_TEMPLATES } from './templates';
 import { geometryToTikz, physicsToTikz } from './tikz';
@@ -29,6 +30,11 @@ export interface DrawingDialogOptions {
   editors?: SceneEditorFactory[];
   /** Сканы работы ученика рядом с полотном — чтобы перерисовывать «с фото». */
   scans?: () => string[];
+  /**
+   * Вкладка JSON, образцы сцен, предпросмотр и поле TikZ. По умолчанию их нет:
+   * школьнику достаточно конструкторов, а это инструменты для отладки.
+   */
+  json?: boolean;
 }
 
 /** Встроенные конструкторы: вкладки диалога по видам сцен. */
@@ -39,21 +45,21 @@ export const DEFAULT_SCENE_EDITORS: SceneEditorFactory[] = [
   physicsEditorFactory,
 ];
 
-/** Счётчик для уникальных id: подсказки, группы радио и вкладки привязаны к полям. */
+/** Счётчик для уникальных id: подсказки и вкладки привязаны к полям. */
 let drawingDialogCount = 0;
-
-const KINDS: DrawingKind[] = ['geometry', 'physics'];
 
 /** Вкладка JSON всегда последняя: это запасной путь, когда конструктора под сцену нет. */
 const JSON_TAB = 'json';
 
 /**
- * Диалог чертежа: вкладки конструкторов и JSON, шаблоны, живое превью и TikZ.
+ * Диалог чертежа: вкладки конструкторов, а с опцией `json` — ещё вкладка
+ * JSON, шаблоны, живое превью и TikZ в сворачиваемом блоке.
  *
- * Конструктор одной вкладки создаётся при первом открытии вкладки и живёт
- * до уничтожения диалога; сцена переходит между вкладками через JSON. Вид,
- * открытая сцена, активная вкладка, статус и кнопки — общее состояние
- * обработчиков, поэтому класс.
+ * Вид нового чертежа (геометрия или физика) задаёт выбранная вкладка; у
+ * существующего чертежа — только вкладки его вида. Конструктор одной вкладки
+ * создаётся при первом открытии вкладки и живёт до уничтожения диалога;
+ * сцена переходит между вкладками через JSON. Вид, открытая сцена, активная
+ * вкладка, статус и кнопки — общее состояние обработчиков, поэтому класс.
  */
 class DrawingDialogController implements DialogComponent<DrawingPayload | null> {
   readonly element: HTMLElement;
@@ -80,16 +86,21 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
   private readonly modal: Modal;
 
+  private readonly root: HTMLElement;
+
+  /** Строка над рабочей областью; сейчас в ней только вкладки. */
+  private readonly head: HTMLElement;
+
   private readonly tabList: HTMLElement;
 
   private readonly editorHost: HTMLElement;
 
   private readonly jsonPanel: HTMLElement;
 
-  private readonly kindInputs: HTMLInputElement[];
+  /** Сворачиваемый блок «Шаблоны, предпросмотр и код TikZ»; без опции `json` его нет. */
+  private readonly more: HTMLDetailsElement | null;
 
-  private readonly kindRow: HTMLElement;
-
+  /** Поле JSON есть всегда: через него сцена переходит между вкладками. */
   private readonly codeInput: HTMLTextAreaElement;
 
   private readonly tikzOutput: HTMLTextAreaElement;
@@ -121,18 +132,6 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     this.idPrefix = `rte-drawing-${drawingDialogCount}`;
 
     const hintId = `${this.idPrefix}-hint`;
-
-    this.kindInputs = KINDS.map((kind) =>
-      el('input', { attrs: { type: 'radio', name: `${this.idPrefix}-kind`, value: kind } }),
-    );
-
-    this.kindRow = el('div', {
-      class: 'rte-drawing-dialog__kinds',
-      attrs: { role: 'radiogroup' },
-      children: this.kindInputs.map((input, index) =>
-        el('label', { children: [input, el('span', { text: t(`drawings_insert_${KINDS[index]}`) })] }),
-      ),
-    });
 
     this.tabList = el('div', { class: 'rte-drawing-dialog__tabs', attrs: { role: 'tablist' } });
     this.editorHost = el('div', { class: 'rte-drawing-dialog__editor' });
@@ -180,35 +179,51 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
       ],
     });
 
-    this.modal = createModal({ title: t('drawings_title_insert_geometry'), closeLabel: t('common_close'), wide: true });
+    this.modal = createModal({ title: t('drawings_title_insert_geometry'), closeLabel: t('common_close'), fill: true });
 
-    this.modal.body.appendChild(
-      el('div', {
-        class: 'rte-drawing-dialog',
-        children: [
-          this.kindRow,
-          this.tabList,
-          el('div', {
-            class: 'rte-drawing-dialog__workspace',
-            children: [el('div', { children: [this.editorHost, this.jsonPanel] }), this.scansPanel],
-          }),
-          el('section', {
-            children: [
-              el('h3', { class: 'rte-drawing-dialog__section-title', text: t('drawings_templates') }),
-              this.templatesRow,
-            ],
-          }),
-          el('section', {
-            children: [
-              el('h3', { class: 'rte-drawing-dialog__section-title', text: t('drawings_preview') }),
-              this.preview,
-              this.status,
-            ],
-          }),
-          tikzField,
-        ],
-      }),
-    );
+    // Служебное — образцы, предпросмотр, TikZ — под одной свёрнутой строкой,
+    // чтобы полотно занимало окно; статус остаётся снаружи, ошибку видно всегда.
+    this.more = options.json
+      ? el('details', {
+          class: 'rte-drawing-dialog__more',
+          children: [
+            el('summary', { class: 'rte-drawing-dialog__more-title', text: t('drawings_more') }),
+            el('section', {
+              children: [
+                el('h3', { class: 'rte-drawing-dialog__section-title', text: t('drawings_templates') }),
+                this.templatesRow,
+              ],
+            }),
+            el('section', {
+              children: [el('h3', { class: 'rte-drawing-dialog__section-title', text: t('drawings_preview') }), this.preview],
+            }),
+            tikzField,
+          ],
+        })
+      : null;
+
+    this.head = el('div', { class: 'rte-drawing-dialog__head', children: [this.tabList] });
+
+    this.root = el('div', {
+      class: 'rte-drawing-dialog',
+      children: [
+        this.head,
+        el('div', {
+          class: 'rte-drawing-dialog__workspace',
+          children: [
+            el('div', {
+              class: 'rte-drawing-dialog__main',
+              children: options.json ? [this.editorHost, this.jsonPanel] : [this.editorHost],
+            }),
+            this.scansPanel,
+          ],
+        }),
+        this.status,
+        ...(this.more ? [this.more] : []),
+      ],
+    });
+
+    this.modal.body.appendChild(this.root);
 
     this.removeButton = el('button', {
       class: 'rte-button rte-button--danger',
@@ -228,7 +243,6 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
     this.element = this.modal.element;
 
-    this.disposer.add(on(this.kindRow, 'change', this.onKindChange));
     this.disposer.add(on(this.tabList, 'click', this.onTabClick));
     this.disposer.add(on(this.tabList, 'keydown', this.onTabKeydown));
     this.disposer.add(on(this.codeInput, 'input', this.onCodeInput));
@@ -244,17 +258,10 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
   /** Открывает диалог: с чертежом из документа — на правку, с `null` — на вставку. */
   open(next: DrawingPayload | null): void {
-    const editing = next !== null && next.pos !== null;
-
     this.payload = next;
     this.kind = next?.kind ?? 'geometry';
-    this.saveButton.textContent = this.t(editing ? 'drawings_apply_save' : 'drawings_apply_insert');
-    this.removeButton.hidden = !editing;
-    // Вид существующего чертежа не меняют: это другой узел.
-    this.kindRow.hidden = editing;
-    this.kindInputs.forEach((input) => {
-      input.checked = input.value === this.kind;
-    });
+    this.saveButton.textContent = this.t(this.isEditing ? 'drawings_apply_save' : 'drawings_apply_insert');
+    this.removeButton.hidden = !this.isEditing;
     this.codeInput.value = next?.data ?? '';
     this.renderScans();
     this.applyKind();
@@ -276,16 +283,26 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
   // ------------------------------------------------------------- вкладки
 
-  /** Вкладки под текущий вид: конструкторы этого вида и JSON. */
-  private tabsFor(kind: DrawingKind): Array<{ id: string; label: string }> {
+  private get isEditing(): boolean {
+    return this.payload !== null && this.payload.pos !== null;
+  }
+
+  /**
+   * Вкладки диалога: у нового чертежа — все конструкторы, вид задаёт вкладка;
+   * у существующего — только его вида, потому что другой вид — другой узел.
+   * JSON — последней и только с опцией `json`.
+   */
+  private tabs(): Array<{ id: string; label: string }> {
+    const factories = this.isEditing ? this.factories.filter((factory) => factory.kind === this.kind) : this.factories;
+
     return [
-      ...this.factories.filter((factory) => factory.kind === kind).map((factory) => ({ id: factory.id, label: this.t(factory.labelKey) })),
-      { id: JSON_TAB, label: this.t('drawings_tab_json') },
+      ...factories.map((factory) => ({ id: factory.id, label: this.t(factory.labelKey) })),
+      ...(this.options.json ? [{ id: JSON_TAB, label: this.t('drawings_tab_json') }] : []),
     ];
   }
 
   private renderTabs(): void {
-    const tabs = this.tabsFor(this.kind);
+    const tabs = this.tabs();
 
     this.tabList.replaceChildren(
       ...tabs.map((tab) =>
@@ -303,23 +320,47 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
         }),
       ),
     );
-    // Одна вкладка — одна и есть JSON: список не нужен.
+    // Одна вкладка — выбирать не из чего: список не нужен, а пустая строка
+    // не должна отнимать высоту у полотна.
     this.tabList.hidden = tabs.length <= 1;
+    this.head.hidden = this.tabList.hidden;
   }
 
-  /** Вид выбран: заголовок, шаблоны, первая подходящая вкладка и превью под него. */
-  private applyKind(): void {
-    const editing = this.payload !== null && this.payload.pos !== null;
-
-    this.modal.setTitle(this.t(`drawings_title_${editing ? 'edit' : 'insert'}_${this.kind}`));
+  /** Вид чертежа: заголовок и шаблоны следуют за ним. */
+  private setKind(kind: DrawingKind): void {
+    this.kind = kind;
+    this.modal.setTitle(this.t(`drawings_title_${this.isEditing ? 'edit' : 'insert'}_${kind}`));
     this.renderTemplates();
+  }
 
-    const raw = parseSceneJson(this.codeInput.value) ?? {};
+  /** Сцена открыта: первая подходящая вкладка её вида и превью под неё. */
+  private applyKind(): void {
+    this.setKind(this.kind);
+
+    const data = this.codeInput.value.trim();
+    const raw = parseSceneJson(data);
     const suitable = this.factories.find(
-      (factory) => factory.kind === this.kind && (this.codeInput.value.trim() === '' || factory.accepts(raw as RawScene)),
+      (factory) => factory.kind === this.kind && (data === '' || factory.accepts((raw ?? {}) as RawScene)),
     );
+    const broken = data !== '' && (raw === null || suitable === undefined);
 
-    this.selectTab(suitable ? suitable.id : JSON_TAB, false);
+    if (this.options.json) {
+      this.selectTab(suitable ? suitable.id : JSON_TAB, false);
+
+      return;
+    }
+
+    // Без вкладки JSON нечитаемую сцену не поправить: открываем конструктор
+    // вида с чистым полотном и честно говорим, что чертёж придётся нарисовать
+    // заново. «Вставить» заменит узел новым чертежом.
+    const fallback = this.factories.find((factory) => factory.kind === this.kind) ?? this.factories[0];
+    const target = broken ? fallback : (suitable ?? fallback);
+
+    if (broken) this.codeInput.value = '';
+
+    if (target) this.selectTab(target.id, false);
+
+    if (broken) this.setStatus(this.t('drawings_unreadable'), true);
   }
 
   /** Переключает вкладку; сцена переезжает через JSON, если её редактировали. */
@@ -327,12 +368,21 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     if (fromEditor && this.activeTab !== JSON_TAB) this.syncCodeFromEditor();
 
     this.activeTab = id;
+
+    const factory = this.factories.find((candidate) => candidate.id === id);
+
+    // Вкладка нового чертежа задаёт его вид; JSON вид не меняет.
+    if (factory && factory.kind !== this.kind) this.setKind(factory.kind);
+
     this.renderTabs();
 
     const editor = id === JSON_TAB ? null : this.ensureEditor(id);
 
     this.jsonPanel.hidden = editor !== null;
     this.editorHost.replaceChildren(...(editor ? [editor.element] : []));
+    this.root.classList.toggle('rte-drawing-dialog--json', editor === null);
+    // Служебный блок раскрыт там, где он нужен, — на вкладке JSON.
+    if (this.more) this.more.open = editor === null;
 
     if (editor) {
       editor.load((parseSceneJson(this.codeInput.value) as RawScene | null) ?? {});
@@ -403,6 +453,8 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   // ------------------------------------------------------------- шаблоны
 
   private renderTemplates(): void {
+    if (!this.options.json) return;
+
     this.templatesRow.replaceChildren(
       ...DRAWING_TEMPLATES.filter((template) => template.kind === this.kind).map((template) =>
         el('button', {
@@ -444,20 +496,28 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   }
 
   private paintPreview(state: 'empty' | 'invalid' | 'ok'): void {
-    const svg = this.scene ? renderDrawingPreview(this.kind, this.scene) : null;
+    const drawable = this.scene !== null && hasDrawableContent(this.scene);
 
-    this.preview.innerHTML = svg ? sanitizeSvg(svg) : '';
-    this.preview.hidden = svg === null;
-    this.tikzOutput.value = this.scene ? this.buildTikz(this.scene) : '';
+    // Предпросмотр и TikZ на экране — только с опцией `json`; TikZ для узла
+    // всё равно считается при вставке.
+    if (this.options.json) {
+      const svg = this.scene ? renderDrawingPreview(this.kind, this.scene) : null;
 
+      this.preview.innerHTML = svg ? sanitizeSvg(svg) : '';
+      this.preview.hidden = svg === null;
+      this.tikzOutput.value = this.scene ? this.buildTikz(this.scene) : '';
+    }
+
+    // Пустое полотно конструктора говорит само за себя: строка статуса
+    // отняла бы высоту у полотна. О пустом JSON сообщаем — его не видно.
     if (state === 'empty') this.setStatus(this.t('drawings_empty'), false);
     else if (state === 'invalid') this.setStatus(this.t('drawings_invalid'), true);
-    else if (svg === null) this.setStatus(this.t('drawings_placeholder'), false);
+    else if (!drawable && this.activeTab === JSON_TAB) this.setStatus(this.t('drawings_placeholder'), false);
     else this.setStatus('', false);
 
     // Нечитаемый JSON всё же можно сохранить: узел покажет плейсхолдер, данные
     // не потеряются. А вот пустую сцену конструктора вставлять незачем.
-    this.saveButton.disabled = state === 'empty' || (this.activeTab !== JSON_TAB && svg === null);
+    this.saveButton.disabled = state === 'empty' || (this.activeTab !== JSON_TAB && !drawable);
   }
 
   private buildTikz(scene: GeometryScene | PhysicsScene): string {
@@ -471,17 +531,6 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   }
 
   // ------------------------------------------------------------- события
-
-  private readonly onKindChange = (): void => {
-    const checked = this.kindInputs.find((input) => input.checked);
-
-    if (!checked) return;
-
-    if (this.activeTab !== JSON_TAB) this.syncCodeFromEditor();
-
-    this.kind = checked.value as DrawingKind;
-    this.applyKind();
-  };
 
   private readonly onCodeInput = (): void => {
     this.renderPreview();

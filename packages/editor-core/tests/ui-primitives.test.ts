@@ -136,6 +136,17 @@ describe('модалка и видимая область окна', () => {
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined });
   });
 
+  it('с опцией fill панель получает класс окна на весь экран, без неё — нет', () => {
+    const filled = createModal({ title: 'Чертёж', closeLabel: 'Закрыть', fill: true });
+    const plain = createModal({ title: 'Ссылка', closeLabel: 'Закрыть' });
+
+    expect(filled.element.querySelector('.rte-modal__panel')?.classList.contains('rte-modal__panel--fill')).toBe(true);
+    expect(plain.element.querySelector('.rte-modal__panel')?.classList.contains('rte-modal__panel--fill')).toBe(false);
+
+    filled.destroy();
+    plain.destroy();
+  });
+
   it('запирает прокрутку документа, пока открыт хоть один диалог', () => {
     const html = document.documentElement;
 

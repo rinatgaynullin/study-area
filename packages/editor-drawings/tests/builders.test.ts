@@ -1,6 +1,7 @@
 import { createRichEditor, type RichEditorUi, type Translate } from '@rich-editor/core';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_SCENE_EDITORS,
   DRAWINGS_MESSAGES,
   HistoryStack,
   createDrawingsFeature,
@@ -580,14 +581,14 @@ describe('диалог с конструктором', () => {
   };
 
   it('новый чертёж открывается на вкладке планиметрии; шаблон попадает в конструктор; вставка берёт его сцену', () => {
-    const editor = mountEditor();
+    const editor = mountEditor({ json: true });
 
     toolbarButton('Чертёж').click();
 
     const dialog = openDialog();
     const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[role="tab"]')].map((tab) => tab.textContent);
 
-    expect(tabs).toEqual(['Планиметрия', 'Стереометрия', 'Графики', 'JSON']);
+    expect(tabs).toEqual(['Планиметрия', 'Стереометрия', 'Графики', 'Физика', 'JSON']);
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Планиметрия');
     expect(dialog.querySelector('.rte-builder--planimetry')).not.toBeNull();
 
@@ -605,7 +606,7 @@ describe('диалог с конструктором', () => {
   });
 
   it('вкладка JSON показывает сцену конструктора, а правка JSON возвращается в конструктор', () => {
-    mountEditor();
+    mountEditor({ json: true });
     toolbarButton('Чертёж').click();
 
     const dialog = openDialog();
@@ -632,7 +633,7 @@ describe('диалог с конструктором', () => {
 
     let dialog = openDialog();
 
-    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Механика');
+    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Физика');
     expect(dialog.querySelector('.rte-builder__palette')).not.toBeNull();
     dialog.querySelector<HTMLButtonElement>('.rte-button')?.click();
 
@@ -652,6 +653,18 @@ describe('диалог с конструктором', () => {
 
     expect(images).toHaveLength(2);
     expect(images[0].getAttribute('src')).toBe('blob:http://localhost/scan-1');
+  });
+});
+
+describe('сцена конструкторов', () => {
+  it('у каждого встроенного конструктора полотно лежит в сцене', () => {
+    DEFAULT_SCENE_EDITORS.forEach((factory) => {
+      const editor = factory.create({ t });
+
+      document.body.appendChild(editor.element);
+      expect(editor.element.querySelector('.rte-builder__stage > .rte-sketch'), factory.id).not.toBeNull();
+      editor.destroy();
+    });
   });
 });
 

@@ -1,21 +1,17 @@
 /* Диалог чертежа. Кнопки, поля и модалка — классы ядра. */
 
 .rte-drawing-dialog {
-  display: grid;
-  gap: 14px;
-}
-
-.rte-drawing-dialog__kinds {
   display: flex;
-  gap: 16px;
-  font-size: var(--rte-ui-font-size-sm, 14px);
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.rte-drawing-dialog__kinds label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
+/* Шапка — одна строка вкладок; не помещается — прокручивается, а не переносится. */
+.rte-drawing-dialog__head {
+  flex: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .rte-drawing-dialog__code {
@@ -107,23 +103,27 @@
   color: var(--rte-color-danger, #f23e3e);
 }
 
-/* Вкладки конструкторов и JSON. */
+/* Вкладки конструкторов и JSON: крупные, в одну строку. */
 .rte-drawing-dialog__tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  min-width: max-content;
   border-bottom: 1px solid var(--rte-color-border, #dedce3);
 }
 
 .rte-drawing-dialog__tab {
-  padding: 8px 12px;
+  flex: none;
+  height: 40px;
+  padding: 0 16px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 3px solid transparent;
   margin-bottom: -1px;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: var(--rte-ui-font-size-sm, 14px);
+  font-size: var(--rte-ui-font-size, 15px);
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -141,14 +141,29 @@
   font-weight: var(--rte-title-font-weight, 600);
 }
 
+/* Колонка сканов — неявная: без сканов нет ни её, ни зазора перед ней. */
 .rte-drawing-dialog__workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
   gap: 12px;
+}
+
+.rte-drawing-dialog__main {
+  display: grid;
+  min-width: 0;
+}
+
+.rte-drawing-dialog__editor {
+  display: grid;
+  min-width: 0;
 }
 
 .rte-drawing-dialog__scans {
   display: grid;
+  align-content: start;
   gap: 8px;
   max-width: 220px;
   max-height: 480px;
@@ -164,4 +179,57 @@
   max-width: 100%;
   border: 1px solid var(--rte-color-border, #dedce3);
   border-radius: var(--rte-radius, 8px);
+}
+
+/* Служебное под одной строкой: образцы, предпросмотр и TikZ (опция `json`). */
+.rte-drawing-dialog__more {
+  flex: none;
+}
+
+.rte-drawing-dialog__more > summary {
+  padding: 8px 0;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  font-weight: var(--rte-title-font-weight, 600);
+  cursor: pointer;
+}
+
+.rte-drawing-dialog__more > summary:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+.rte-drawing-dialog__more[open] {
+  display: grid;
+  gap: 14px;
+}
+
+.rte-drawing-dialog > .rte-drawing-dialog__status {
+  flex: none;
+  margin: 0;
+}
+
+/*
+ * Широкое окно: конструктор растягивается на всю оставшуюся высоту, полотно
+ * вписывается в неё (см. builders.css). Нужны контейнерные единицы — без них
+ * остаётся обычная раскладка, где тело диалога прокручивается.
+ */
+@media (min-width: 861px) {
+  @supports (width: 1cqw) {
+    .rte-drawing-dialog:not(.rte-drawing-dialog--json) > .rte-drawing-dialog__workspace {
+      flex: 1 1 0;
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 360px;
+    }
+
+    .rte-drawing-dialog:not(.rte-drawing-dialog--json) .rte-drawing-dialog__main,
+    .rte-drawing-dialog:not(.rte-drawing-dialog--json) .rte-drawing-dialog__editor {
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .rte-drawing-dialog:not(.rte-drawing-dialog--json) .rte-drawing-dialog__scans {
+      max-height: none;
+      min-height: 0;
+    }
+  }
 }

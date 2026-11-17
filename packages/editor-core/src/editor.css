@@ -337,6 +337,26 @@
   width: min(var(--rte-modal-width-wide), 100%);
 }
 
+/* Окно на весь экран: высота — вся доля оверлея за вычетом его отступов. */
+.rte-modal__panel--fill {
+  width: min(var(--rte-modal-width-fill), 100%);
+  height: 100%;
+  max-height: 100%;
+}
+
+/* Шапка, тело и подвал — с половинными отступами: высота окна уходит содержимому. */
+.rte-modal__panel--fill .rte-modal__header,
+.rte-modal__panel--fill .rte-modal__footer {
+  padding-block: calc(var(--rte-modal-padding-y) / 2);
+}
+
+/* Тело — колонка: содержимое может растянуться на всю высоту окна. */
+.rte-modal__panel--fill .rte-modal__body {
+  display: flex;
+  flex-direction: column;
+  padding-block: calc(var(--rte-modal-padding-y) / 2);
+}
+
 .rte-modal__header {
   display: flex;
   align-items: center;
@@ -753,6 +773,13 @@
     width: 100%;
     max-height: 92%;
     border-radius: var(--rte-radius-lg) var(--rte-radius-lg) 0 0;
+  }
+
+  /* На телефоне окно на весь экран — без полосы над ним и без скруглений. */
+  .rte-modal__panel--fill {
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
   }
 
   .rte-formula-editor__gallery {

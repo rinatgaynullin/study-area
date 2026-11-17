@@ -659,7 +659,10 @@ class PhysicsEditor implements SceneEditor {
         el('div', { class: 'rte-builder__bar', children: [this.tools.element, actions] }),
         sections,
         this.palette,
-        el('div', { class: 'rte-builder__body', children: [this.canvas.element, this.properties] }),
+        el('div', {
+          class: 'rte-builder__body',
+          children: [el('div', { class: 'rte-builder__stage', children: [this.canvas.element] }), this.properties],
+        }),
         this.hint,
       ],
     });
@@ -1674,7 +1677,7 @@ class PhysicsEditor implements SceneEditor {
 export const physicsEditorFactory: SceneEditorFactory = {
   id: 'physics',
   kind: 'physics',
-  labelKey: 'drawings_tab_mechanics',
+  labelKey: 'drawings_tab_physics',
   // Любая физическая сцена редактируется здесь: четыре раздела — это палитры, а не форматы.
   accepts: () => true,
   create: (context) => new PhysicsEditor(context),

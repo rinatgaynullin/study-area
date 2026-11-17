@@ -58,12 +58,16 @@ test.describe('структурные формулы', () => {
 test.describe('чертежи', () => {
   test('конструктор планиметрии: шаблон на полотне, точка кликом, карточка в документе', async ({ page }) => {
     await openDemo(page);
+    // Образцы сцен и вкладка JSON — инструменты разработчика, демо включает их флажком.
+    await page.getByRole('checkbox', { name: 'JSON в диалоге чертежа' }).check();
 
     await page.locator(`${EDITOR} p`).first().click();
     await page.locator('.rte-toolbar button[aria-label="Чертёж"]').click();
     await expect(page.locator(MODAL_TITLE)).toHaveText('Чертёж');
     await expect(page.locator(`${OPEN_MODAL} [role="tab"][aria-selected="true"]`)).toHaveText('Планиметрия');
 
+    // На вкладке конструктора образцы свёрнуты вместе с предпросмотром и TikZ.
+    await page.locator(`${OPEN_MODAL} .rte-drawing-dialog__more > summary`).click();
     await page.locator(`${OPEN_MODAL} button[data-template="triangle"]`).click();
     const canvas = page.locator(`${OPEN_MODAL} .rte-sketch`);
     await expect(canvas.locator('svg').first()).toBeVisible();
