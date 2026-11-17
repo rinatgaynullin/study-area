@@ -109,6 +109,23 @@ const iconButton = (name: string, label: string, action: string): HTMLButtonElem
 const isTextField = (target: EventTarget | null): boolean =>
   target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 
+/** Подпись атома для читалки: безымянный узел — углерод. */
+const spokenLabel = (atom: ChemAtom): string => formatChemLabel(atom.label) || 'C';
+
+/** Укорачивает отрезок с обоих концов: область нажатия связи не заходит на атомы. */
+const trimSegment = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  by: number,
+): { x1: number; y1: number; x2: number; y2: number } => {
+  const length = Math.hypot(x2 - x1, y2 - y1);
+  const k = length > by * 2 ? by / length : 0;
+
+  return { x1: x1 + (x2 - x1) * k, y1: y1 + (y2 - y1) * k, x2: x2 - (x2 - x1) * k, y2: y2 - (y2 - y1) * k };
+};
+
 const directionKey = (angle: number): string =>
   DIRECTION_KEYS[(Math.round(angle / 45) * 45) % 360] ?? 'chemistry_builder_dir_right';
 
@@ -479,15 +496,35 @@ export class StructureEditor {
     this.renderPanel();
   }
 
+  /** Селектор элемента полотна для выделенного: атом или связь по номеру в раскладке. */
+  private selectionSelector(selection: Selection): string | null {
+    const { layout } = this;
+
+    if (!layout || !selection) return null;
+
+    if (selection.kind === 'atom') {
+      const index = layout.atoms.findIndex((placed) => placed.atom === selection.atom);
+
+      return index === -1 ? null : `[data-atom="${index}"]`;
+    }
+
+    const index = layout.bonds.findIndex(({ bond }) =>
+      'ring' in bond
+        ? selection.kind === 'ring-bond' && selection.index === bond.index
+        : selection.kind === 'bond' && selection.bond === bond,
+    );
+
+    return index === -1 ? null : `[data-bond="${index}"]`;
+  }
+
   /**
    * Фокус после действия на полотне: элементы полотна пересоздаются, поэтому
-   * фокус ставится заново — на выделенный атом, иначе на само полотно. Так
-   * Delete, Escape, отмена и обход Tab продолжают работать.
+   * фокус ставится заново — на выделенный атом или связь (или на элемент по
+   * переданному селектору), иначе на само полотно. Так Delete, Escape, отмена
+   * и обход Tab продолжают работать.
    */
-  private restoreFocus(): void {
-    const atom = this.selectedAtom;
-    const index = atom ? (this.layout?.atoms.findIndex((placed) => placed.atom === atom) ?? -1) : -1;
-    const target = index === -1 ? null : this.stage.querySelector<SVGElement>(`[data-atom="${index}"]`);
+  private restoreFocus(selector: string | null = this.selectionSelector(this.selection)): void {
+    const target = selector ? this.stage.querySelector<SVGElement>(selector) : null;
 
     if (target) target.focus({ preventScroll: true });
     else this.focus();
@@ -543,36 +580,16 @@ export class StructureEditor {
   }
 
   /**
-   * Слой поверх структуры. Связи — только для мыши и пальца; атомы и «плюсы» —
-   * кнопки в обходе Tab: атомы в порядке обхода структуры, затем «плюсы».
+   * Слой поверх структуры: атомы, связи и «плюсы» — кнопки в обходе Tab в
+   * этом порядке. Область нажатия связи укорочена на радиус атома, поэтому
+   * связи могут идти в DOM после атомов и не перекрывать их.
    */
   private renderOverlay(layout: ChemLayout): SVGElement {
     const { t, selection } = this;
     const overlay = svgElement('g', { class: 'rte-chem-builder__overlay' });
 
-    layout.bonds.forEach((placed, index) => {
-      const ref = placed.bond;
-      const isSelected =
-        'ring' in ref
-          ? selection?.kind === 'ring-bond' && selection.index === ref.index
-          : selection?.kind === 'bond' && selection.bond === ref;
-
-      overlay.appendChild(
-        svgElement('line', {
-          class: isSelected ? 'rte-chem-builder__bond rte-chem-builder__bond--selected' : 'rte-chem-builder__bond',
-          x1: placed.x1,
-          y1: placed.y1,
-          x2: placed.x2,
-          y2: placed.y2,
-          'stroke-width': BOND_HIT_WIDTH,
-          'data-bond': String(index),
-        }),
-      );
-    });
-
     layout.atoms.forEach((placed, index) => {
       const isSelected = selection?.kind === 'atom' && selection.atom === placed.atom;
-      const label = formatChemLabel(placed.atom.label) || t('chemistry_builder_atom_unnamed');
 
       overlay.appendChild(
         svgElement('circle', {
@@ -583,8 +600,40 @@ export class StructureEditor {
           tabindex: '0',
           role: 'button',
           'aria-pressed': String(isSelected),
-          'aria-label': t('chemistry_builder_atom', { label }),
+          'aria-label': t('chemistry_builder_atom', { label: spokenLabel(placed.atom) }),
           'data-atom': String(index),
+        }),
+      );
+    });
+
+    const atomAt = (x: number, y: number): ChemAtom | null =>
+      layout.atoms.find((placed) => Math.hypot(placed.x - x, placed.y - y) < 0.5)?.atom ?? null;
+
+    layout.bonds.forEach((placed, index) => {
+      const ref = placed.bond;
+      const isSelected =
+        'ring' in ref
+          ? selection?.kind === 'ring-bond' && selection.index === ref.index
+          : selection?.kind === 'bond' && selection.bond === ref;
+      const type = 'ring' in ref ? ref.ring.bonds[ref.index] ?? '-' : ref.type;
+      const typeKey = BOND_TYPES.find((item) => item.type === type)?.labelKey ?? 'chemistry_builder_single';
+      const from = atomAt(placed.x1, placed.y1);
+      const to = atomAt(placed.x2, placed.y2);
+
+      overlay.appendChild(
+        svgElement('line', {
+          class: isSelected ? 'rte-chem-builder__bond rte-chem-builder__bond--selected' : 'rte-chem-builder__bond',
+          ...trimSegment(placed.x1, placed.y1, placed.x2, placed.y2, ATOM_HIT_RADIUS),
+          'stroke-width': BOND_HIT_WIDTH,
+          tabindex: '0',
+          role: 'button',
+          'aria-pressed': String(isSelected),
+          'aria-label': t('chemistry_builder_bond_label', {
+            from: from ? spokenLabel(from) : 'C',
+            to: to ? spokenLabel(to) : 'C',
+            type: t(typeKey).toLocaleLowerCase(),
+          }),
+          'data-bond': String(index),
         }),
       );
     });
@@ -918,7 +967,7 @@ export class StructureEditor {
   }
 
   /**
-   * Клавиши конструктора: Enter и пробел на атоме или «плюсе», отмена и
+   * Клавиши конструктора: Enter и пробел на атоме, связи или «плюсе», отмена и
    * повтор, Delete и Backspace для выделенного, Escape снимает выделение и
    * тогда диалог не закрывает. В полях ввода клавиши остаются полю.
    */
@@ -931,7 +980,7 @@ export class StructureEditor {
     const key = event.key.toLowerCase();
     const onStage = target instanceof Element && this.stage.contains(target);
 
-    if ((event.key === 'Enter' || event.key === ' ') && onStage && target.closest('[data-atom], [data-plus]')) {
+    if ((event.key === 'Enter' || event.key === ' ') && onStage && target.closest('[data-atom], [data-bond], [data-plus]')) {
       event.preventDefault();
       this.activate(target);
 
@@ -960,18 +1009,12 @@ export class StructureEditor {
       event.preventDefault();
       event.stopPropagation();
 
-      const atom = this.selectedAtom;
+      // Фокус остаётся на том же атоме или связи, уже без выделения.
+      const selector = this.selectionSelector(this.selection);
 
       this.select(null);
 
-      // Фокус остаётся на том же атоме, уже без выделения.
-      const index = atom ? (this.layout?.atoms.findIndex((placed) => placed.atom === atom) ?? -1) : -1;
-      const element = index === -1 ? null : this.stage.querySelector<SVGElement>(`[data-atom="${index}"]`);
-
-      if (onStage) {
-        if (element) element.focus({ preventScroll: true });
-        else this.focus();
-      }
+      if (onStage) this.restoreFocus(selector);
     }
   };
 

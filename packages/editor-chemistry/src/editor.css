@@ -132,8 +132,22 @@
 .rte-chem-builder__atom {
   fill: transparent;
   stroke: transparent;
-  stroke-linecap: round;
   cursor: pointer;
+}
+
+/* Концы области нажатия связи ровные: скругление заходило бы на атомы. */
+.rte-chem-builder__bond {
+  stroke-linecap: butt;
+}
+
+.rte-chem-builder__bond:focus {
+  outline: none;
+}
+
+.rte-chem-builder__bond:focus-visible {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-opacity: 0.6;
+  stroke-dasharray: 3 2;
 }
 
 .rte-chem-builder__atom:focus {
