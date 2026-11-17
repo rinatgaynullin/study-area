@@ -526,7 +526,14 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     const factory = this.factoryOf(id);
     const editor = this.editors.get(id);
 
-    if (!this.options.json || !factory || !editor || !this.drafts.isChanged(id)) return;
+    if (!this.options.json || !factory || !editor) return;
+
+    // У пустого текста своего вида нет: он принимает вид последнего
+    // конструктора. Иначе JSON, вставленный сразу после вкладки «Физика»,
+    // ушёл бы в документ геометрическим чертежом.
+    if (this.codeInput.value.trim() === '') this.drafts.codeKind = factory.kind;
+
+    if (!this.drafts.isChanged(id)) return;
 
     this.codeInput.value = JSON.stringify(editor.getScene(), null, 2);
     this.drafts.codeKind = factory.kind;

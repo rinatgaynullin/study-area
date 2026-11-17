@@ -386,6 +386,51 @@ describe('раскладка диалога', () => {
     dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
     expect(code()).toBe('{vertices: [1,');
   });
+
+  it('пустой текст JSON принимает вид последнего конструктора: после «Физики» вставляется физическая схема', () => {
+    const editor = mountEditor({}, { json: true });
+
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+
+    // Конструктор только открыли, ничего не рисовали — и сразу на вкладку JSON.
+    dialog.querySelector<HTMLButtonElement>('[data-tab="physics"]')?.click();
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
+
+    expect(activeTab(dialog)).toBe('JSON');
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Физическая схема');
+
+    typeJson(dialog, BLOCK);
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+
+    const html = editor.core.getHTML();
+
+    expect(html).toContain('data-physics-data=');
+    expect(html).not.toContain('data-geometry-data=');
+  });
+
+  it('непустой текст JSON хранит свой вид: вкладка «Физика» без рисунка его не меняет', () => {
+    const editor = mountEditor({}, { json: true });
+
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
+    typeJson(dialog, TRIANGLE);
+    dialog.querySelector<HTMLButtonElement>('[data-tab="physics"]')?.click();
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
+
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Чертёж');
+
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+
+    const html = editor.core.getHTML();
+
+    expect(html).toContain('data-geometry-data=');
+    expect(html).not.toContain('data-physics-data=');
+  });
 });
 
 describe('вьюер', () => {
