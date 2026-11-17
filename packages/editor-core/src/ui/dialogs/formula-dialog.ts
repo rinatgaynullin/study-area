@@ -2,7 +2,7 @@
 // подключать не нужно. Хост, раздающий шрифты сам, передаёт fontsDirectory —
 // MathLive объявит свои @font-face поверх этих.
 import 'mathlive/fonts.css';
-import type { MathfieldElement } from 'mathlive';
+import type { MathfieldElement, VirtualKeyboardInterface } from 'mathlive';
 import { MATHLIVE_STRINGS } from '../../i18n/mathlive';
 import { latexToMathML, mathmlToLatex } from '../../formula/mathml';
 import { getTemplateCategories } from '../../formula/templates';
@@ -23,14 +23,43 @@ interface FormulaDialogOptions {
   onRemove(pos: number): void;
 }
 
-/** Состояние загрузки MathLive: он подгружается лениво и может не доехать. */
-type FieldStatus = 'idle' | 'loading' | 'failed';
+/**
+ * Что сообщает строка статуса. Сбои разные, и школьнику в каждом нужно своё
+ * «что делать дальше»: проверить интернет, набрать формулу заново или
+ * дописать начатое.
+ */
+type FieldStatus = 'idle' | 'loading' | 'loadFailed' | 'unreadable' | 'invalid';
+
+/** Текст каждого непустого статуса. Ошибки — все, кроме загрузки. */
+const STATUS_MESSAGES: Record<Exclude<FieldStatus, 'idle'>, string> = {
+  loading: 'formula_loading',
+  loadFailed: 'formula_load_failed',
+  unreadable: 'formula_unreadable',
+  invalid: 'formula_invalid',
+};
 
 /** Заглушка на кнопке шаблона. Означает «превью рисуется прямо сейчас». */
 const PREVIEW_PLACEHOLDER = '…';
 
 /** Счётчик для уникальных id: вкладки ссылаются на свою панель, панель — на вкладку. */
 let formulaDialogCount = 0;
+
+/** Переменная MathLive, задающая слой его экранной клавиатуры. */
+const KEYBOARD_Z_INDEX = '--keyboard-zindex';
+
+/**
+ * Зазор между панелью диалога и клавиатурой. Заодно покрывает верхний отступ
+ * клавиатуры, которого нет в её `boundingRect`.
+ */
+const KEYBOARD_GAP_PX = 8;
+
+/**
+ * Палец вместо мыши: телефон, планшет. Там нечем ввести цифру или букву, кроме
+ * экранной клавиатуры MathLive, — поэтому она открывается по фокусу. jsdom и
+ * старые движки без matchMedia считаются «мышью».
+ */
+const hasCoarsePointer = (): boolean =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
 /**
  * Клавиатура списка вкладок (паттерн ARIA tabs): ← → ходят по вкладкам по
@@ -70,7 +99,7 @@ const onTablistKeydown = (
 };
 
 /**
- * Неудача рендера не должна ронять галерею и превью: вместо SVG приходит
+ * Неудача рендера не должна ронять галерею: вместо SVG приходит
  * пустая строка, и вызывающий показывает запасной текст. Промис никогда не
  * отклоняется — поэтому его результата можно не ждать.
  */
@@ -83,8 +112,106 @@ const renderPreviewSafely = async (source: string, previewType: FormulaType): Pr
 };
 
 /**
- * Визуальный редактор формул: вкладки математика/химия, галерея шаблонов по
- * категориям и живое превью.
+ * Экранная клавиатура MathLive на время диалога.
+ *
+ * Клавиатура живёт в `document.body`, рисуется поверх страницы у нижнего края
+ * и о модалке ничего не знает. Пока диалог открыт, её поднимаем над оверлеем
+ * по `z-index`, а оверлей поджимаем снизу на её высоту — панель с полем и
+ * кнопками оказывается над клавиатурой, а не под ней. Закрытие возвращает
+ * переменную слоя и отступ такими, какими они были.
+ *
+ * Класс: клавиатура, сохранённое значение переменной и обработчик событий
+ * клавиатуры — общее состояние подключения и отключения.
+ */
+class VirtualKeyboardLift {
+  private keyboard: (VirtualKeyboardInterface & EventTarget) | null = null;
+
+  private savedZIndex = '';
+
+  /** Пересчёт после resize ждёт кадр: модалка подгоняет оверлей своим слушателем. */
+  private resizeFrame = 0;
+
+  constructor(private readonly overlay: HTMLElement) {}
+
+  /** Подключается к клавиатуре MathLive. Повторный вызов ничего не делает. */
+  attach(): void {
+    if (this.keyboard || !('mathVirtualKeyboard' in window)) return;
+
+    const keyboard = window.mathVirtualKeyboard;
+    const bodyStyle = document.body.style;
+    const overlayZIndex = Number.parseInt(getComputedStyle(this.overlay).zIndex, 10);
+
+    this.savedZIndex = bodyStyle.getPropertyValue(KEYBOARD_Z_INDEX);
+
+    if (Number.isFinite(overlayZIndex)) {
+      bodyStyle.setProperty(KEYBOARD_Z_INDEX, String(overlayZIndex + 1));
+    }
+
+    keyboard.addEventListener('geometrychange', this.onKeyboardChange);
+    keyboard.addEventListener('virtual-keyboard-toggle', this.onKeyboardChange);
+    // Поворот экрана и новый размер окна меняют и высоту клавиатуры, и рамку
+    // оверлея: подъём считаем заново.
+    window.addEventListener('resize', this.onWindowResize);
+
+    this.keyboard = keyboard;
+    this.fit();
+  }
+
+  /** Прячет клавиатуру и возвращает всё, что выставил `attach`. Идемпотентен. */
+  detach(): void {
+    const { keyboard } = this;
+
+    if (!keyboard) return;
+
+    this.keyboard = null;
+    keyboard.removeEventListener('geometrychange', this.onKeyboardChange);
+    keyboard.removeEventListener('virtual-keyboard-toggle', this.onKeyboardChange);
+    window.removeEventListener('resize', this.onWindowResize);
+    cancelAnimationFrame(this.resizeFrame);
+    keyboard.hide();
+
+    const bodyStyle = document.body.style;
+
+    if (this.savedZIndex) bodyStyle.setProperty(KEYBOARD_Z_INDEX, this.savedZIndex);
+    else bodyStyle.removeProperty(KEYBOARD_Z_INDEX);
+
+    this.overlay.style.paddingBottom = '';
+  }
+
+  /**
+   * Поджимает оверлей снизу на часть, которую закрывает клавиатура.
+   *
+   * Верх клавиатуры считаем от её высоты, а не от `boundingRect.top`: она
+   * выезжает с анимацией, и в момент события прямоугольник ещё в пути.
+   */
+  private fit(): void {
+    const { keyboard } = this;
+
+    if (!keyboard) return;
+
+    this.overlay.style.paddingBottom = '';
+
+    if (!keyboard.visible) return;
+
+    const keyboardTop = window.innerHeight - keyboard.boundingRect.height - KEYBOARD_GAP_PX;
+    const overlap = this.overlay.getBoundingClientRect().bottom - keyboardTop;
+
+    if (overlap > 0) this.overlay.style.paddingBottom = `${Math.ceil(overlap)}px`;
+  }
+
+  private readonly onKeyboardChange = (): void => {
+    this.fit();
+  };
+
+  private readonly onWindowResize = (): void => {
+    cancelAnimationFrame(this.resizeFrame);
+    this.resizeFrame = requestAnimationFrame(this.onKeyboardChange);
+  };
+}
+
+/**
+ * Визуальный редактор формул: вкладки математика/химия, поле MathLive и
+ * галерея шаблонов по категориям.
  *
  * Формула хранится в документе как MathML, а правится как LaTeX: MathLive
  * умеет отдавать MathML, но не умеет его читать, поэтому LaTeX едет внутри
@@ -118,8 +245,6 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
    */
   private galleryToken = 0;
 
-  private previewToken = 0;
-
   private openToken = 0;
 
   private readonly idPrefix: string;
@@ -143,12 +268,12 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
 
   private readonly gallery: HTMLElement;
 
-  private readonly previewContent: HTMLElement;
-
-  /** Всё под вкладками — их панель: поле, шаблоны и превью зависят от типа. */
+  /** Всё под вкладками — их панель: поле и шаблоны зависят от типа. */
   private readonly panel: HTMLElement;
 
   private readonly modal: Modal;
+
+  private readonly keyboardLift: VirtualKeyboardLift;
 
   private readonly removeButton: HTMLButtonElement;
 
@@ -218,32 +343,19 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
       ],
     });
 
-    this.previewContent = el('span');
-
-    const preview = el('section', {
-      class: 'rte-formula-editor__preview',
-      children: [
-        el('h3', { class: 'rte-formula-editor__section-title', text: t('formula_preview') }),
-        // Сообщения «формула пуста» и «не удалось разобрать» читалка слышит;
-        // сама картинка формулы ей ни о чём не говорит.
-        el('div', {
-          class: 'rte-formula-editor__preview-box',
-          attrs: { 'aria-live': 'polite' },
-          children: [this.previewContent],
-        }),
-      ],
-    });
-
     this.modal = createModal({
       title: t('formula_title_math'),
       closeLabel: t('common_close'),
       wide: true,
+      onClose: this.onModalClose,
     });
+
+    this.keyboardLift = new VirtualKeyboardLift(this.modal.element);
 
     this.panel = el('div', {
       class: 'rte-formula-editor__panel',
       attrs: { role: 'tabpanel', id: this.panelId },
-      children: [this.status, input, templates, preview],
+      children: [this.status, input, templates],
     });
 
     this.modal.body.appendChild(
@@ -254,19 +366,19 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     );
 
     this.removeButton = el('button', {
-      class: 'rte-button rte-button--danger',
+      class: 'rte-button rte-button--danger rte-formula-editor__action',
       attrs: { type: 'button' },
       text: t('formula_remove'),
     });
 
     this.cancelButton = el('button', {
-      class: 'rte-button',
+      class: 'rte-button rte-formula-editor__action',
       attrs: { type: 'button' },
       text: t('formula_cancel'),
     });
 
     this.saveButton = el('button', {
-      class: 'rte-button rte-button--primary',
+      class: 'rte-button rte-button--primary rte-formula-editor__action',
       attrs: { type: 'button' },
       text: t('formula_insert'),
     });
@@ -294,6 +406,8 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     // поэтому слушатель один — на контейнере, а не на каждой кнопке.
     this.disposer.add(on(this.categoryList, 'click', this.onCategoryListClick));
     this.disposer.add(on(this.gallery, 'click', this.onGalleryClick));
+    this.disposer.add(on(this.categoryList, 'pointerdown', this.onPickerPointerdown));
+    this.disposer.add(on(this.gallery, 'pointerdown', this.onPickerPointerdown));
   }
 
   get isVisible(): boolean {
@@ -320,8 +434,10 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     this.setStatus('idle');
 
     this.modal.open();
+    // Строка категорий прокручивается вбок: при новом открытии — к началу.
+    this.categoryList.scrollLeft = 0;
     this.openToken += 1;
-    this.prepareField(this.openToken).catch(this.onConversionError);
+    this.prepareField(this.openToken).catch(this.onPrepareError);
   }
 
   close(): void {
@@ -330,6 +446,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
 
   /** Освобождает слушатели, поле MathLive и разметку. Идемпотентен. */
   destroy(): void {
+    this.keyboardLift.detach();
     this.disposer.dispose();
     this.field?.remove();
     this.field = null;
@@ -370,13 +487,12 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
 
     if (next === 'idle') return;
 
-    const isFailed = next === 'failed';
+    this.status.className =
+      next === 'loading'
+        ? 'rte-formula-editor__status'
+        : 'rte-formula-editor__status rte-field__error';
 
-    this.status.className = isFailed
-      ? 'rte-formula-editor__status rte-field__error'
-      : 'rte-formula-editor__status';
-
-    this.status.textContent = isFailed ? this.t('formula_invalid') : this.t('formula_loading');
+    this.status.textContent = this.t(STATUS_MESSAGES[next]);
   }
 
   private syncTab(element: HTMLButtonElement, tabType: FormulaType): void {
@@ -404,7 +520,19 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
       ? this.t('formula_save')
       : this.t('formula_insert');
 
-    this.saveButton.disabled = this.latex.trim() === '';
+    this.syncSaveButton();
+  }
+
+  /**
+   * Пустую формулу вставлять нечего: кнопка выключена и объясняет почему. Без
+   * поля (MathLive грузится или не загрузился) она выключена тоже — но
+   * подсказка «напиши формулу» там была бы неправдой.
+   */
+  private syncSaveButton(): void {
+    const isEmpty = this.latex.trim() === '';
+
+    this.saveButton.disabled = isEmpty || !this.field;
+    this.saveButton.title = isEmpty && this.field ? this.t('formula_empty') : '';
   }
 
   private renderCategories(): void {
@@ -432,6 +560,28 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
         });
       }),
     );
+
+    this.revealActiveCategory();
+  }
+
+  /**
+   * Категории — одна строка с прокруткой вбок: выбранная (стрелкой, кликом по
+   * краю) должна оказаться в видимой части. Двигаем только строку — не
+   * `scrollIntoView`, который заодно прокрутил бы тело диалога.
+   */
+  private revealActiveCategory(): void {
+    const active = this.categoryList.querySelector('[aria-selected="true"]');
+
+    if (!active) return;
+
+    const list = this.categoryList.getBoundingClientRect();
+    const item = active.getBoundingClientRect();
+
+    if (item.left < list.left) {
+      this.categoryList.scrollLeft -= list.left - item.left;
+    } else if (item.right > list.right) {
+      this.categoryList.scrollLeft += item.right - list.right;
+    }
   }
 
   private async fillTemplatePreview(
@@ -513,50 +663,11 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     );
   }
 
-  private showPreviewMessage(message: string): void {
-    this.previewContent.className = 'rte-formula-editor__empty';
-    this.previewContent.textContent = message;
-  }
-
-  private renderPreview(): void {
-    this.previewToken += 1;
-
-    const token = this.previewToken;
-    const value = this.latex.trim();
-
-    if (!value) {
-      this.showPreviewMessage(this.t('formula_empty'));
-
-      return;
-    }
-
-    // Результата не ждём: превью обновится в фоне, а отказ рендера гасит
-    // renderPreviewSafely — отклониться промису нечем.
-    this.fillPreview(value, token);
-  }
-
-  /** Асинхронная часть живого превью: ответ устаревшего запуска отбрасывается по номеру. */
-  private async fillPreview(value: string, token: number): Promise<void> {
-    const svg = await renderPreviewSafely(value, this.type);
-
-    if (token !== this.previewToken) return;
-
-    if (!svg) {
-      this.showPreviewMessage(this.t('formula_invalid'));
-
-      return;
-    }
-
-    this.previewContent.className = '';
-    this.previewContent.innerHTML = svg;
-  }
-
   // --------------------------------------------------------------- действия
 
   private setLatex(value: string): void {
     this.latex = value;
-    this.saveButton.disabled = this.latex.trim() === '';
-    this.renderPreview();
+    this.syncSaveButton();
   }
 
   private setType(next: FormulaType): void {
@@ -572,8 +683,6 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     this.syncTabs();
     this.renderCategories();
     this.renderGallery();
-    // Одна и та же запись в математике и в химии выглядит по-разному.
-    this.renderPreview();
   }
 
   private setCategory(id: string): void {
@@ -587,6 +696,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
 
     this.field.insert(template.latex, { selectionMode: 'placeholder', focus: true });
     this.setLatex(this.field.value);
+    this.setStatus('idle');
   }
 
   /** MathLive тяжёлый и работает только в браузере — грузим при первом показе. */
@@ -610,15 +720,20 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
       MathfieldConstructor.strings = MATHLIVE_STRINGS;
       MathfieldConstructor.locale = this.options.locale;
 
+      const isTouch = hasCoarsePointer();
+
       const created = new MathfieldConstructor({
         defaultMode: 'math',
-        // Диалог — десктопная форма с галереей шаблонов; собственная экранная
-        // клавиатура MathLive дублирует её и закрывает превью. 'manual'
-        // не даёт ей открываться по фокусу, кнопка вызова скрыта в CSS.
-        mathVirtualKeyboardPolicy: 'manual',
+        // С мышью и клавиатурой экранная клавиатура MathLive не нужна: 'manual'
+        // не даёт ей открываться по фокусу, кнопка вызова скрыта в CSS. С
+        // пальцем без неё не набрать ни цифры — 'auto' открывает её по фокусу.
+        mathVirtualKeyboardPolicy: isTouch ? 'auto' : 'manual',
       });
 
-      created.className = 'rte-formula-editor__field';
+      // Модификатор показывает кнопку вызова клавиатуры (см. editor.css).
+      created.className = isTouch
+        ? 'rte-formula-editor__field rte-formula-editor__field--touch'
+        : 'rte-formula-editor__field';
       // Модалка отдаёт фокус помеченному элементу — каретка должна оказаться
       // в поле формулы, а не на первой кнопке.
       created.setAttribute('data-autofocus', '');
@@ -630,13 +745,17 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
       this.disposer.add(
         on(created, 'input', () => {
           this.setLatex(created.value);
+          // Ошибка относилась к прошлой записи — после правки она неверна.
+          this.setStatus('idle');
         }),
       );
 
       this.field = created;
+      this.syncSaveButton();
       this.setStatus('idle');
     } catch {
-      this.setStatus('failed');
+      // Чаще всего не доехал сам модуль: нет сети или сменилась сборка.
+      this.setStatus('loadFailed');
     }
   }
 
@@ -647,14 +766,39 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     if (token !== this.openToken || !this.field) return;
 
     this.host.replaceChildren(this.field);
+    // Меню MathLive — десктопный инструмент для тех, кто знает LaTeX; школьнику
+    // хватает шаблонов. Пустой список прячет кнопку меню и гасит контекстное
+    // меню. Задаётся после монтирования: до него MathLive бросает исключение.
+    this.field.menuItems = [];
+
+    // Диалог могли закрыть, пока грузился MathLive: тогда отключать клавиатуру
+    // будет некому — не подключаемся.
+    if (this.field.mathVirtualKeyboardPolicy === 'auto' && this.modal.isVisible) {
+      this.keyboardLift.attach();
+    }
 
     // Существующая формула открывается из сохранённого MathML.
-    const nextLatex = this.payload?.mathml ? await mathmlToLatex(this.payload.mathml) : '';
+    const storedMathml = this.payload?.mathml ?? '';
+    let nextLatex = '';
+
+    try {
+      nextLatex = storedMathml ? await mathmlToLatex(storedMathml) : '';
+    } catch {
+      // Конвертер не загрузился. Поле и кнопки остаются как есть — меняется
+      // только объяснение.
+      if (token === this.openToken) this.setStatus('unreadable');
+
+      return;
+    }
 
     if (token !== this.openToken || !this.field) return;
 
     this.field.value = nextLatex;
     this.setLatex(nextLatex);
+    // Формула есть, а LaTeX из неё не собрался: поле пустое, и школьник должен
+    // понять почему.
+    if (storedMathml && !nextLatex) this.setStatus('unreadable');
+
     this.field.focus();
   }
 
@@ -665,7 +809,13 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
 
     const mathml = await latexToMathML(value, this.type);
 
-    if (!mathml) return;
+    // Запись не разобралась — обычно что-то не дописано. Без живого превью
+    // сказать об этом можно только здесь.
+    if (!mathml) {
+      this.setStatus('invalid');
+
+      return;
+    }
 
     this.options.onSave({ mathml, type: this.type, pos: this.payload?.pos ?? null });
     this.modal.close();
@@ -680,6 +830,11 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   }
 
   // ------------------------------------------------------------ обработчики
+
+  /** Модалка закрылась — любым путём: Escape, крестик, подложка, кнопки. */
+  private readonly onModalClose = (): void => {
+    this.keyboardLift.detach();
+  };
 
   private readonly onMathTabClick = (): void => {
     this.setType('math');
@@ -716,7 +871,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   };
 
   private readonly onSaveButtonClick = (): void => {
-    this.save().catch(this.onConversionError);
+    this.save().catch(this.onSaveError);
   };
 
   private readonly onCategoryListClick = (event: MouseEvent): void => {
@@ -727,6 +882,20 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     const id = target.closest<HTMLElement>('[data-category-id]')?.dataset.categoryId;
 
     if (id) this.setCategory(id);
+  };
+
+  /**
+   * Касание категории или шаблона не уводит фокус из поля. Иначе экранная
+   * клавиатура MathLive прячется на каждом касании, а окно прыгает вниз и
+   * обратно. Клик после этого приходит как обычно; Tab и стрелки с физической
+   * клавиатуры ходят по кнопкам, как раньше, — их это не касается.
+   */
+  private readonly onPickerPointerdown = (event: PointerEvent): void => {
+    if (this.field?.mathVirtualKeyboardPolicy !== 'auto') return;
+
+    const { target } = event;
+
+    if (target instanceof Element && target.closest('button')) event.preventDefault();
   };
 
   private readonly onGalleryClick = (event: MouseEvent): void => {
@@ -744,13 +913,17 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   };
 
   /**
-   * Конвертация формулы не удалась: MathLive и конвертер MathML подгружаются
-   * лениво и могут не доехать, а разбор LaTeX может не пройти. Сообщаем той
-   * же строкой статуса, что и о невозможности загрузить редактор, вместо
+   * Подготовка поля упала уже после загрузки MathLive — при монтировании или
+   * переводе формулы в LaTeX: открыть её не получилось. Строка статуса вместо
    * необработанного отклонения промиса.
    */
-  private readonly onConversionError = (): void => {
-    this.setStatus('failed');
+  private readonly onPrepareError = (): void => {
+    this.setStatus('unreadable');
+  };
+
+  /** Сохранение упало: конвертер не доехал или разбор не прошёл. */
+  private readonly onSaveError = (): void => {
+    this.setStatus('invalid');
   };
 }
 

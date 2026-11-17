@@ -147,7 +147,11 @@ test.describe('formula editing', () => {
 
     await page.locator('.rte-formula-editor__category', { hasText: 'Дроби' }).click();
     await page.locator('.rte-formula-editor__template').first().click();
-    await expect(page.locator('.rte-formula-editor__preview-box svg')).toBeVisible();
+    // Предпросмотра больше нет: шаблон виден в самом поле.
+    await expect(page.locator('.rte-formula-editor__preview')).toHaveCount(0);
+    await expect.poll(() => field.evaluate((el: HTMLElement & { value: string }) => el.value)).toContain(
+      '\\frac',
+    );
 
     await page.getByRole('button', { name: 'Сохранить' }).click();
     await expect(page.locator(MODAL_PANEL)).toBeHidden();
@@ -159,40 +163,147 @@ test.describe('formula editing', () => {
     await expect(page.locator(FORMULA)).toHaveCount(4);
   });
 
-  test('keeps the virtual keyboard out and puts the menu in Russian', async ({ page }) => {
+  test('with a mouse: no on-screen keyboard and no MathLive menu', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'На сенсорном экране клавиатура нужна — её проверяет отдельный сценарий');
     await openDemo(page);
 
     await page.locator(FORMULA).first().click();
     const field = page.locator('math-field').first();
     await expect(field).toBeAttached();
 
-    // The toggle lives in MathLive's shadow DOM; it is hidden via ::part, so
-    // asking the browser for its computed style is the only honest check.
-    await expect
-      .poll(() =>
-        field.evaluate((el) => {
-          const toggle = el.shadowRoot?.querySelector('.ML__virtual-keyboard-toggle');
-          return toggle ? getComputedStyle(toggle).display : 'missing';
-        }),
-      )
-      .toBe('none');
+    // Both buttons live in MathLive's shadow DOM and are hidden via ::part, so
+    // asking the browser for their computed style is the only honest check.
+    const partDisplay = (selector: string): Promise<string> =>
+      field.evaluate((el, partSelector) => {
+        const part = el.shadowRoot?.querySelector(partSelector);
+        return part ? getComputedStyle(part).display : 'missing';
+      }, selector);
 
-    // Focusing the field must not summon the keyboard either.
+    await expect.poll(() => partDisplay('.ML__virtual-keyboard-toggle')).toBe('none');
+    await expect.poll(() => partDisplay('[part=menu-toggle]')).toBe('none');
+
+    // Focusing the field must not summon the keyboard.
     await field.click();
     await expect(page.locator('.ML__keyboard')).toHaveCount(0);
 
-    // MathLive's own menu, not ours — it ships no Russian, so any Russian here
-    // proves the merged string table is in use. Playwright's CSS engine pierces
-    // the open shadow root, so the toggle is clicked like a user would.
-    await page.locator('math-field .ML__menu-toggle').first().click();
-    await expect(page.getByRole('menuitem', { name: 'Вставить матрицу' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Начертание' })).toBeVisible();
-    // No English left at the top level of the menu.
-    const items = await page.getByRole('menuitem').allTextContents();
-    expect(items.length).toBeGreaterThan(5);
-    expect(items.filter((item) => /^[A-Za-z]/.test(item.trim()))).toEqual([]);
+    // The context menu is off too: a right click opens nothing.
+    await field.click({ button: 'right' });
+    await page.waitForTimeout(300);
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
 
     await page.keyboard.press('Escape');
+  });
+
+  test('on a touch screen the MathLive keyboard types and stays below the dialog', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Экранная клавиатура включается только на сенсорных устройствах');
+    await openDemo(page);
+    const before = await page.locator(FORMULA).count();
+
+    await page.locator(`${EDITOR} p`).first().click();
+    await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').click();
+    const dialog = page.locator(OPEN_MODAL);
+    const field = dialog.locator('math-field');
+    await expect(field).toBeVisible({ timeout: 20_000 });
+
+    await field.tap();
+    const keyboard = page.locator('.ML__keyboard.is-visible');
+    await expect(keyboard).toBeVisible();
+
+    // В тексте клавиши после цифры идёт её вариант на Shift — сверяем начало.
+    const seven = keyboard.locator('.MLK__layer.is-visible .MLK__keycap', { hasText: /^7/ });
+    await seven.first().tap();
+    await expect
+      .poll(() => field.evaluate((el: HTMLElement & { value: string }) => el.value))
+      .toContain('7');
+
+    // Касание категории и шаблона не уводит фокус из поля: клавиатура остаётся.
+    await dialog.locator('.rte-formula-editor__category', { hasText: 'Дроби' }).tap();
+    await expect(
+      dialog.locator('.rte-formula-editor__category', { hasText: 'Дроби' }),
+    ).toHaveAttribute('aria-selected', 'true');
+    await dialog.locator('.rte-formula-editor__template').first().tap();
+    await expect
+      .poll(() => field.evaluate((el: HTMLElement & { value: string }) => el.value))
+      .toContain('\\frac');
+    await expect(field).toBeFocused();
+    // Клавиатура прячется с задержкой в 300 мс — выждем дольше и проверим.
+    await page.waitForTimeout(500);
+    await expect(keyboard).toBeVisible();
+
+    // Поле и кнопки над клавиатурой, а не под ней. Клавиатура выезжает с
+    // анимацией — ждём, пока раскладка устоится.
+    const save = dialog.getByRole('button', { name: 'Вставить', exact: true });
+    const plate = page.locator('.ML__keyboard .MLK__plate');
+    const bottomOf = async (locator: typeof field): Promise<number> => {
+      const box = await locator.boundingBox();
+      return box ? box.y + box.height : Number.POSITIVE_INFINITY;
+    };
+
+    await expect
+      .poll(async () => {
+        const top = (await plate.boundingBox())?.y ?? 0;
+        return (await bottomOf(field)) <= top && (await bottomOf(save)) <= top;
+      })
+      .toBe(true);
+
+    // Ничто не перекрывает кнопку: в её центре — она сама.
+    const covered = await save.evaluate((button) => {
+      const box = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return hit !== button && !button.contains(hit);
+    });
+    expect(covered).toBe(false);
+
+    await save.tap();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator(FORMULA)).toHaveCount(before + 1);
+    await expect(page.locator('.ML__keyboard.is-visible')).toHaveCount(0);
+  });
+
+  test('categories stay in one row and templates fit without scrolling', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'Раскладка проверяется на десктопном окне');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openDemo(page);
+
+    await page.locator('.rte-toolbar button[aria-label="Математическая формула"]').click();
+    const dialog = page.locator(OPEN_MODAL);
+    await expect(dialog.locator('math-field')).toBeVisible({ timeout: 20_000 });
+
+    const row = await dialog.locator('.rte-formula-editor__categories').boundingBox();
+    const first = await dialog.locator('.rte-formula-editor__category').first().boundingBox();
+    expect(row && first).toBeTruthy();
+    // Одна строка: контейнер не выше одной кнопки (с допуском на полосу прокрутки).
+    expect(row!.height).toBeLessThan(first!.height * 1.5);
+
+    const tops = await dialog
+      .locator('.rte-formula-editor__category')
+      .evaluateAll((items) => new Set(items.map((item) => item.getBoundingClientRect().top)).size);
+    expect(tops).toBe(1);
+
+    // Тело модалки не прокручивается, и первый ряд шаблонов виден целиком.
+    const body = dialog.locator('.rte-modal__body');
+    expect(await body.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    await expect(dialog.locator('.rte-formula-editor__template').first()).toBeInViewport({
+      ratio: 1,
+    });
+
+    // Выбранная категория в конце строки прокручивается в видимую часть.
+    const categories = dialog.locator('.rte-formula-editor__categories [role="tab"]');
+    await categories.first().focus();
+    await page.keyboard.press('End');
+    await expect(categories.last()).toHaveAttribute('aria-selected', 'true');
+    await expect(categories.last()).toBeInViewport({ ratio: 1 });
+
+    // Кнопки шаблонов не меньше 48×48.
+    const template = await dialog.locator('.rte-formula-editor__template').first().boundingBox();
+    expect(template!.width).toBeGreaterThanOrEqual(48);
+    expect(template!.height).toBeGreaterThanOrEqual(48);
   });
 
   test('inserts a new chemistry formula from the toolbar', async ({ page }) => {
@@ -217,7 +328,7 @@ test.describe('formula editing', () => {
 
     await page.locator(FORMULA).first().click();
     await expect(page.locator(MODAL_PANEL)).toBeVisible();
-    await page.getByRole('button', { name: 'Удалить формулу' }).click();
+    await page.getByRole('button', { name: 'Удалить', exact: true }).click();
 
     await expect(page.locator(FORMULA)).toHaveCount(3);
     // No fragment of the removed formula is left behind as text.
@@ -266,7 +377,7 @@ test.describe('toolbar', () => {
 
     await page.locator('.rte-toolbar button[aria-label="Math formula"]').click();
     await expect(page.locator(MODAL_TITLE)).toHaveText('Math formula');
-    await expect(page.locator('.rte-formula-editor__category').first()).toHaveText('Basics');
+    await expect(page.locator('.rte-formula-editor__category').first()).toHaveText('Popular');
   });
 });
 

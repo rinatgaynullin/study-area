@@ -555,7 +555,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
+  min-height: 40px;
+  padding: 0 14px;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -579,23 +580,29 @@
 }
 
 .rte-formula-editor__host {
+  display: flex;
+  align-items: center;
   border: 1px solid var(--rte-color-border);
   border-radius: var(--rte-input-radius);
-  padding: 10px 12px;
+  padding: 8px 12px;
   min-height: 56px;
   background: var(--rte-color-bg);
-}
-
-.rte-formula-editor__field {
-  width: 100%;
   font-size: var(--rte-formula-input-font-size);
 }
 
-/* The dialog has its own template gallery, so MathLive's on-screen keyboard is
-   redundant here. `mathVirtualKeyboardPolicy: 'manual'` stops it opening on
-   focus; this hides the toggle that would still open it by hand. MathLive
-   exposes the button as a shadow part, so no style injection is needed. */
-.rte-formula-editor__field::part(virtual-keyboard-toggle) {
+/* Крупнее остального интерфейса: 1.1 от кегля формулы — около 22px. */
+.rte-formula-editor__field {
+  width: 100%;
+  font-size: 1.1em;
+}
+
+/* С мышью экранная клавиатура MathLive не нужна: `mathVirtualKeyboardPolicy:
+   'manual'` не даёт ей открываться по фокусу, а здесь скрыта кнопка, которая
+   открыла бы её вручную. На сенсорных устройствах поле получает модификатор
+   `--touch`, и кнопка остаётся. Меню MathLive скрыто везде: школьнику хватает
+   шаблонов. Обе кнопки — части теневого DOM, достаём их через ::part. */
+.rte-formula-editor__field:not(.rte-formula-editor__field--touch)::part(virtual-keyboard-toggle),
+.rte-formula-editor__field::part(menu-toggle) {
   display: none;
 }
 
@@ -616,13 +623,20 @@
 
 .rte-formula-editor__categories {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   margin-bottom: 10px;
+  /* Одна строка: категории, что не влезли, — прокруткой вбок. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
 
 .rte-formula-editor__category {
-  padding: 5px 10px;
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
   border: 1px solid var(--rte-color-border);
   border-radius: var(--rte-radius-pill);
   background: transparent;
@@ -646,6 +660,8 @@
 .rte-formula-editor__gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  /* Равные ячейки: ряд высотой с самый высокий шаблон. */
+  grid-auto-rows: 1fr;
   gap: 6px;
   max-height: 210px;
   overflow-y: auto;
@@ -656,7 +672,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 46px;
+  min-width: 48px;
+  min-height: 48px;
   padding: 6px;
   border: 1px solid var(--rte-color-border);
   border-radius: var(--rte-radius);
@@ -675,20 +692,8 @@
   max-height: 34px;
 }
 
-.rte-formula-editor__preview-box {
-  display: flex;
-  align-items: center;
-  min-height: 56px;
-  padding: 10px 12px;
-  border: 1px dashed var(--rte-color-border);
-  border-radius: var(--rte-radius);
-  background: var(--rte-color-subtle-bg);
-  overflow-x: auto;
-}
-
-.rte-formula-editor__empty {
-  color: var(--rte-color-placeholder);
-  font-size: var(--rte-ui-font-size-xs);
+.rte-formula-editor__action {
+  min-height: 40px;
 }
 
 /* ---------------------------------------------------------------- recorder */
@@ -782,8 +787,9 @@
     border-radius: 0;
   }
 
+  /* На телефоне — пять шаблонов в ряд: ячейка шире 48px и при 320px. */
   .rte-formula-editor__gallery {
-    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     max-height: 160px;
   }
 }

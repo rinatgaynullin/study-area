@@ -1,6 +1,7 @@
 import type { FormulaType } from '../types';
 
 export type TemplateCategoryId =
+  | 'popular'
   | 'basic'
   | 'fractions'
   | 'roots'
@@ -275,6 +276,42 @@ const MATH_CATEGORIES: TemplateCategory[] = [
 ];
 
 /**
+ * «Частые» — то, что школьнику нужно чаще всего, собранное из других
+ * категорий. Хранит ссылки на те же объекты шаблонов, а не копии: id у шаблона
+ * один, и `findTemplate` находит его, откуда бы его ни выбрали.
+ */
+const POPULAR_TEMPLATE_IDS = [
+  'fractions.frac',
+  'scripts.square',
+  'scripts.sup',
+  'scripts.sub',
+  'roots.sqrt',
+  'roots.nthroot',
+  'basic.parens',
+  'basic.abs',
+  'basic.times',
+  'basic.div',
+  'basic.pm',
+  'basic.degree',
+  'relations.le',
+  'relations.ge',
+  'relations.ne',
+  'relations.approx',
+  'greek.pi',
+];
+
+const MATH_TEMPLATES = MATH_CATEGORIES.flatMap((category) => category.templates);
+
+const POPULAR_CATEGORY: TemplateCategory = {
+  id: 'popular',
+  type: 'math',
+  labelKey: 'formula_categories_popular',
+  templates: POPULAR_TEMPLATE_IDS.flatMap((id) =>
+    MATH_TEMPLATES.filter((template) => template.id === id),
+  ),
+};
+
+/**
  * Chemistry is expressed with the same MathML pipeline: upright element symbols,
  * sub/superscripts for counts and charges, and standard reaction arrows. This
  * covers equations and notation — structural molecule drawing is out of scope
@@ -384,7 +421,11 @@ const CHEM_CATEGORIES: TemplateCategory[] = [
   },
 ];
 
-export const TEMPLATE_CATEGORIES: TemplateCategory[] = [...MATH_CATEGORIES, ...CHEM_CATEGORIES];
+export const TEMPLATE_CATEGORIES: TemplateCategory[] = [
+  POPULAR_CATEGORY,
+  ...MATH_CATEGORIES,
+  ...CHEM_CATEGORIES,
+];
 
 export const getTemplateCategories = (type: FormulaType): TemplateCategory[] =>
   TEMPLATE_CATEGORIES.filter((category) => category.type === type);
