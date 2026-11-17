@@ -2,6 +2,7 @@ export type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } fr
 export { HistoryStack, cloneScene } from './history';
 export { ChangeEmitter, HIT_RADIUS_PX, SketchCanvas, type PointerInfo, type SketchCanvasOptions } from './sketch-canvas';
 export { ToolBar, actionButton, propertyField, selectControl, type ToolButton, type ToolBarOptions } from './tool-bar';
+export { BUILDER_ICONS, createBuilderIcon, type BuilderIconId, type BuilderIconShape, type BuilderIconSpec } from './builder-icons';
 export {
   angleBetween,
   angleDegrees,

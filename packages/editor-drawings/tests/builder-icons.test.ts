@@ -22,6 +22,8 @@ const ICON_IDS: BuilderIconId[] = [
   'zoomOut',
   'fit',
   'resetView',
+  'copy',
+  'paste',
   'cube',
   'box',
   'prism',
@@ -83,11 +85,11 @@ describe('BUILDER_ICONS', () => {
     });
   });
 
-  it('ссылается на существующие примитивы в dashed и filled', () => {
+  it('ссылается на существующие примитивы в dashed, filled и thin', () => {
     ICON_IDS.forEach((id) => {
-      const { shapes, dashed = [], filled = [] } = BUILDER_ICONS[id];
+      const { shapes, dashed = [], filled = [], thin = [] } = BUILDER_ICONS[id];
 
-      [...dashed, ...filled].forEach((index) => {
+      [...dashed, ...filled, ...thin].forEach((index) => {
         expect(shapes[index], `${id}[${index}]`).toBeDefined();
       });
     });
@@ -124,6 +126,7 @@ describe('createBuilderIcon', () => {
         expect(child?.tagName.toLowerCase(), `${id}[${index}]`).toBe(name);
         expect(child?.hasAttribute('stroke-dasharray'), `${id}[${index}]`).toBe(spec.dashed?.includes(index) ?? false);
         expect(child?.getAttribute('fill'), `${id}[${index}]`).toBe(spec.filled?.includes(index) ? 'currentColor' : null);
+        expect(child?.getAttribute('stroke-width'), `${id}[${index}]`).toBe(spec.thin?.includes(index) ? '1' : null);
       });
     });
   });
@@ -137,9 +140,22 @@ describe('createBuilderIcon', () => {
     expect(svg.querySelectorAll('circle[fill="currentColor"]')).toHaveLength(2);
   });
 
-  it('ставит пунктир невидимым рёбрам тел', () => {
-    expect(createBuilderIcon('cube').querySelectorAll('[stroke-dasharray]')).toHaveLength(1);
-    expect(createBuilderIcon('tabSolid').querySelectorAll('[stroke-dasharray]')).toHaveLength(0);
+  it('рисует тела без пунктира: на 20px он превращается в шум', () => {
+    const solids: BuilderIconId[] = ['section', 'cube', 'box', 'prism', 'pyramid', 'frustum', 'cylinder', 'cone', 'sphere', 'tabSolid'];
+
+    solids.forEach((id) => {
+      expect(createBuilderIcon(id).querySelectorAll('[stroke-dasharray]'), id).toHaveLength(0);
+    });
+  });
+
+  it('у параболы и корня нет креста осей: одна тонкая ось под кривой', () => {
+    (['parabola', 'root'] as const).forEach((id) => {
+      const svg = createBuilderIcon(id);
+
+      expect(svg.querySelectorAll('[stroke-width="1"]'), id).toHaveLength(1);
+      expect(svg.innerHTML, id).not.toContain('M3 12 H21 M12 3 V21');
+    });
+    expect(createBuilderIcon('hyperbola').innerHTML).not.toContain('M3 12 H21 M12 3 V21');
   });
 
   it('задаёт размер параметром size, по умолчанию 20', () => {

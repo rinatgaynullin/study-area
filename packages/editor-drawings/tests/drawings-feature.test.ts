@@ -370,13 +370,21 @@ describe('раскладка диалога', () => {
     expect(editor.element.querySelectorAll('.rte-content .rte-drawing')).toHaveLength(1);
   });
 
-  it('нечитаемая сцена с JSON: как раньше — данные в поле JSON, без просьбы нарисовать заново', () => {
+  it('нечитаемая сцена с JSON: вкладка JSON с исходным текстом; переход на конструктор и обратно текст не меняет', () => {
     const editor = mountEditor({}, { json: true });
     const dialog = editBroken(editor);
+    const code = (): string | undefined => dialog.querySelector<HTMLTextAreaElement>('textarea:not([readonly])')?.value;
+    const status = dialog.querySelector('.rte-drawing-dialog__status');
 
+    expect(activeTab(dialog)).toBe('JSON');
+    expect(code()).toBe('{vertices: [1,');
+    expect(status?.classList.contains('rte-drawing-dialog__status--error')).toBe(true);
+    expect(status?.textContent).not.toContain('Нарисуй');
+
+    dialog.querySelector<HTMLButtonElement>('[data-tab="planimetry"]')?.click();
     expect(activeTab(dialog)).toBe('Планиметрия');
-    expect(dialog.querySelector<HTMLTextAreaElement>('textarea:not([readonly])')?.value).toBe('{vertices: [1,');
-    expect(dialog.querySelector('.rte-drawing-dialog__status')?.textContent).not.toContain('Нарисуй');
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
+    expect(code()).toBe('{vertices: [1,');
   });
 });
 

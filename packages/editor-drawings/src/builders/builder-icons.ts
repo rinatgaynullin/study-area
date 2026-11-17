@@ -14,6 +14,8 @@ export interface BuilderIconSpec {
   dashed?: number[];
   /** Индексы примитивов, которые заливаются `currentColor` (точки). */
   filled?: number[];
+  /** Индексы примитивов, которые рисуются тонкой линией (оси графиков): кривая читается поверх. */
+  thin?: number[];
 }
 
 export type BuilderIconId =
@@ -38,6 +40,8 @@ export type BuilderIconId =
   | 'zoomOut'
   | 'fit'
   | 'resetView'
+  | 'copy'
+  | 'paste'
   // Тела
   | 'cube'
   | 'box'
@@ -67,10 +71,16 @@ const DASH = '2 3.5';
 
 const DEFAULT_SIZE = 20;
 
+/** Тонкая линия осей: заметно тоньше обводки 1.75, но на 20px ещё видна. */
+const THIN_WIDTH = '1';
+
 /** Оси графиков: общие для всей группы, начало координат в центре поля. */
 const PLOT_AXES: BuilderIconShape = ['path', { d: 'M3 12 H21 M12 3 V21' }];
 
-/** Куб в косоугольной проекции: передняя грань, видимые и невидимые рёбра задней части. */
+/** Одна ось внизу поля — для кривых, которые крест осей перечёркивает. */
+const PLOT_BASELINE: BuilderIconShape = ['line', { x1: 3, y1: 20, x2: 21, y2: 20 }];
+
+/** Куб в косоугольной проекции: передняя грань и видимые рёбра задней части. */
 const CUBE_FRONT: BuilderIconShape = ['rect', { x: 3, y: 8, width: 13, height: 13 }];
 const CUBE_BACK: BuilderIconShape = ['path', { d: 'M3 8 L8 3 H21 V16 L16 21 M16 8 L21 3' }];
 
@@ -135,9 +145,9 @@ export const BUILDER_ICONS: Record<BuilderIconId, BuilderIconSpec> = {
   },
   section: {
     shapes: [
-      ['polygon', { points: '3,17 8.5,7 21,7 15.5,17' }],
-      ['line', { x1: 8.1, y1: 10.6, x2: 13.5, y2: 16 }],
-      ['line', { x1: 10.5, y1: 8, x2: 15.9, y2: 13.4 }],
+      ['polygon', { points: '3,17 8.5,8 21,8 15.5,17' }],
+      ['line', { x1: 12, y1: 2.5, x2: 12, y2: 8 }],
+      ['line', { x1: 12, y1: 17, x2: 12, y2: 21.5 }],
     ],
   },
   pencil: {
@@ -213,83 +223,84 @@ export const BUILDER_ICONS: Record<BuilderIconId, BuilderIconSpec> = {
       ['polyline', { points: '4,4 4,8.6 8.6,8.6' }],
     ],
   },
+  copy: {
+    shapes: [
+      ['rect', { x: 8, y: 8, width: 13, height: 13, rx: 2 }],
+      ['path', { d: 'M16 8 V5 A2 2 0 0 0 14 3 H5 A2 2 0 0 0 3 5 V14 A2 2 0 0 0 5 16 H8' }],
+    ],
+  },
+  paste: {
+    shapes: [
+      ['path', { d: 'M15 4.5 H17 A2 2 0 0 1 19 6.5 V19 A2 2 0 0 1 17 21 H7 A2 2 0 0 1 5 19 V6.5 A2 2 0 0 1 7 4.5 H9' }],
+      ['rect', { x: 9, y: 3, width: 6, height: 3.5, rx: 1 }],
+      ['line', { x1: 9, y1: 12, x2: 15, y2: 12 }],
+      ['line', { x1: 9, y1: 16, x2: 13, y2: 16 }],
+    ],
+  },
 
+  // Тела — только видимые рёбра и дуги: пунктир невидимых на 20px превращается
+  // в шум (у тел вращения две чёрточки читаются как «рожица»).
   cube: {
-    shapes: [CUBE_FRONT, CUBE_BACK, ['path', { d: 'M3 21 L8 16 V3 M8 16 H21' }]],
-    dashed: [2],
+    shapes: [CUBE_FRONT, CUBE_BACK],
   },
   box: {
     shapes: [
       ['rect', { x: 2, y: 10, width: 15, height: 9 }],
       ['path', { d: 'M2 10 L7 5 H22 V14 L17 19 M17 10 L22 5' }],
-      ['path', { d: 'M2 19 L7 14 V5 M7 14 H22' }],
     ],
-    dashed: [2],
   },
   prism: {
     shapes: [
       ['polygon', { points: '3.5,20 15.5,20 9.5,9' }],
       ['path', { d: 'M15.5 20 L20.5 15 L14.5 4 L9.5 9' }],
-      ['path', { d: 'M3.5 20 L8.5 15 H20.5 M8.5 15 L14.5 4' }],
     ],
-    dashed: [2],
   },
   pyramid: {
-    shapes: [
-      ['path', { d: 'M3 20.5 H16 L21 15.5 M3 20.5 L12 3.5 L16 20.5 M12 3.5 L21 15.5' }],
-      ['path', { d: 'M3 20.5 L8 15.5 H21 M8 15.5 L12 3.5' }],
-    ],
-    dashed: [1],
+    shapes: [['path', { d: 'M3 20.5 H16 L21 15.5 M3 20.5 L12 3.5 L16 20.5 M12 3.5 L21 15.5' }]],
   },
   frustum: {
     shapes: [
       ['polygon', { points: '7.9,6.4 13.8,6.4 16.1,4.2 10.2,4.2' }],
       ['path', { d: 'M3 19.8 H16 L21 14.8 M3 19.8 L7.9 6.4 M16 19.8 L13.8 6.4 M21 14.8 L16.1 4.2' }],
-      ['path', { d: 'M3 19.8 L8 14.8 H21 M8 14.8 L10.2 4.2' }],
     ],
-    dashed: [2],
   },
   cylinder: {
     shapes: [
       ['ellipse', { cx: 12, cy: 6, rx: 7.5, ry: 2.5 }],
       ['path', { d: 'M4.5 6 V18 M19.5 6 V18' }],
       ['path', { d: 'M4.5 18 A7.5 2.5 0 0 0 19.5 18' }],
-      ['path', { d: 'M4.5 18 A7.5 2.5 0 0 1 19.5 18' }],
     ],
-    dashed: [3],
   },
   cone: {
     shapes: [
       ['path', { d: 'M4.5 18 L12 3.5 L19.5 18' }],
       ['path', { d: 'M4.5 18 A7.5 2.5 0 0 0 19.5 18' }],
-      ['path', { d: 'M4.5 18 A7.5 2.5 0 0 1 19.5 18' }],
     ],
-    dashed: [2],
   },
   sphere: {
     shapes: [
       ['circle', { cx: 12, cy: 12, r: 8.5 }],
       ['path', { d: 'M3.5 12 A8.5 3 0 0 0 20.5 12' }],
-      ['path', { d: 'M3.5 12 A8.5 3 0 0 1 20.5 12' }],
     ],
-    dashed: [2],
   },
 
+  // Парабола, гипербола и корень — без креста осей: на 20px оси сливаются с кривой.
   parabola: {
-    shapes: [PLOT_AXES, ['path', { d: 'M7 5 Q9.5 16 12 16 Q14.5 16 17 5' }]],
+    shapes: [PLOT_BASELINE, ['path', { d: 'M5 3.5 C7.5 21 16.5 21 19 3.5' }]],
+    thin: [0],
   },
   hyperbola: {
     shapes: [
-      PLOT_AXES,
-      ['path', { d: 'M14 4 Q15.2 8.8 20 10' }],
-      ['path', { d: 'M10 20 Q8.8 15.2 4 14' }],
+      ['path', { d: 'M12.5 3 Q14 10 21 11' }],
+      ['path', { d: 'M11.5 21 Q10 14 3 13' }],
     ],
   },
   lineFn: {
     shapes: [PLOT_AXES, ['line', { x1: 5, y1: 20.5, x2: 20.5, y2: 5 }]],
   },
   root: {
-    shapes: [PLOT_AXES, ['path', { d: 'M5 17 Q5 11 20.5 5' }]],
+    shapes: [PLOT_BASELINE, ['path', { d: 'M4.5 20 Q4.5 8.5 20.5 5.5' }]],
+    thin: [0],
   },
   plotCircle: {
     shapes: [PLOT_AXES, ['circle', { cx: 14.5, cy: 9.5, r: 5 }]],
@@ -308,7 +319,14 @@ export const BUILDER_ICONS: Record<BuilderIconId, BuilderIconSpec> = {
     filled: [1, 2, 3],
   },
   tabSolid: {
-    shapes: [CUBE_FRONT, CUBE_BACK],
+    shapes: [
+      CUBE_FRONT,
+      CUBE_BACK,
+      ['circle', { cx: 3, cy: 8, r: 1.6 }],
+      ['circle', { cx: 16, cy: 21, r: 1.6 }],
+      ['circle', { cx: 21, cy: 3, r: 1.6 }],
+    ],
+    filled: [2, 3, 4],
   },
   tabPlot: {
     shapes: [
@@ -360,6 +378,7 @@ export const createBuilderIcon = (id: BuilderIconId, size = DEFAULT_SIZE): SVGSV
 
     if (spec.dashed?.includes(index)) element.setAttribute('stroke-dasharray', DASH);
     if (spec.filled?.includes(index)) element.setAttribute('fill', 'currentColor');
+    if (spec.thin?.includes(index)) element.setAttribute('stroke-width', THIN_WIDTH);
 
     svg.appendChild(element);
   });

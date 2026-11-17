@@ -3,26 +3,36 @@ import { renderGeometrySvg, resolveGeometryViewport } from '../render/geometry-s
 import { fmt, pointsAttr } from '../render/svg-builder';
 import { normalizeGeometryScene } from '../scene/normalize';
 import type { GeometryHighlight, GeometryScene, Plot, Vec2 } from '../scene/types';
+import type { BuilderIconId } from './builder-icons';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
 import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
-import { ToolBar, actionButton, propertyField, selectControl, type ToolButton } from './tool-bar';
+import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
 type Tool = 'select' | 'point' | 'pencil' | 'shading' | 'text' | 'delete';
 
 const TOOLS: ToolButton<Tool>[] = [
-  { id: 'select', labelKey: 'drawings_tool_select', glyph: '↖' },
-  { id: 'point', labelKey: 'drawings_tool_point', glyph: '•' },
-  { id: 'pencil', labelKey: 'drawings_tool_pencil', glyph: '✎' },
-  { id: 'shading', labelKey: 'drawings_tool_shading', glyph: '▨' },
-  { id: 'text', labelKey: 'drawings_tool_text', glyph: 'T' },
-  { id: 'delete', labelKey: 'drawings_tool_delete', glyph: '✕' },
+  { id: 'select', labelKey: 'drawings_tool_select', icon: 'select' },
+  { id: 'point', labelKey: 'drawings_tool_point', icon: 'point' },
+  { id: 'pencil', labelKey: 'drawings_tool_pencil', icon: 'pencil' },
+  { id: 'shading', labelKey: 'drawings_tool_shading', icon: 'shading' },
+  { id: 'text', labelKey: 'drawings_tool_text', icon: 'text' },
+  { id: 'delete', labelKey: 'drawings_tool_delete', icon: 'delete' },
 ];
 
 type TemplateId = 'parabola' | 'hyperbola' | 'line' | 'circle' | 'sqrt';
 
 const TEMPLATES: TemplateId[] = ['parabola', 'hyperbola', 'line', 'circle', 'sqrt'];
+
+/** Значки шаблонов в палитре: по форме кривой. */
+const TEMPLATE_ICONS: Record<TemplateId, BuilderIconId> = {
+  parabola: 'parabola',
+  hyperbola: 'hyperbola',
+  line: 'lineFn',
+  circle: 'plotCircle',
+  sqrt: 'root',
+};
 
 /** Цвета шаблонов — те же, что в оригинале: по цвету ученик узнаёт вид графика. */
 const TEMPLATE_COLORS: Record<TemplateId, string> = {
@@ -520,14 +530,14 @@ class PlotsEditor implements SceneEditor {
     const actions = el('div', {
       class: 'rte-builder__actions',
       children: [
-        actionButton(this.t('drawings_undo'), '↶', () => this.undo()),
-        actionButton(this.t('drawings_redo'), '↷', () => this.redo()),
-        actionButton(this.t('drawings_plots_copy'), '⧉', () => this.copySelected()),
-        actionButton(this.t('drawings_plots_paste'), '⎘', () => this.paste()),
-        actionButton(this.t('drawings_grid'), '#', () => this.toggleGrid()),
-        actionButton(this.t('drawings_zoom_in'), '+', () => this.canvas.zoomBy(1.25)),
-        actionButton(this.t('drawings_zoom_out'), '−', () => this.canvas.zoomBy(0.8)),
-        actionButton(this.t('drawings_zoom_reset'), '⌂', () => this.fitView()),
+        actionButton(this.t('drawings_undo'), 'undo', () => this.undo()),
+        actionButton(this.t('drawings_redo'), 'redo', () => this.redo()),
+        actionButton(this.t('drawings_plots_copy'), 'copy', () => this.copySelected()),
+        actionButton(this.t('drawings_plots_paste'), 'paste', () => this.paste()),
+        actionButton(this.t('drawings_grid'), 'grid', () => this.toggleGrid()),
+        actionButton(this.t('drawings_zoom_in'), 'zoomIn', () => this.canvas.zoomBy(1.25)),
+        actionButton(this.t('drawings_zoom_out'), 'zoomOut', () => this.canvas.zoomBy(0.8)),
+        actionButton(this.t('drawings_zoom_reset'), 'fit', () => this.fitView()),
       ],
     });
 
@@ -541,7 +551,7 @@ class PlotsEditor implements SceneEditor {
       const button = el('button', {
         class: 'rte-builder__tool rte-plots__template',
         attrs: { type: 'button', title: label, 'data-plot-template': template },
-        text: label,
+        children: [toolIcon(TEMPLATE_ICONS[template]), el('span', { class: 'rte-builder__tool-label', text: label })],
       });
 
       button.addEventListener('click', () => this.addTemplate(template));
@@ -1427,6 +1437,7 @@ export const plotsEditorFactory: SceneEditorFactory = {
   id: 'plots',
   kind: 'geometry',
   labelKey: 'drawings_tab_plots',
+  icon: 'tabPlot',
   accepts: (scene) => normalizeGeometryScene(scene).type === 'plot_2d',
   create: (context) => new PlotsEditor(context),
 };

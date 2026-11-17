@@ -1,5 +1,6 @@
 import type { Translate, UiComponent, Unsubscribe } from '@rich-editor/core';
 import type { DrawingKind } from '../scene/types';
+import type { BuilderIconId } from './builder-icons';
 
 /** Сырая сцена, какой она лежит в узле: конструкторы работают с ней напрямую. */
 export type RawScene = Record<string, unknown>;
@@ -33,6 +34,8 @@ export interface SceneEditorFactory {
   kind: DrawingKind;
   /** Ключ перевода названия вкладки. */
   labelKey: string;
+  /** Значок перед названием вкладки; без него вкладка — одна подпись. */
+  icon?: BuilderIconId;
   /** Подходит ли сцена этой вкладке: диалог открывает первую подходящую. */
   accepts(scene: RawScene): boolean;
   create(context: SceneEditorContext): SceneEditor;

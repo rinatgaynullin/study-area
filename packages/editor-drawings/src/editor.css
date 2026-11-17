@@ -113,7 +113,10 @@
 }
 
 .rte-drawing-dialog__tab {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 6px;
   height: 40px;
   padding: 0 16px;
   border: 0;
@@ -125,6 +128,13 @@
   font-size: var(--rte-ui-font-size, 15px);
   white-space: nowrap;
   cursor: pointer;
+}
+
+/* Значок вкладки — как в кнопках конструкторов: 20px, цвет подписи. */
+.rte-drawing-dialog__tab-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
 }
 
 .rte-drawing-dialog__tab:hover {

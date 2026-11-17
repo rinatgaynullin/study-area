@@ -9,6 +9,8 @@ import { expect, test, type Page } from '@playwright/test';
 const EDITOR = '.rte-root .rte-content';
 const OPEN_MODAL = '.rte-modal:not([hidden])';
 const SKETCH = `${OPEN_MODAL} .rte-sketch`;
+/** Вкладки диалога; у физики свои вкладки разделов — тоже `role="tab"`. */
+const DIALOG_TABS = `${OPEN_MODAL} .rte-drawing-dialog__tabs [role="tab"]`;
 
 async function openDemo(page: Page): Promise<void> {
   await page.goto('/');
@@ -18,8 +20,8 @@ async function openDemo(page: Page): Promise<void> {
 async function openDrawingDialog(page: Page, tab: string): Promise<void> {
   await page.locator(`${EDITOR} p`).first().click();
   await page.locator('.rte-toolbar button[aria-label="Чертёж"]').click();
-  await page.locator(`${OPEN_MODAL} [role="tab"]`, { hasText: tab }).click();
-  await expect(page.locator(`${OPEN_MODAL} [role="tab"][aria-selected="true"]`)).toHaveText(tab);
+  await page.locator(DIALOG_TABS, { hasText: tab }).click();
+  await expect(page.locator(`${DIALOG_TABS}[aria-selected="true"]`)).toHaveText(tab);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -52,6 +54,17 @@ test.describe('десктоп', () => {
       .evaluate((body) => ({ scrollHeight: body.scrollHeight, clientHeight: body.clientHeight }));
 
     expect(scroll.scrollHeight).toBeLessThanOrEqual(scroll.clientHeight + 1);
+  });
+
+  test('на окне 1440×900 полотно планиметрии не меньше прежних 856×642', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openDemo(page);
+    await openDrawingDialog(page, 'Планиметрия');
+
+    const sketch = await boxOf(page, SKETCH);
+
+    expect(sketch.width).toBeGreaterThanOrEqual(852);
+    expect(sketch.height).toBeGreaterThanOrEqual(639);
   });
 
   test('панель свойств — справа от полотна, в одной строке с ним', async ({ page }) => {
@@ -113,6 +126,69 @@ test.describe('десктоп', () => {
     await page.locator(`${OPEN_MODAL} [data-tab="json"]`).click();
     await expect(more).toHaveAttribute('open');
     await expect(page.locator(`${OPEN_MODAL} button[data-template="triangle"]`)).toBeVisible();
+  });
+});
+
+test.describe('черновики вкладок и значки', () => {
+  test('рисунок «Планиметрии» переживает переход на «Стереометрию» и обратно', async ({ page }) => {
+    await openDemo(page);
+    await openDrawingDialog(page, 'Планиметрия');
+    await page.locator(`${OPEN_MODAL} button[data-tool="point"]`).click();
+
+    const sketch = await boxOf(page, SKETCH);
+
+    await page.mouse.click(sketch.x + sketch.width * 0.3, sketch.y + sketch.height * 0.3);
+    await page.mouse.click(sketch.x + sketch.width * 0.6, sketch.y + sketch.height * 0.6);
+
+    const points = page.locator(`${SKETCH} .rte-sketch__layer svg circle`);
+    const drawn = await points.count();
+
+    expect(drawn).toBeGreaterThanOrEqual(2);
+
+    await page.locator(DIALOG_TABS, { hasText: 'Стереометрия' }).click();
+    await expect(page.locator(`${OPEN_MODAL} .rte-builder--stereometry`)).toBeVisible();
+    await page.locator(DIALOG_TABS, { hasText: 'Планиметрия' }).click();
+    await expect(page.locator(`${OPEN_MODAL} .rte-builder--planimetry`)).toBeVisible();
+    await expect(points).toHaveCount(drawn);
+  });
+
+  test('кнопка «Добавить деление» не обрезана', async ({ page }) => {
+    await openDemo(page);
+    await openDrawingDialog(page, 'Физика');
+    await page.locator(`${OPEN_MODAL} button[data-section="thermo"]`).click();
+    await page.locator(`${OPEN_MODAL} button[data-element="thermo_axes"]`).click();
+
+    const add = page.locator(`${OPEN_MODAL} button[data-add-tick="xTicks"]`);
+
+    await add.scrollIntoViewIfNeeded();
+    await expect(add).toBeVisible();
+    await expect(add).toHaveText('+ Добавить деление');
+
+    const size = await add.evaluate((button) => ({ scrollWidth: button.scrollWidth, clientWidth: button.clientWidth }));
+
+    expect(size.scrollWidth).toBeLessThanOrEqual(size.clientWidth);
+  });
+
+  test('в кнопках инструментов видны значки', async ({ page }) => {
+    await openDemo(page);
+    await openDrawingDialog(page, 'Планиметрия');
+
+    const icons = page.locator(`${OPEN_MODAL} .rte-builder__tool svg`);
+
+    expect(await icons.count()).toBeGreaterThan(10);
+
+    const sizes = await icons.evaluateAll((svgs) =>
+      svgs.map((svg) => {
+        const rect = svg.getBoundingClientRect();
+
+        return { width: rect.width, height: rect.height };
+      }),
+    );
+
+    sizes.forEach((size) => {
+      expect(size.width).toBe(20);
+      expect(size.height).toBe(20);
+    });
   });
 });
 

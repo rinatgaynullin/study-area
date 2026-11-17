@@ -23,14 +23,14 @@ import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } fr
 type Tool = 'select' | 'point' | 'segment' | 'circle' | 'angle' | 'ticks' | 'text' | 'delete';
 
 const TOOLS: ToolButton<Tool>[] = [
-  { id: 'select', labelKey: 'drawings_tool_select', glyph: '↖' },
-  { id: 'point', labelKey: 'drawings_tool_point', glyph: '•' },
-  { id: 'segment', labelKey: 'drawings_tool_segment', glyph: '╱' },
-  { id: 'circle', labelKey: 'drawings_tool_circle', glyph: '○' },
-  { id: 'angle', labelKey: 'drawings_tool_angle', glyph: '∠' },
-  { id: 'ticks', labelKey: 'drawings_tool_ticks', glyph: '╫' },
-  { id: 'text', labelKey: 'drawings_tool_text', glyph: 'T' },
-  { id: 'delete', labelKey: 'drawings_tool_delete', glyph: '✕' },
+  { id: 'select', labelKey: 'drawings_tool_select', icon: 'select' },
+  { id: 'point', labelKey: 'drawings_tool_point', icon: 'point' },
+  { id: 'segment', labelKey: 'drawings_tool_segment', icon: 'segment' },
+  { id: 'circle', labelKey: 'drawings_tool_circle', icon: 'circle' },
+  { id: 'angle', labelKey: 'drawings_tool_angle', icon: 'angle' },
+  { id: 'ticks', labelKey: 'drawings_tool_ticks', icon: 'ticks' },
+  { id: 'text', labelKey: 'drawings_tool_text', icon: 'text' },
+  { id: 'delete', labelKey: 'drawings_tool_delete', icon: 'delete' },
 ];
 
 const CANVAS_WIDTH = 560;
@@ -175,12 +175,12 @@ class PlanimetryEditor implements SceneEditor {
     const actions = el('div', {
       class: 'rte-builder__actions',
       children: [
-        actionButton(this.t('drawings_undo'), '↶', () => this.undo()),
-        actionButton(this.t('drawings_redo'), '↷', () => this.redo()),
-        actionButton(this.t('drawings_grid'), '#', () => this.toggleGrid()),
-        actionButton(this.t('drawings_zoom_in'), '+', () => this.canvas.zoomBy(1.25)),
-        actionButton(this.t('drawings_zoom_out'), '−', () => this.canvas.zoomBy(0.8)),
-        actionButton(this.t('drawings_zoom_reset'), '⌂', () => this.fitView()),
+        actionButton(this.t('drawings_undo'), 'undo', () => this.undo()),
+        actionButton(this.t('drawings_redo'), 'redo', () => this.redo()),
+        actionButton(this.t('drawings_grid'), 'grid', () => this.toggleGrid()),
+        actionButton(this.t('drawings_zoom_in'), 'zoomIn', () => this.canvas.zoomBy(1.25)),
+        actionButton(this.t('drawings_zoom_out'), 'zoomOut', () => this.canvas.zoomBy(0.8)),
+        actionButton(this.t('drawings_zoom_reset'), 'fit', () => this.fitView()),
       ],
     });
 
@@ -1199,6 +1199,7 @@ export const planimetryEditorFactory: SceneEditorFactory = {
   id: 'planimetry',
   kind: 'geometry',
   labelKey: 'drawings_tab_planimetry',
+  icon: 'tabPlane',
   accepts: (scene) => {
     const normalized = normalizeGeometryScene(scene);
 

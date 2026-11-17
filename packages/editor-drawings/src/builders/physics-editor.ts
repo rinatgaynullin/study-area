@@ -6,14 +6,14 @@ import type { AxisTick, PhysicsElement, PhysicsElementType, PhysicsScene, Vec2 }
 import { distance, distanceToSegment, projectOnSegment, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
 import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
-import { ToolBar, actionButton, propertyField, selectControl, type ToolButton } from './tool-bar';
+import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
 type Tool = 'select' | 'delete';
 
 const TOOLS: ToolButton<Tool>[] = [
-  { id: 'select', labelKey: 'drawings_tool_select', glyph: '↖' },
-  { id: 'delete', labelKey: 'drawings_tool_delete', glyph: '✕' },
+  { id: 'select', labelKey: 'drawings_tool_select', icon: 'select' },
+  { id: 'delete', labelKey: 'drawings_tool_delete', icon: 'delete' },
 ];
 
 type Section = 'mechanics' | 'thermo' | 'circuit' | 'optics';
@@ -606,12 +606,12 @@ class PhysicsEditor implements SceneEditor {
     const actions = el('div', {
       class: 'rte-builder__actions',
       children: [
-        actionButton(this.t('drawings_undo'), '↶', () => this.undo()),
-        actionButton(this.t('drawings_redo'), '↷', () => this.redo()),
-        actionButton(this.t('drawings_grid'), '#', () => this.toggleGrid()),
-        actionButton(this.t('drawings_zoom_in'), '+', () => this.canvas.zoomBy(1.25)),
-        actionButton(this.t('drawings_zoom_out'), '−', () => this.canvas.zoomBy(0.8)),
-        actionButton(this.t('drawings_zoom_reset'), '⌂', () => this.fitView()),
+        actionButton(this.t('drawings_undo'), 'undo', () => this.undo()),
+        actionButton(this.t('drawings_redo'), 'redo', () => this.redo()),
+        actionButton(this.t('drawings_grid'), 'grid', () => this.toggleGrid()),
+        actionButton(this.t('drawings_zoom_in'), 'zoomIn', () => this.canvas.zoomBy(1.25)),
+        actionButton(this.t('drawings_zoom_out'), 'zoomOut', () => this.canvas.zoomBy(0.8)),
+        actionButton(this.t('drawings_zoom_reset'), 'fit', () => this.fitView()),
       ],
     });
 
@@ -1613,7 +1613,7 @@ class PhysicsEditor implements SceneEditor {
     ticks.forEach((tick, index) => {
       const value = el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value: String(tick.val), 'aria-label': t('drawings_physics_tick_value'), 'data-tick': 'val' } });
       const text = el('input', { class: 'rte-input', attrs: { type: 'text', value: tick.label ?? '', placeholder: String(tick.val), 'aria-label': t('drawings_physics_tick_label'), 'data-tick': 'label' } });
-      const remove = el('button', { class: 'rte-builder__tool rte-builder__tool--action rte-builder__tick-remove', attrs: { type: 'button', title: t('drawings_physics_remove_tick'), 'aria-label': t('drawings_physics_remove_tick') }, text: '✕' });
+      const remove = el('button', { class: 'rte-builder__tool rte-builder__tool--action rte-builder__tool--icon rte-builder__tick-remove', attrs: { type: 'button', title: t('drawings_physics_remove_tick'), 'aria-label': t('drawings_physics_remove_tick') }, children: [toolIcon('delete')] });
       const update = (mutate: (ticks: AxisTick[]) => void): void => {
         this.mutateSelected(item.id, (target) => {
           const next = [...(target[key] ?? [])];
@@ -1678,6 +1678,7 @@ export const physicsEditorFactory: SceneEditorFactory = {
   id: 'physics',
   kind: 'physics',
   labelKey: 'drawings_tab_physics',
+  icon: 'tabPhysics',
   // Любая физическая сцена редактируется здесь: четыре раздела — это палитры, а не форматы.
   accepts: () => true,
   create: (context) => new PhysicsEditor(context),

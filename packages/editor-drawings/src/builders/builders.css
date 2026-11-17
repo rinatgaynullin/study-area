@@ -65,12 +65,26 @@
   font-weight: var(--rte-title-font-weight, 600);
 }
 
-/* Действия — квадратные кнопки со значком; подпись в title и aria-label. */
+/* Действия — кнопки без режима; с подписью («+ Добавить деление») — обычной ширины. */
 .rte-builder__tool--action {
+  min-height: 40px;
+}
+
+/* Кнопка из одного значка — квадрат; подпись в title и aria-label. */
+.rte-builder__tool--icon {
   width: 40px;
   padding: 0;
 }
 
+/* Значок в кнопке: цвет от кнопки (активная, недоступная), не сжимается подписью. */
+.rte-builder__tool-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: currentColor;
+}
+
+/* Символы палитры физики: для её элементов значков нет. */
 .rte-builder__tool-glyph {
   font-size: 16px;
   line-height: 1;

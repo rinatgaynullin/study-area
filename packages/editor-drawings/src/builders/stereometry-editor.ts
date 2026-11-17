@@ -16,18 +16,18 @@ import {
   type StereoTemplateParams,
 } from './stereo-templates';
 import { ChangeEmitter, HIT_RADIUS_PX, SketchCanvas, type PointerInfo } from './sketch-canvas';
-import { ToolBar, actionButton, propertyField, selectControl, type ToolButton } from './tool-bar';
+import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
 type Tool = 'select' | 'point' | 'segment' | 'section' | 'angle' | 'delete';
 
 const TOOLS: ToolButton<Tool>[] = [
-  { id: 'select', labelKey: 'drawings_tool_select', glyph: '↖' },
-  { id: 'point', labelKey: 'drawings_tool_point', glyph: '•' },
-  { id: 'segment', labelKey: 'drawings_tool_segment', glyph: '╱' },
-  { id: 'section', labelKey: 'drawings_tool_section', glyph: '◇' },
-  { id: 'angle', labelKey: 'drawings_tool_angle', glyph: '∠' },
-  { id: 'delete', labelKey: 'drawings_tool_delete', glyph: '✕' },
+  { id: 'select', labelKey: 'drawings_tool_select', icon: 'select' },
+  { id: 'point', labelKey: 'drawings_tool_point', icon: 'point' },
+  { id: 'segment', labelKey: 'drawings_tool_segment', icon: 'segment' },
+  { id: 'section', labelKey: 'drawings_tool_section', icon: 'section' },
+  { id: 'angle', labelKey: 'drawings_tool_angle', icon: 'angle' },
+  { id: 'delete', labelKey: 'drawings_tool_delete', icon: 'delete' },
 ];
 
 /** Ключи подсказок целиком, а не из префикса: проверка таблиц переводов ищет их в коде. */
@@ -629,13 +629,13 @@ class StereometryEditor implements SceneEditor {
     const actions = el('div', {
       class: 'rte-builder__actions',
       children: [
-        actionButton(this.t('drawings_undo'), '↶', () => this.undo()),
-        actionButton(this.t('drawings_redo'), '↷', () => this.redo()),
-        actionButton(this.t('drawings_grid'), '#', () => this.toggleGrid()),
-        actionButton(this.t('drawings_stereo_axes'), 'xyz', () => this.toggleAxes()),
-        actionButton(this.t('drawings_zoom_in'), '+', () => this.canvas.zoomBy(1.25)),
-        actionButton(this.t('drawings_zoom_out'), '−', () => this.canvas.zoomBy(0.8)),
-        actionButton(this.t('drawings_zoom_reset'), '⌂', () => this.fitView()),
+        actionButton(this.t('drawings_undo'), 'undo', () => this.undo()),
+        actionButton(this.t('drawings_redo'), 'redo', () => this.redo()),
+        actionButton(this.t('drawings_grid'), 'grid', () => this.toggleGrid()),
+        actionButton(this.t('drawings_stereo_axes'), 'axes', () => this.toggleAxes()),
+        actionButton(this.t('drawings_zoom_in'), 'zoomIn', () => this.canvas.zoomBy(1.25)),
+        actionButton(this.t('drawings_zoom_out'), 'zoomOut', () => this.canvas.zoomBy(0.8)),
+        actionButton(this.t('drawings_zoom_reset'), 'fit', () => this.fitView()),
       ],
     });
 
@@ -648,7 +648,7 @@ class StereometryEditor implements SceneEditor {
         return el('button', {
           class: 'rte-builder__tool',
           attrs: { type: 'button', title: label, 'data-template': template.id },
-          children: [el('span', { class: 'rte-builder__tool-glyph', text: template.glyph }), el('span', { class: 'rte-builder__tool-label', text: label })],
+          children: [toolIcon(template.icon), el('span', { class: 'rte-builder__tool-label', text: label })],
         });
       }),
     });
@@ -2147,7 +2147,11 @@ class StereometryEditor implements SceneEditor {
       });
     });
 
-    const reset = el('button', { class: 'rte-button rte-stereo__reset', attrs: { type: 'button' }, text: t('drawings_stereo_reset_view') });
+    const reset = el('button', {
+      class: 'rte-button rte-stereo__reset',
+      attrs: { type: 'button' },
+      children: [toolIcon('resetView'), el('span', { text: t('drawings_stereo_reset_view') })],
+    });
 
     on(reset, 'click', () => this.resetView());
     this.properties.appendChild(reset);
@@ -2437,6 +2441,7 @@ export const stereometryEditorFactory: SceneEditorFactory = {
   id: 'stereometry',
   kind: 'geometry',
   labelKey: 'drawings_tab_stereometry',
+  icon: 'tabSolid',
   accepts: (scene) => normalizeGeometryScene(scene).type === '3d',
   create: (context) => new StereometryEditor(context),
 };

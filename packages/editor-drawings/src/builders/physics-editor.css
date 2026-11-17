@@ -41,7 +41,7 @@
 
 .rte-builder__tick {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
   gap: 4px;
   align-items: center;
 }
@@ -51,5 +51,5 @@
 }
 
 .rte-builder__tick-remove {
-  height: 32px;
+  height: 40px;
 }

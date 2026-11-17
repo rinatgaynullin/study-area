@@ -10,6 +10,7 @@ import {
   type Translate,
   type Unsubscribe,
 } from '@rich-editor/core';
+import { createBuilderIcon, type BuilderIconId } from './builders/builder-icons';
 import { physicsEditorFactory } from './builders/physics-editor';
 import { planimetryEditorFactory } from './builders/planimetry-editor';
 import { plotsEditorFactory } from './builders/plots-editor';
@@ -51,15 +52,72 @@ let drawingDialogCount = 0;
 /** Вкладка JSON всегда последняя: это запасной путь, когда конструктора под сцену нет. */
 const JSON_TAB = 'json';
 
+/** Ни одна вкладка не выбрана: диалог только открывается или чертёж здесь не изменить. */
+const NO_TAB = '';
+
+/** Сцена из текста; `null` — текст не разобран. */
+const readRawScene = (text: string): RawScene | null => parseSceneJson(text) as RawScene | null;
+
+/**
+ * Черновики вкладок за одно открытие диалога: какие конструкторы уже показаны
+ * (повторный показ ничего в них не загружает) и какие пользователь менял с
+ * последней синхронизации — загрузки сцены в конструктор или выгрузки его
+ * сцены в текст JSON. Здесь же состояние текста JSON: вид его сцены и правил
+ * ли его пользователь с последней синхронизации.
+ */
+class TabDrafts {
+  /** Вид сцены в поле JSON; у вкладки JSON вид диалога — этот. */
+  codeKind: DrawingKind = 'geometry';
+
+  /** Текст JSON правили (ввод, образец) после последней синхронизации с конструктором. */
+  codeEdited = false;
+
+  private readonly shown = new Set<string>();
+
+  private readonly changed = new Set<string>();
+
+  /** Новое открытие диалога: рисунки прошлого открытия не всплывают. */
+  reset(codeKind: DrawingKind): void {
+    this.codeKind = codeKind;
+    this.codeEdited = false;
+    this.shown.clear();
+    this.changed.clear();
+  }
+
+  isShown(id: string): boolean {
+    return this.shown.has(id);
+  }
+
+  markShown(id: string): void {
+    this.shown.add(id);
+  }
+
+  isChanged(id: string): boolean {
+    return this.changed.has(id);
+  }
+
+  markChanged(id: string): void {
+    this.changed.add(id);
+  }
+
+  /** Сцена конструктора и текст совпали или конструктор загружен заново. */
+  markSynced(id: string): void {
+    this.changed.delete(id);
+  }
+}
+
 /**
  * Диалог чертежа: вкладки конструкторов, а с опцией `json` — ещё вкладка
  * JSON, шаблоны, живое превью и TikZ в сворачиваемом блоке.
  *
  * Вид нового чертежа (геометрия или физика) задаёт выбранная вкладка; у
  * существующего чертежа — только вкладки его вида. Конструктор одной вкладки
- * создаётся при первом открытии вкладки и живёт до уничтожения диалога;
- * сцена переходит между вкладками через JSON. Вид, открытая сцена, активная
- * вкладка, статус и кнопки — общее состояние обработчиков, поэтому класс.
+ * создаётся при первом открытии вкладки и живёт до уничтожения диалога. У
+ * каждой вкладки свой черновик: переключение ничего не переносит между
+ * конструкторами; с опцией `json` текст JSON обменивается сценой только с тем
+ * конструктором, который менял пользователь (см. `TabDrafts`). Вид, открытая
+ * сцена, активная вкладка, черновики, статус и кнопки — общее состояние
+ * обработчиков, поэтому класс.
  */
 class DrawingDialogController implements DialogComponent<DrawingPayload | null> {
   readonly element: HTMLElement;
@@ -82,7 +140,17 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
   private readonly editorReleases = new Map<string, Unsubscribe>();
 
-  private activeTab = JSON_TAB;
+  private activeTab = NO_TAB;
+
+  private readonly drafts = new TabDrafts();
+
+  /** Вкладка, в которую при первом показе загружается открытая сцена. */
+  private openingTab: string | null = null;
+
+  private openingScene: RawScene = {};
+
+  /** Узел, для которого нет подходящего конструктора: полотна нет, сохранять нечего. */
+  private unavailable = false;
 
   private readonly modal: Modal;
 
@@ -100,7 +168,7 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   /** Сворачиваемый блок «Шаблоны, предпросмотр и код TikZ»; без опции `json` его нет. */
   private readonly more: HTMLDetailsElement | null;
 
-  /** Поле JSON есть всегда: через него сцена переходит между вкладками. */
+  /** Поле JSON есть всегда: в нём лежит открытая сцена, а с опцией `json` его видно и правят. */
   private readonly codeInput: HTMLTextAreaElement;
 
   private readonly tikzOutput: HTMLTextAreaElement;
@@ -260,6 +328,10 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   open(next: DrawingPayload | null): void {
     this.payload = next;
     this.kind = next?.kind ?? 'geometry';
+    this.drafts.reset(this.kind);
+    this.unavailable = false;
+    this.openingTab = null;
+    this.activeTab = NO_TAB;
     this.saveButton.textContent = this.t(this.isEditing ? 'drawings_apply_save' : 'drawings_apply_insert');
     this.removeButton.hidden = !this.isEditing;
     this.codeInput.value = next?.data ?? '';
@@ -292,13 +364,32 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
    * у существующего — только его вида, потому что другой вид — другой узел.
    * JSON — последней и только с опцией `json`.
    */
-  private tabs(): Array<{ id: string; label: string }> {
-    const factories = this.isEditing ? this.factories.filter((factory) => factory.kind === this.kind) : this.factories;
-
+  private tabs(): Array<{ id: string; label: string; icon?: BuilderIconId }> {
     return [
-      ...factories.map((factory) => ({ id: factory.id, label: this.t(factory.labelKey) })),
+      ...this.tabFactories().map((factory) => ({ id: factory.id, label: this.t(factory.labelKey), icon: factory.icon })),
       ...(this.options.json ? [{ id: JSON_TAB, label: this.t('drawings_tab_json') }] : []),
     ];
+  }
+
+  private tabFactories(): SceneEditorFactory[] {
+    return this.isEditing ? this.factories.filter((factory) => factory.kind === this.kind) : this.factories;
+  }
+
+  private factoryOf(id: string): SceneEditorFactory | undefined {
+    return id === NO_TAB || id === JSON_TAB ? undefined : this.factories.find((candidate) => candidate.id === id);
+  }
+
+  /** Значок вкладки скрыт от скринридера: имя вкладки — её подпись. */
+  private tabContent(label: string, icon: BuilderIconId | undefined): Node[] {
+    const text = el('span', { text: label });
+
+    if (!icon) return [text];
+
+    const svg = createBuilderIcon(icon);
+
+    svg.classList.add('rte-drawing-dialog__tab-icon');
+
+    return [svg, text];
   }
 
   private renderTabs(): void {
@@ -316,7 +407,7 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
             'aria-selected': String(tab.id === this.activeTab),
             tabindex: tab.id === this.activeTab ? 0 : -1,
           },
-          text: tab.label,
+          children: this.tabContent(tab.label, tab.icon),
         }),
       ),
     );
@@ -333,19 +424,33 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     this.renderTemplates();
   }
 
-  /** Сцена открыта: первая подходящая вкладка её вида и превью под неё. */
+  /**
+   * Сцена открыта: первая подходящая вкладка её вида и превью под неё. Узел,
+   * который ни один конструктор его вида не берёт, не перекрашивается молча в
+   * другой вид: без JSON его можно только удалить.
+   */
   private applyKind(): void {
     this.setKind(this.kind);
 
     const data = this.codeInput.value.trim();
-    const raw = parseSceneJson(data);
-    const suitable = this.factories.find(
-      (factory) => factory.kind === this.kind && (data === '' || factory.accepts((raw ?? {}) as RawScene)),
-    );
-    const broken = data !== '' && (raw === null || suitable === undefined);
+    const raw = readRawScene(data);
+    const ofKind = this.factories.filter((factory) => factory.kind === this.kind);
+    const suitable = ofKind.find((factory) => data === '' || (raw !== null && factory.accepts(raw)));
+    const broken = data !== '' && suitable === undefined;
 
+    this.openingScene = raw ?? {};
+
+    // С JSON нечитаемое и чужое открывается текстом как есть: конструктор его
+    // не примет, а правка текста не должна потеряться.
     if (this.options.json) {
-      this.selectTab(suitable ? suitable.id : JSON_TAB, false);
+      this.openingTab = suitable ? suitable.id : null;
+      this.selectTab(suitable ? suitable.id : JSON_TAB);
+
+      return;
+    }
+
+    if (this.isEditing && (ofKind.length === 0 || (raw !== null && suitable === undefined))) {
+      this.showUnavailable();
 
       return;
     }
@@ -353,30 +458,49 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     // Без вкладки JSON нечитаемую сцену не поправить: открываем конструктор
     // вида с чистым полотном и честно говорим, что чертёж придётся нарисовать
     // заново. «Вставить» заменит узел новым чертежом.
-    const fallback = this.factories.find((factory) => factory.kind === this.kind) ?? this.factories[0];
-    const target = broken ? fallback : (suitable ?? fallback);
+    const target = suitable ?? ofKind[0] ?? this.factories[0];
 
-    if (broken) this.codeInput.value = '';
+    if (broken) {
+      this.codeInput.value = '';
+      this.openingScene = {};
+    }
 
-    if (target) this.selectTab(target.id, false);
+    if (target) {
+      this.openingTab = target.id;
+      this.selectTab(target.id);
+    }
 
     if (broken) this.setStatus(this.t('drawings_unreadable'), true);
   }
 
-  /** Переключает вкладку; сцена переезжает через JSON, если её редактировали. */
-  private selectTab(id: string, fromEditor: boolean): void {
-    if (fromEditor && this.activeTab !== JSON_TAB) this.syncCodeFromEditor();
+  /** Чертёж здесь не изменить: ни вкладок, ни полотна; остаются «Удалить» и «Отмена». */
+  private showUnavailable(): void {
+    this.unavailable = true;
+    this.activeTab = NO_TAB;
+    this.tabList.replaceChildren();
+    this.tabList.hidden = true;
+    this.head.hidden = true;
+    this.editorHost.replaceChildren();
+    this.jsonPanel.hidden = true;
+    this.root.classList.remove('rte-drawing-dialog--json');
+    this.setStatus(this.t('drawings_unavailable'), true);
+    this.saveButton.disabled = true;
+  }
 
+  /** Переключает вкладку: у каждого конструктора свой черновик, JSON — свой текст. */
+  private selectTab(id: string): void {
+    this.leaveTab();
     this.activeTab = id;
 
-    const factory = this.factories.find((candidate) => candidate.id === id);
+    const factory = this.factoryOf(id);
 
-    // Вкладка нового чертежа задаёт его вид; JSON вид не меняет.
+    // Вкладка нового чертежа задаёт его вид; у вкладки JSON вид — вид её текста.
     if (factory && factory.kind !== this.kind) this.setKind(factory.kind);
+    else if (!factory && this.drafts.codeKind !== this.kind) this.setKind(this.drafts.codeKind);
 
     this.renderTabs();
 
-    const editor = id === JSON_TAB ? null : this.ensureEditor(id);
+    const editor = factory ? this.ensureEditor(factory) : null;
 
     this.jsonPanel.hidden = editor !== null;
     this.editorHost.replaceChildren(...(editor ? [editor.element] : []));
@@ -384,22 +508,70 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     // Служебный блок раскрыт там, где он нужен, — на вкладке JSON.
     if (this.more) this.more.open = editor === null;
 
-    if (editor) {
-      editor.load((parseSceneJson(this.codeInput.value) as RawScene | null) ?? {});
+    if (factory && editor) {
+      this.enterEditor(factory, editor);
       this.renderPreviewFrom(editor.getScene());
     } else {
       this.renderPreview();
     }
   }
 
-  private ensureEditor(id: string): SceneEditor | null {
+  /**
+   * Уход с конструктора (только с опцией `json`): рисунок, который менял
+   * пользователь, становится текстом JSON. Конструктор, который только
+   * посмотрели, текст не трогает.
+   */
+  private leaveTab(): void {
+    const id = this.activeTab;
+    const factory = this.factoryOf(id);
+    const editor = this.editors.get(id);
+
+    if (!this.options.json || !factory || !editor || !this.drafts.isChanged(id)) return;
+
+    this.codeInput.value = JSON.stringify(editor.getScene(), null, 2);
+    this.drafts.codeKind = factory.kind;
+    this.drafts.codeEdited = false;
+    this.drafts.markSynced(id);
+  }
+
+  /**
+   * Вход на конструктор: правленный пользователем текст JSON, если конструктор
+   * его берёт; иначе при первом показе — открытая сцена (у своей вкладки) или
+   * пустое полотно; при повторном — черновик как оставили.
+   */
+  private enterEditor(factory: SceneEditorFactory, editor: SceneEditor): void {
+    const fromCode = this.editedCodeFor(factory);
+
+    if (fromCode) {
+      this.loadInto(factory.id, editor, fromCode);
+      this.drafts.codeEdited = false;
+    } else if (!this.drafts.isShown(factory.id)) {
+      this.loadInto(factory.id, editor, factory.id === this.openingTab ? this.openingScene : {});
+    }
+
+    this.drafts.markShown(factory.id);
+  }
+
+  /** Сцена из текста JSON для конструктора — только если текст правили и он подходит. */
+  private editedCodeFor(factory: SceneEditorFactory): RawScene | null {
+    if (!this.options.json || !this.drafts.codeEdited || this.drafts.codeKind !== factory.kind) return null;
+
+    const raw = readRawScene(this.codeInput.value);
+
+    return raw !== null && factory.accepts(raw) ? raw : null;
+  }
+
+  /** Загрузка — не правка пользователя: признак «изменён» снимается. */
+  private loadInto(id: string, editor: SceneEditor, scene: RawScene): void {
+    editor.load(scene);
+    this.drafts.markSynced(id);
+  }
+
+  private ensureEditor(factory: SceneEditorFactory): SceneEditor {
+    const { id } = factory;
     const existing = this.editors.get(id);
 
     if (existing) return existing;
-
-    const factory = this.factories.find((candidate) => candidate.id === id);
-
-    if (!factory) return null;
 
     const editor = factory.create({ t: this.t, scans: this.options.scans?.() });
 
@@ -407,6 +579,8 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     this.editorReleases.set(
       id,
       editor.onChange(() => {
+        this.drafts.markChanged(id);
+
         if (this.activeTab === id) this.renderPreviewFrom(editor.getScene());
       }),
     );
@@ -414,17 +588,11 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     return editor;
   }
 
-  private syncCodeFromEditor(): void {
-    const editor = this.editors.get(this.activeTab);
-
-    if (editor) this.codeInput.value = JSON.stringify(editor.getScene(), null, 2);
-  }
-
   private readonly onTabClick = (event: Event): void => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-tab]');
 
     if (button && button.dataset.tab && button.dataset.tab !== this.activeTab) {
-      this.selectTab(button.dataset.tab, true);
+      this.selectTab(button.dataset.tab);
       this.tabList.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
     }
   };
@@ -445,7 +613,7 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     const next = tabs[(current + step + tabs.length) % tabs.length];
 
     if (next?.dataset.tab) {
-      this.selectTab(next.dataset.tab, true);
+      this.selectTab(next.dataset.tab);
       this.tabList.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
     }
   };
@@ -533,9 +701,11 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   // ------------------------------------------------------------- события
 
   private readonly onCodeInput = (): void => {
+    this.drafts.codeEdited = true;
     this.renderPreview();
   };
 
+  /** Образец — правка текста JSON: грузится в активный конструктор или открывает подходящую вкладку. */
   private readonly onTemplatesClick = (event: Event): void => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-template]');
     const template = DRAWING_TEMPLATES.find((candidate) => candidate.id === button?.dataset.template);
@@ -543,28 +713,35 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     if (!template) return;
 
     this.codeInput.value = JSON.stringify(template.scene, null, 2);
+    this.drafts.codeKind = template.kind;
+    this.drafts.codeEdited = true;
 
+    const factory = this.factoryOf(this.activeTab);
     const editor = this.editors.get(this.activeTab);
 
-    if (editor && this.activeTab !== JSON_TAB) {
-      const factory = this.factories.find((candidate) => candidate.id === this.activeTab);
+    if (!factory || !editor) {
+      this.renderPreview();
+      this.codeInput.focus();
 
-      // Шаблон другого вида сцены открывает подходящую вкладку.
-      if (factory && !factory.accepts(template.scene)) {
-        this.applyKind();
+      return;
+    }
 
-        return;
-      }
-
-      editor.load(template.scene);
+    if (factory.accepts(template.scene)) {
+      this.loadInto(factory.id, editor, template.scene);
+      this.drafts.codeEdited = false;
       this.renderPreviewFrom(editor.getScene());
       editor.focus();
 
       return;
     }
 
-    this.renderPreview();
-    this.codeInput.focus();
+    // Образец другого вида сцены открывает подходящую вкладку (или JSON, если
+    // такой нет); черновик текущей вкладки поверх образца не выгружается.
+    const target = this.tabFactories().find((candidate) => candidate.kind === template.kind && candidate.accepts(template.scene));
+
+    this.drafts.markSynced(factory.id);
+    this.selectTab(target ? target.id : JSON_TAB);
+    this.editors.get(this.activeTab)?.focus();
   };
 
   private readonly onCancelClick = (): void => {
@@ -578,6 +755,8 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   };
 
   private readonly onSaveClick = (): void => {
+    if (this.unavailable) return;
+
     const editor = this.activeTab === JSON_TAB ? null : this.editors.get(this.activeTab);
     const data = editor ? stringifyScene(editor.getScene()) : this.codeInput.value.trim();
 

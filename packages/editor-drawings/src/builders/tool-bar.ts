@@ -1,10 +1,11 @@
 import { el, on, type Translate, type Unsubscribe } from '@rich-editor/core';
+import { createBuilderIcon, type BuilderIconId } from './builder-icons';
 
 export interface ToolButton<TId extends string = string> {
   id: TId;
   labelKey: string;
-  /** Короткий значок вместо иконки: буква или символ. */
-  glyph: string;
+  /** Значок кнопки из набора `builder-icons`. */
+  icon: BuilderIconId;
 }
 
 export interface ToolBarOptions<TId extends string> {
@@ -33,7 +34,7 @@ export class ToolBar<TId extends string> {
       const button = el('button', {
         class: 'rte-builder__tool',
         attrs: { type: 'button', title: label, 'aria-label': label, 'aria-pressed': 'false', 'data-tool': tool.id },
-        children: [el('span', { class: 'rte-builder__tool-glyph', text: tool.glyph }), el('span', { class: 'rte-builder__tool-label', text: label })],
+        children: [toolIcon(tool.icon), el('span', { class: 'rte-builder__tool-label', text: label })],
       });
 
       this.buttons.set(tool.id, button);
@@ -68,12 +69,21 @@ export class ToolBar<TId extends string> {
   }
 }
 
-/** Кнопка действия (отмена, зум) — без режима. */
-export const actionButton = (label: string, glyph: string, onClick: () => void): HTMLButtonElement => {
+/** Значок в кнопке конструктора: 20px, цвет — от кнопки, для скринридера скрыт. */
+export const toolIcon = (id: BuilderIconId): SVGSVGElement => {
+  const icon = createBuilderIcon(id);
+
+  icon.classList.add('rte-builder__tool-icon');
+
+  return icon;
+};
+
+/** Кнопка действия (отмена, зум) — без режима: квадрат со значком, подпись в title и aria-label. */
+export const actionButton = (label: string, icon: BuilderIconId, onClick: () => void): HTMLButtonElement => {
   const button = el('button', {
-    class: 'rte-builder__tool rte-builder__tool--action',
+    class: 'rte-builder__tool rte-builder__tool--action rte-builder__tool--icon',
     attrs: { type: 'button', title: label, 'aria-label': label },
-    children: [el('span', { class: 'rte-builder__tool-glyph', text: glyph })],
+    children: [toolIcon(icon)],
   });
 
   button.addEventListener('click', onClick);
