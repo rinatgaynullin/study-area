@@ -238,6 +238,9 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
 
   private field: MathfieldElement | null = null;
 
+  /** Шаблон, нажатый, пока MathLive ещё грузился: вставится, когда поле будет готово. */
+  private pendingTemplate: FormulaTemplate | null = null;
+
   /**
    * Номер последнего запуска отрисовки. Рендер асинхронный, а вкладку можно
    * переключить раньше, чем он закончится: ответы прошлых запусков отбрасываем
@@ -437,6 +440,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     // Строка категорий прокручивается вбок: при новом открытии — к началу.
     this.categoryList.scrollLeft = 0;
     this.openToken += 1;
+    this.pendingTemplate = null;
     this.prepareField(this.openToken).catch(this.onPrepareError);
   }
 
@@ -692,11 +696,25 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   }
 
   private applyTemplate(template: FormulaTemplate): void {
-    if (!this.field) return;
+    // На медленной сети шаблон успевают нажать раньше, чем загрузится MathLive.
+    // Нажатие не теряем: шаблон дождётся поля (см. `flushPendingTemplate`).
+    if (!this.field) {
+      this.pendingTemplate = template;
+
+      return;
+    }
 
     this.field.insert(template.latex, { selectionMode: 'placeholder', focus: true });
     this.setLatex(this.field.value);
     this.setStatus('idle');
+  }
+
+  private flushPendingTemplate(): void {
+    const pending = this.pendingTemplate;
+
+    this.pendingTemplate = null;
+
+    if (pending) this.applyTemplate(pending);
   }
 
   /** MathLive тяжёлый и работает только в браузере — грузим при первом показе. */
@@ -786,7 +804,10 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     } catch {
       // Конвертер не загрузился. Поле и кнопки остаются как есть — меняется
       // только объяснение.
-      if (token === this.openToken) this.setStatus('unreadable');
+      if (token === this.openToken) {
+        this.setStatus('unreadable');
+        this.flushPendingTemplate();
+      }
 
       return;
     }
@@ -800,6 +821,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     if (storedMathml && !nextLatex) this.setStatus('unreadable');
 
     this.field.focus();
+    this.flushPendingTemplate();
   }
 
   private async save(): Promise<void> {

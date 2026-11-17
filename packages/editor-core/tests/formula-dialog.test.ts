@@ -248,6 +248,24 @@ describe('диалог формул', () => {
     expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(false);
   });
 
+  it('шаблон, нажатый до загрузки поля, вставляется, когда поле появилось', async () => {
+    mountEditor();
+    openMathDialog();
+
+    const dialog = openDialog()!;
+
+    // Сразу, пока MathLive ещё грузится: поля в диалоге нет.
+    expect(dialog.querySelector('fake-math-field')).toBeNull();
+    dialog.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!.click();
+
+    const field = await waitForField();
+
+    await vi.waitFor(() => {
+      expect(field.value).toContain('\\frac');
+    });
+    expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(false);
+  });
+
   it('у химии «Частых» нет: первой остаётся прежняя категория', async () => {
     mountEditor();
     openMathDialog();
