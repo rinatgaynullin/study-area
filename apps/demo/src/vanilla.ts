@@ -30,14 +30,34 @@ const ocrFeature = createOcrFeature({
   recognize: async () => ({ text: HTML_SAMPLES.find((sample) => sample.id === 'ocr')?.html ?? '' }),
 });
 
-const editor = createRichEditor({
-  element: host,
-  content: '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>',
-  minHeight: '280px',
-  features: [createChemistryFeature(), createDrawingsFeature({ scans: ocrFeature.scans }), ocrFeature],
-  onChange: (html) => void viewer.update({ html }),
-});
+const drawingsFeature = createDrawingsFeature({ scans: ocrFeature.scans });
+
+/** Редактор пересоздаётся флажком «Код chemfig»: возможности читаются при создании. */
+const mountEditor = (chemistryCode: boolean, content: string): ReturnType<typeof createRichEditor> =>
+  createRichEditor({
+    element: host,
+    content,
+    minHeight: '280px',
+    features: [createChemistryFeature({ code: chemistryCode }), drawingsFeature, ocrFeature],
+    onChange: (html) => void viewer.update({ html }),
+  });
+
+let editor = mountEditor(false, '<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>');
 void viewer.update({ html: editor.core.getHTML() });
 
 // Для проверки из тестов: даём доступ к документу.
 Object.assign(window, { vanillaEditor: editor });
+
+const chemistryCodeToggle = document.createElement('input');
+const chemistryCodeLabel = document.createElement('label');
+
+chemistryCodeToggle.type = 'checkbox';
+chemistryCodeLabel.append(chemistryCodeToggle, ' Код chemfig в диалоге структуры');
+host.before(chemistryCodeLabel);
+chemistryCodeToggle.addEventListener('change', () => {
+  const html = editor.core.getHTML();
+
+  editor.destroy();
+  editor = mountEditor(chemistryCodeToggle.checked, html);
+  Object.assign(window, { vanillaEditor: editor });
+});

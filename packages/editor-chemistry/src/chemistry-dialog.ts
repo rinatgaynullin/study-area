@@ -3,33 +3,30 @@ import {
   createModal,
   el,
   on,
-  sanitizeSvg,
   type DialogComponent,
   type EditorUiContext,
   type Modal,
   type Translate,
 } from '@rich-editor/core';
-import { chemfigToSvg } from './chemfig';
-import { CHEMISTRY_TEMPLATES } from './templates';
+import { StructureEditor } from './builder/structure-editor';
+import { tryParseChemfig } from './chemfig';
 import type { ChemistryPayload } from './types';
 
 export interface ChemistryDialogOptions {
   onSave(payload: ChemistryPayload): void;
   onRemove(pos: number): void;
+  /** Показать под конструктором поле кода chemfig. */
+  code?: boolean;
 }
 
-/** Масштаб превью и миниатюр шаблонов относительно картинки в документе. */
-const PREVIEW_SCALE = 1.2;
-const TEMPLATE_SCALE = 0.45;
-
-/** Счётчик для уникальных id: подсказка и превью привязаны к полю через aria. */
+/** Счётчик для уникальных id: подсказка привязана к полю кода через aria. */
 let chemistryDialogCount = 0;
 
 /**
- * Диалог структурной формулы: поле кода chemfig, шаблоны и живое превью.
+ * Диалог структурной формулы: конструктор и, по опции, поле кода chemfig.
  *
- * Класс, а не замыкания: код, открытая структура, состояние превью и
- * кнопки — общее состояние, к которому обращаются и обработчики ввода, и
+ * Класс, а не замыкания: открытая структура, конструктор, поле кода и
+ * кнопки — общее состояние, к которому обращаются и обработчики правок, и
  * открытие, и сохранение.
  */
 class ChemistryDialogController implements DialogComponent<ChemistryPayload | null> {
@@ -41,14 +38,12 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
 
   private payload: ChemistryPayload | null = null;
 
-  /** Разобрался ли текущий код: от этого зависит кнопка вставки. */
-  private isValid = false;
-
   private readonly modal: Modal;
 
-  private readonly codeInput: HTMLTextAreaElement;
+  private readonly editor: StructureEditor;
 
-  private readonly preview: HTMLElement;
+  /** Поле кода есть только при `code: true`. */
+  private readonly codeInput: HTMLTextAreaElement | null;
 
   private readonly status: HTMLElement;
 
@@ -63,74 +58,16 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
     const { t } = context;
 
     this.t = t;
-
-    chemistryDialogCount += 1;
-
-    const idPrefix = `rte-chemistry-${chemistryDialogCount}`;
-    const hintId = `${idPrefix}-hint`;
-
-    this.codeInput = el('textarea', {
-      class: 'rte-input rte-chemistry-dialog__code',
-      attrs: {
-        rows: 3,
-        spellcheck: 'false',
-        autocapitalize: 'off',
-        autocomplete: 'off',
-        'aria-describedby': hintId,
-        'data-autofocus': true,
-      },
-    });
-
-    const field = el('label', {
-      class: 'rte-field',
-      children: [
-        el('span', { class: 'rte-field__label', text: t('chemistry_code_label') }),
-        this.codeInput,
-        el('p', { class: 'rte-chemistry-dialog__hint', text: t('chemistry_code_hint'), attrs: { id: hintId } }),
-      ],
-    });
-
-    const templates = el('div', {
-      class: 'rte-chemistry-dialog__templates',
-      attrs: { role: 'group', 'aria-label': t('chemistry_templates') },
-      children: CHEMISTRY_TEMPLATES.map((template) => {
-        const label = t(template.labelKey);
-        const svg = chemfigToSvg(template.code, { scale: TEMPLATE_SCALE });
-
-        return el('button', {
-          class: 'rte-chemistry-dialog__template',
-          attrs: { type: 'button', title: label, 'aria-label': label, 'data-code': template.code },
-          // Миниатюра — наш же SVG, тем же путём через санитайзер.
-          html: svg ? sanitizeSvg(svg) : '',
-          text: svg ? undefined : label,
-        });
-      }),
-    });
-
+    this.editor = new StructureEditor({ t, onChange: this.onEditorChange });
     this.status = el('p', { class: 'rte-chemistry-dialog__status', attrs: { role: 'status' } });
-    this.preview = el('div', { class: 'rte-chemistry-dialog__preview', attrs: { 'aria-hidden': 'true' } });
+    this.codeInput = options.code ? this.createCodeInput() : null;
 
-    this.modal = createModal({ title: t('chemistry_title_insert'), closeLabel: t('common_close') });
+    this.modal = createModal({ title: t('chemistry_title_insert'), closeLabel: t('common_close'), wide: true });
 
     this.modal.body.appendChild(
       el('div', {
         class: 'rte-chemistry-dialog',
-        children: [
-          field,
-          el('section', {
-            children: [
-              el('h3', { class: 'rte-chemistry-dialog__section-title', text: t('chemistry_templates') }),
-              templates,
-            ],
-          }),
-          el('section', {
-            children: [
-              el('h3', { class: 'rte-chemistry-dialog__section-title', text: t('chemistry_preview') }),
-              this.preview,
-              this.status,
-            ],
-          }),
-        ],
+        children: [this.editor.element, this.codeInput ? this.createCodeBlock(this.codeInput) : null, this.status],
       }),
     );
 
@@ -161,9 +98,11 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
 
     this.element = this.modal.element;
 
-    this.disposer.add(on(this.codeInput, 'input', this.onCodeInput));
-    this.disposer.add(on(this.codeInput, 'keydown', this.onCodeKeydown));
-    this.disposer.add(on(templates, 'click', this.onTemplatesClick));
+    if (this.codeInput) {
+      this.disposer.add(on(this.codeInput, 'input', this.onCodeInput));
+      this.disposer.add(on(this.codeInput, 'keydown', this.onCodeKeydown));
+    }
+
     this.disposer.add(on(cancelButton, 'click', this.onCancelClick));
     this.disposer.add(on(this.removeButton, 'click', this.onRemoveClick));
     this.disposer.add(on(this.saveButton, 'click', this.onSaveClick));
@@ -176,13 +115,25 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
   /** Открывает диалог: со структурой из документа — на правку, с `null` — на вставку. */
   open(next: ChemistryPayload | null): void {
     const editing = next !== null && next.pos !== null;
+    const code = next?.code.trim() ?? '';
+    const loaded = this.editor.load(code);
 
     this.payload = next;
     this.modal.setTitle(this.t(editing ? 'chemistry_title_edit' : 'chemistry_title_insert'));
     this.saveButton.textContent = this.t(editing ? 'chemistry_apply_save' : 'chemistry_apply_insert');
     this.removeButton.hidden = !editing;
-    this.codeInput.value = next?.code ?? '';
-    this.renderPreview();
+
+    if (this.codeInput) this.codeInput.value = code;
+
+    // Код, который не разобрать: с полем кода он остаётся в поле, без поля —
+    // формулу собирают заново.
+    if (code !== '' && !loaded) {
+      this.setStatus(this.t(this.codeInput ? 'chemistry_invalid' : 'chemistry_unreadable'), true);
+    } else {
+      this.setStatus('', false);
+    }
+
+    this.updateSaveButton();
     this.modal.open();
   }
 
@@ -192,24 +143,50 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
 
   destroy(): void {
     this.disposer.dispose();
+    this.editor.destroy();
     this.modal.destroy();
   }
 
-  /** Превью по текущему коду; пустой и неразобранный код объявляются в строке статуса. */
-  private renderPreview(): void {
-    const code = this.codeInput.value.trim();
-    const svg = code ? chemfigToSvg(code, { scale: PREVIEW_SCALE }) : null;
+  private createCodeInput(): HTMLTextAreaElement {
+    chemistryDialogCount += 1;
 
-    this.isValid = code !== '' && svg !== null;
-    this.preview.innerHTML = svg ? sanitizeSvg(svg) : '';
-    this.preview.hidden = svg === null;
+    return el('textarea', {
+      class: 'rte-input rte-chemistry-dialog__code',
+      attrs: {
+        rows: 3,
+        spellcheck: 'false',
+        autocapitalize: 'off',
+        autocomplete: 'off',
+        'aria-describedby': `rte-chemistry-${chemistryDialogCount}-hint`,
+      },
+    });
+  }
 
-    if (code === '') this.setStatus(this.t('chemistry_empty'), false);
-    else if (svg === null) this.setStatus(this.t('chemistry_invalid'), true);
-    else this.setStatus('', false);
+  /** Сворачиваемый блок «Код chemfig» с прежним полем и подсказкой про синтаксис. */
+  private createCodeBlock(input: HTMLTextAreaElement): HTMLElement {
+    return el('details', {
+      class: 'rte-chemistry-dialog__code-block',
+      children: [
+        el('summary', { class: 'rte-chemistry-dialog__summary', text: this.t('chemistry_code_label') }),
+        el('label', {
+          class: 'rte-field',
+          children: [
+            el('span', { class: 'rte-field__label', text: this.t('chemistry_code_label') }),
+            input,
+            el('p', {
+              class: 'rte-chemistry-dialog__hint',
+              text: this.t('chemistry_code_hint'),
+              attrs: { id: input.getAttribute('aria-describedby') },
+            }),
+          ],
+        }),
+      ],
+    });
+  }
 
-    // Неразобранный код всё же можно вставить: он сохранится как текст.
-    this.saveButton.disabled = code === '';
+  /** Сохранить можно только непустую структуру конструктора. */
+  private updateSaveButton(): void {
+    this.saveButton.disabled = this.editor.getCode() === '';
   }
 
   private setStatus(text: string, isError: boolean): void {
@@ -218,8 +195,29 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
     this.status.classList.toggle('rte-chemistry-dialog__status--error', isError);
   }
 
+  /** Правка в конструкторе переписывает поле кода. */
+  private readonly onEditorChange = (): void => {
+    if (this.codeInput) this.codeInput.value = this.editor.getCode();
+
+    this.setStatus('', false);
+    this.updateSaveButton();
+  };
+
+  /**
+   * Правка поля загружает код в конструктор. Код, который не разбирается,
+   * конструктор не трогает: ошибка — в статусе.
+   */
   private readonly onCodeInput = (): void => {
-    this.renderPreview();
+    const code = this.codeInput?.value.trim() ?? '';
+
+    if (code !== '' && !tryParseChemfig(code)) {
+      this.setStatus(this.t('chemistry_invalid'), true);
+    } else {
+      this.editor.load(code);
+      this.setStatus('', false);
+    }
+
+    this.updateSaveButton();
   };
 
   /** Ctrl/Cmd+Enter вставляет: Enter в многострочном поле оставляем переносу. */
@@ -228,16 +226,6 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
       event.preventDefault();
       this.save();
     }
-  };
-
-  private readonly onTemplatesClick = (event: Event): void => {
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-code]');
-
-    if (!button) return;
-
-    this.codeInput.value = button.dataset.code ?? '';
-    this.renderPreview();
-    this.codeInput.focus();
   };
 
   private readonly onCancelClick = (): void => {
@@ -257,7 +245,7 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
   };
 
   private save(): void {
-    const code = this.codeInput.value.trim();
+    const code = this.editor.getCode();
 
     if (!code) return;
 

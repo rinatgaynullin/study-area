@@ -32,6 +32,8 @@ export interface PlacedBond {
   y2: number;
   /** Направление в градусах, как в коде: 0 — вправо, против часовой. */
   angle: number;
+  /** Связь модели, которую изображает линия; у сторон кольца её нет. */
+  source?: ChemBond;
 }
 
 export interface TreeLayoutOptions {
@@ -104,7 +106,7 @@ export class ChemTreeLayout {
       const x2 = x + length * Math.cos(radians);
       const y2 = y - length * Math.sin(radians);
 
-      this.bonds.push({ type: bond.type, x1: x, y1: y, x2, y2, angle });
+      this.bonds.push({ type: bond.type, x1: x, y1: y, x2, y2, angle, source: bond });
       this.place(bond.target, x2, y2, angle);
     });
   }
