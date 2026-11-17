@@ -1,0 +1,258 @@
+import { describe, expect, it } from 'vitest';
+import {
+  MIN_HYPERBOLA_K,
+  MIN_STRETCH,
+  applyFunctionParam,
+  describeFunction,
+  functionLabel,
+  functionParams,
+  functionText,
+  isFunctionLabel,
+  type FunctionParamId,
+  type ParabolaForm,
+} from '../src/builders/plot-functions';
+import type { HyperbolaPlot, LinePlot, ParabolaPlot, Plot, SqrtPlot } from '../src/scene/types';
+
+const parabola = (fields: Partial<ParabolaPlot> = {}): ParabolaPlot => ({ type: 'parabola', vertex: [0, 0], direction: 'up', stretchX: 1, stretchY: 1, ...fields });
+const sqrt = (fields: Partial<SqrtPlot> = {}): SqrtPlot => ({ type: 'sqrt', vertex: [0, 0], directionX: 'right', directionY: 'up', stretch: 1, ...fields });
+const hyperbola = (fields: Partial<HyperbolaPlot> = {}): HyperbolaPlot => ({ type: 'hyperbola', center: [0, 0], k: 1, ...fields });
+
+const values = (plot: Plot, form: ParabolaForm = 'vertex'): Record<string, number> =>
+  Object.fromEntries(functionParams(plot, form).map((param) => [param.id, param.value]));
+
+/** y(x) по полям сцены — так, как кривую строит полотно (`curveRuns`), без модуля формул. */
+const yFromFields = (plot: Plot, x: number): number => {
+  switch (plot.type) {
+    case 'parabola': {
+      const t = (x - plot.vertex[0]) / plot.stretchX;
+
+      return plot.vertex[1] + (plot.direction === 'down' ? -1 : 1) * t * t * plot.stretchY;
+    }
+    case 'sqrt': {
+      const s = (x - plot.vertex[0]) * (plot.directionX === 'left' ? -1 : 1);
+
+      return plot.vertex[1] + (plot.directionY === 'down' ? -1 : 1) * plot.stretch * Math.sqrt(s);
+    }
+    case 'hyperbola':
+      return plot.center[1] + plot.k / (x - plot.center[0]);
+    case 'line':
+      if (plot.p1 && plot.p2) {
+        const k = (plot.p2[1] - plot.p1[1]) / (plot.p2[0] - plot.p1[0]);
+
+        return plot.p1[1] + k * (x - plot.p1[0]);
+      }
+
+      return (plot.k ?? 0) * x + (plot.b ?? 0);
+    default:
+      return NaN;
+  }
+};
+
+/** y(x) по параметрам школьной записи. */
+const yFromParams = (plot: Plot, form: ParabolaForm, x: number): number => {
+  const p = values(plot, form);
+  const get = (id: string): number => p[id] ?? NaN;
+
+  switch (plot.type) {
+    case 'parabola':
+      return form === 'standard' ? get('a') * x * x + get('b') * x + get('c') : get('a') * (x - get('m')) ** 2 + get('n');
+    case 'sqrt':
+      return get('a') * Math.sqrt(plot.directionX === 'left' ? get('m') - x : x - get('m')) + get('n');
+    case 'hyperbola':
+      return get('k') / (x - get('m')) + get('n');
+    case 'line':
+      return get('k') * x + get('b');
+    default:
+      return NaN;
+  }
+};
+
+const expectSameCurve = (plot: Plot, form: ParabolaForm, xs: number[]): void => {
+  xs.forEach((x) => expect(yFromParams(plot, form, x)).toBeCloseTo(yFromFields(plot, x), 2));
+};
+
+describe('параметры функции из полей сцены', () => {
+  it('прямая: k и b; по двум точкам — вычисляются; вертикальная — один параметр c', () => {
+    expect(values({ type: 'line', k: 2, b: -1 })).toEqual({ k: 2, b: -1 });
+    expect(values({ type: 'line', p1: [0, 1], p2: [2, 5] })).toEqual({ k: 2, b: 1 });
+    expect(values({ type: 'line', p1: [2, -1], p2: [2, 3] })).toEqual({ c: 2 });
+  });
+
+  it('парабола: a = ±stretchY / stretchX², m и n — вершина; общий вид — a, b, c', () => {
+    expect(values(parabola({ vertex: [1, -3], stretchX: 2, stretchY: 2, direction: 'down' }))).toEqual({ a: -0.5, m: 1, n: -3 });
+    expect(values(parabola({ vertex: [1, 3], stretchY: 2 }), 'standard')).toEqual({ a: 2, b: -4, c: 5 });
+  });
+
+  it('гипербола: k, m, n; корень: знак a — направление по y', () => {
+    expect(values(hyperbola({ center: [-1, 2], k: -3 }))).toEqual({ k: -3, m: -1, n: 2 });
+    expect(values(sqrt({ vertex: [2, 1], directionX: 'left', directionY: 'down', stretch: 1.5 }))).toEqual({ a: -1.5, m: 2, n: 1 });
+  });
+
+  it('диапазоны: a и k — от −5 до 5 шагом 0,1; сдвиги — от −10 до 10 шагом 0,5; у окружности параметров нет', () => {
+    const [a, m] = functionParams(parabola(), 'vertex');
+
+    expect(a).toMatchObject({ id: 'a', min: -5, max: 5, step: 0.1 });
+    expect(m).toMatchObject({ id: 'm', min: -10, max: 10, step: 0.5 });
+    expect(functionParams({ type: 'line', k: 1, b: 0 }, 'vertex')[0]).toMatchObject({ id: 'k', min: -5, max: 5, step: 0.1 });
+    expect(functionParams({ type: 'circle', center: [0, 0], radius: 2 }, 'vertex')).toEqual([]);
+    expect(functionParams({ type: 'point', coords: [0, 0], pointStyle: 'solid' }, 'vertex')).toEqual([]);
+  });
+
+  it('значения округляются до трёх знаков', () => {
+    expect(values(parabola({ stretchX: 3, stretchY: 1 })).a).toBe(0.111);
+  });
+});
+
+describe('правка параметра', () => {
+  const XS = [-3, -1.5, 0.5, 2, 4.25];
+
+  const cases: Array<{ name: string; plot: Plot; form: ParabolaForm; id: FunctionParamId; value: number; xs?: number[] }> = [
+    { name: 'прямая k', plot: { type: 'line', k: 1, b: 2 }, form: 'vertex', id: 'k', value: -1.5 },
+    { name: 'прямая b', plot: { type: 'line', k: 1, b: 2 }, form: 'vertex', id: 'b', value: -3 },
+    { name: 'прямая по точкам k', plot: { type: 'line', p1: [0, 1], p2: [2, 5] }, form: 'vertex', id: 'k', value: 0.5 },
+    { name: 'парабола a', plot: parabola({ vertex: [1, -3], stretchX: 2, stretchY: 1 }), form: 'vertex', id: 'a', value: -2 },
+    { name: 'парабола m', plot: parabola({ vertex: [1, -3], stretchX: 2, stretchY: 1 }), form: 'vertex', id: 'm', value: -2.5 },
+    { name: 'парабола n', plot: parabola({ vertex: [1, -3], direction: 'down' }), form: 'vertex', id: 'n', value: 4 },
+    { name: 'парабола общий a', plot: parabola({ vertex: [1, 3], stretchY: 2 }), form: 'standard', id: 'a', value: -1 },
+    { name: 'парабола общий b', plot: parabola({ vertex: [1, 3], stretchY: 2 }), form: 'standard', id: 'b', value: 2 },
+    { name: 'парабола общий c', plot: parabola({ vertex: [1, 3], stretchY: 2 }), form: 'standard', id: 'c', value: -1 },
+    { name: 'гипербола k', plot: hyperbola({ center: [1, 1] }), form: 'vertex', id: 'k', value: -2 },
+    { name: 'гипербола m', plot: hyperbola({ center: [1, 1] }), form: 'vertex', id: 'm', value: -0.5, xs: [-3, 0.5, 2, 4.25] },
+    { name: 'гипербола n', plot: hyperbola({ center: [1, 1] }), form: 'vertex', id: 'n', value: -2 },
+    { name: 'корень a', plot: sqrt({ vertex: [-4, 1] }), form: 'vertex', id: 'a', value: -2 },
+    { name: 'корень m', plot: sqrt({ vertex: [-4, 1] }), form: 'vertex', id: 'm', value: -5 },
+    { name: 'корень влево n', plot: sqrt({ vertex: [5, 1], directionX: 'left' }), form: 'vertex', id: 'n', value: -1 },
+  ];
+
+  cases.forEach(({ name, plot, form, id, value, xs }) => {
+    it(`${name}: новая кривая проходит через точки формулы, вход не меняется`, () => {
+      const before = JSON.stringify(plot);
+      const next = applyFunctionParam(plot, form, id, value);
+
+      expect(JSON.stringify(plot)).toBe(before);
+      expect(values(next, form)[id]).toBeCloseTo(value, 2);
+      expectSameCurve(next, form, xs ?? XS);
+    });
+  });
+
+  it('правка a параболы: направление по знаку, stretchX = 1, stretchY = |a|; m и n растяжений не трогают', () => {
+    const plot = parabola({ vertex: [1, -3], stretchX: 2, stretchY: 1 });
+
+    expect(applyFunctionParam(plot, 'vertex', 'a', -2)).toMatchObject({ direction: 'down', stretchX: 1, stretchY: 2 });
+    expect(applyFunctionParam(plot, 'vertex', 'm', 4)).toMatchObject({ vertex: [4, -3], stretchX: 2, stretchY: 1 });
+  });
+
+  it('правка k или b прямой по точкам переводит её в запись k/b; вертикальная двигается через c', () => {
+    const next = applyFunctionParam({ type: 'line', p1: [0, 1], p2: [2, 5] }, 'vertex', 'b', 3);
+
+    expect(next).toEqual({ type: 'line', k: 2, b: 3 });
+    expect(applyFunctionParam({ type: 'line', p1: [2, -1], p2: [2, 3] }, 'vertex', 'c', -1.5)).toEqual({ type: 'line', p1: [-1.5, -1], p2: [-1.5, 3] });
+  });
+
+  it('общий вид ↔ вершина: туда и обратно', () => {
+    const plot = parabola({ vertex: [-1.5, 2], stretchY: 0.5, direction: 'down' });
+    const standard = values(plot, 'standard');
+
+    expect(standard).toEqual({ a: -0.5, b: -1.5, c: 0.875 });
+
+    const back = applyFunctionParam(applyFunctionParam(plot, 'standard', 'b', standard.b ?? 0), 'standard', 'c', standard.c ?? 0);
+
+    expect(values(back)).toEqual({ a: -0.5, m: -1.5, n: 2 });
+  });
+
+  it('ноль для a и k гиперболы заменяется наименьшим допустимым со знаком прежнего значения', () => {
+    expect(values(applyFunctionParam(parabola({ direction: 'down' }), 'vertex', 'a', 0)).a).toBe(-MIN_STRETCH);
+    expect(values(applyFunctionParam(parabola(), 'standard', 'a', 0), 'standard').a).toBe(MIN_STRETCH);
+    expect(values(applyFunctionParam(sqrt({ directionY: 'down' }), 'vertex', 'a', 0)).a).toBe(-MIN_STRETCH);
+    expect(applyFunctionParam(hyperbola({ k: -2 }), 'vertex', 'k', 0)).toMatchObject({ k: -MIN_HYPERBOLA_K });
+    expect(applyFunctionParam(hyperbola({ k: 2 }), 'vertex', 'k', 0.04)).toMatchObject({ k: MIN_HYPERBOLA_K });
+    // У прямой k = 0 разрешён.
+    expect(applyFunctionParam({ type: 'line', k: 2, b: 1 }, 'vertex', 'k', 0)).toMatchObject({ k: 0, b: 1 });
+  });
+
+  it('кривая без правок не меняется: растяжения и точки остаются как загружены', () => {
+    const curve = parabola({ stretchX: 2, stretchY: 3 });
+    const line: LinePlot = { type: 'line', p1: [0, 1], p2: [2, 5] };
+
+    functionParams(curve, 'vertex');
+    functionParams(line, 'vertex');
+    expect(curve).toEqual(parabola({ stretchX: 2, stretchY: 3 }));
+    expect(line).toEqual({ type: 'line', p1: [0, 1], p2: [2, 5] });
+    // Сдвиг вершины растяжения не переписывает.
+    expect(applyFunctionParam(curve, 'vertex', 'n', 1)).toMatchObject({ stretchX: 2, stretchY: 3 });
+    // Чужой параметр — та же кривая.
+    expect(applyFunctionParam(line, 'vertex', 'm', 3)).toBe(line);
+  });
+});
+
+describe('запись формулы', () => {
+  const ru = (plot: Plot, form: ParabolaForm = 'vertex'): string => functionText(plot, form, 'ru');
+
+  it.each<[string, Plot, string]>([
+    ['шаблон параболы', parabola(), 'y = x²'],
+    ['множитель 1 не пишется', parabola({ vertex: [1, 3] }), 'y = (x − 1)² + 3'],
+    ['−1 — минусом', parabola({ direction: 'down' }), 'y = −x²'],
+    ['нулевые слагаемые', parabola({ stretchY: 2 }), 'y = 2x²'],
+    ['x − (−2) → x + 2, + (−3) → − 3', parabola({ vertex: [-2, -3], stretchY: 2 }), 'y = 2(x + 2)² − 3'],
+    ['десятичная запятая', parabola({ vertex: [0.5, 0], stretchY: 0.5 }), 'y = 0,5(x − 0,5)²'],
+    ['прямая y = x + 2', { type: 'line', k: 1, b: 2 }, 'y = x + 2'],
+    ['прямая y = 2x', { type: 'line', k: 2, b: 0 }, 'y = 2x'],
+    ['k = 0', { type: 'line', k: 0, b: 3 }, 'y = 3'],
+    ['прямая с минусами', { type: 'line', k: -1, b: -2.5 }, 'y = −x − 2,5'],
+    ['вертикальная прямая', { type: 'line', p1: [2, 0], p2: [2, 4] }, 'x = 2'],
+    ['гипербола', hyperbola({ center: [1, 2], k: 3 }), 'y = 3/(x − 1) + 2'],
+    ['гипербола y = −1/x', hyperbola({ k: -1 }), 'y = −1/x'],
+    ['корень', sqrt({ vertex: [1, -2], stretch: 2 }), 'y = 2√(x − 1) − 2'],
+    ['корень влево вниз', sqrt({ vertex: [3, 0], directionX: 'left', directionY: 'down' }), 'y = −√(3 − x)'],
+    ['корень влево из нуля', sqrt({ directionX: 'left' }), 'y = √(−x)'],
+    ['окружность', { type: 'circle', center: [1, -2], radius: 2.5 }, '(x − 1)² + (y + 2)² = 6,25'],
+    ['окружность в начале', { type: 'circle', center: [0, 0], radius: 2 }, 'x² + y² = 4'],
+  ])('%s: %s', (_name, plot, expected) => {
+    expect(ru(plot)).toBe(expected);
+  });
+
+  it('общий вид параболы', () => {
+    expect(ru(parabola({ vertex: [1, 3], stretchY: 2 }), 'standard')).toBe('y = 2x² − 4x + 5');
+    expect(ru(parabola({ vertex: [0.5, 0] }), 'standard')).toBe('y = x² − x + 0,25');
+    expect(ru(parabola(), 'standard')).toBe('y = x²');
+  });
+
+  it('английская локаль — с десятичной точкой', () => {
+    expect(functionText(parabola({ vertex: [0.5, -1.25], stretchY: 1.5 }), 'vertex', 'en')).toBe('y = 1.5(x − 0.5)² − 1.25');
+  });
+
+  it('части формулы: степень, дробь, корень — отдельными узлами', () => {
+    expect(describeFunction(parabola({ vertex: [1, 0] }), 'vertex', 'ru')).toEqual([
+      { kind: 'var', name: 'y' },
+      { kind: 'text', text: ' = ' },
+      { kind: 'text', text: '(' },
+      { kind: 'var', name: 'x' },
+      { kind: 'text', text: ' − 1' },
+      { kind: 'text', text: ')' },
+      { kind: 'sup', text: '2' },
+    ]);
+    expect(describeFunction(hyperbola(), 'vertex', 'ru')?.[2]).toEqual({ kind: 'frac', num: [{ kind: 'text', text: '1' }], den: [{ kind: 'var', name: 'x' }] });
+    expect(describeFunction(sqrt(), 'vertex', 'ru')?.[2]).toEqual({ kind: 'sqrt', body: [{ kind: 'var', name: 'x' }] });
+    expect(describeFunction({ type: 'point', coords: [0, 0], pointStyle: 'solid' }, 'vertex', 'ru')).toBeNull();
+  });
+});
+
+describe('подпись формулой', () => {
+  it('запись для обоих рендеров: дефис, дробь в скобках, корень знаком', () => {
+    expect(functionLabel({ type: 'line', k: -2, b: 1 }, 'vertex', 'ru')).toBe('y = -2x + 1');
+    expect(functionLabel(hyperbola({ center: [1, -2], k: 3 }), 'vertex', 'ru')).toBe('y = 3/(x - 1) - 2');
+    expect(functionLabel(sqrt({ vertex: [1, 0], stretch: 0.5 }), 'vertex', 'ru')).toBe('y = 0,5√(x - 1)');
+    // Степень ни одним рендером верно не рисуется — у параболы и окружности подписи-формулы нет.
+    expect(functionLabel(parabola(), 'vertex', 'ru')).toBeNull();
+    expect(functionLabel({ type: 'circle', center: [0, 0], radius: 1 }, 'vertex', 'ru')).toBeNull();
+  });
+
+  it('подпись, равная формуле, узнаётся без учёта пробелов, минуса и разделителя', () => {
+    const line: LinePlot = { type: 'line', k: 0.5, b: -1 };
+
+    expect(isFunctionLabel('y=0.5x-1', line, 'vertex', 'ru')).toBe(true);
+    expect(isFunctionLabel('y = 0,5x − 1', line, 'vertex', 'ru')).toBe(true);
+    expect(isFunctionLabel('y = x', line, 'vertex', 'ru')).toBe(false);
+    expect(isFunctionLabel(undefined, line, 'vertex', 'ru')).toBe(false);
+  });
+});

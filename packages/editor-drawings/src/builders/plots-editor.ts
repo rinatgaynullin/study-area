@@ -4,8 +4,10 @@ import { fmt, pointsAttr } from '../render/svg-builder';
 import { normalizeGeometryScene } from '../scene/normalize';
 import type { GeometryHighlight, GeometryScene, Plot, Vec2 } from '../scene/types';
 import type { BuilderIconId } from './builder-icons';
+import { FunctionPanel } from './function-panel';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
+import { MIN_STRETCH, functionLabel, isFunctionLabel, isFunctionPlot } from './plot-functions';
 import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
@@ -81,7 +83,6 @@ const LINE_FAR = 1e4;
 /** Точки штриха ближе этого шага не добавляются: дрожание руки не должно раздувать ломаную. */
 const STROKE_MIN_STEP = 0.02;
 const MIN_RADIUS = 0.25;
-const MIN_STRETCH = 0.05;
 
 /** Поля сцены, которые конструктор понимает; остальные уходят обратно нетронутыми. */
 const KNOWN_SCENE_KEYS = new Set(['type', 'plots', 'axes', 'circle', 'circles', 'showGrid', 'grid', 'showAxesTicks', 'scale', 'offsetX', 'offsetY']);
@@ -129,6 +130,8 @@ interface PlotsState {
   showAxesTicks: boolean;
   /** Поля сцены, которых конструктор не знает: уходят обратно нетронутыми. */
   extra: RawScene;
+  /** Кривые, чья подпись — их формула и следует за ней. Не в сцене: только в конструкторе и истории. */
+  formulaLabels: string[];
 }
 
 const isRecord = (value: unknown): value is RawScene => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -445,6 +448,9 @@ const plotDistance = (plot: PlotItem, p: Vec2): number => {
 /** Точки важнее кривых, кривые важнее областей: точка на параболе выбирается первой. */
 const hitRank = (plot: PlotItem): number => (plot.type === 'point' ? 0 : plot.type === 'shading' ? 2 : 1);
 
+/** Набор полей панели свойств: меняется с типом и у прямой — с точек на `y = kx + b`. */
+const propertiesShape = (plot: Plot): string => (plot.type === 'line' && plot.p1 && plot.p2 ? 'line:points' : plot.type);
+
 /** Шаблоны кнопок палитры: единичные кривые в начале координат. */
 const TEMPLATE_PLOTS: Record<TemplateId, (id: string, color: string) => PlotItem> = {
   parabola: (id, color) => ({ id, type: 'parabola', vertex: [0, 0], direction: 'up', stretchX: 1, stretchY: 1, color }),
@@ -510,8 +516,25 @@ class PlotsEditor implements SceneEditor {
 
   private clipboard: PlotItem | null = null;
 
+  /** Локаль записи формул: от неё десятичный разделитель. */
+  private readonly locale: string;
+
+  /** Блок «Функция»: живёт всё время, пересобирается при смене выделения. */
+  private readonly functionPanel: FunctionPanel;
+
+  /** Поле «Метка» выделенного графика: подпись-формула обновляется в нём на месте. */
+  private labelInput: HTMLInputElement | null = null;
+
   constructor(context: SceneEditorContext) {
     this.t = context.t;
+    this.locale = this.t('drawings_plots_fn_locale');
+    this.functionPanel = new FunctionPanel({
+      t: this.t,
+      locale: this.locale,
+      onPreview: (plot, first) => this.previewFunction(plot, first),
+      onCommit: (plot, gesture) => this.commitFunction(plot, gesture),
+      onFormulaLabel: (checked) => this.setFormulaLabel(checked),
+    });
 
     this.canvas = new SketchCanvas({
       width: CANVAS_WIDTH,
@@ -580,7 +603,7 @@ class PlotsEditor implements SceneEditor {
   }
 
   static emptyState(): PlotsState {
-    return { plots: [], xLabel: 'x', yLabel: 'y', showGrid: true, showAxesTicks: true, extra: {} };
+    return { plots: [], xLabel: 'x', yLabel: 'y', showGrid: true, showAxesTicks: true, extra: {}, formulaLabels: [] };
   }
 
   // ----------------------------------------------------------- SceneEditor
@@ -609,6 +632,8 @@ class PlotsEditor implements SceneEditor {
       showGrid: scene.showGrid,
       showAxesTicks: scene.showAxesTicks,
       extra: extraOf(raw, KNOWN_SCENE_KEYS),
+      // Подпись, уже равная формуле, — признак подписи-формулы (как у величины угла).
+      formulaLabels: plots.filter((plot) => isFunctionLabel(plot.label, plot, this.functionPanel.form, this.locale)).map((plot) => plot.id),
     };
     this.history.clear();
     this.selectedId = null;
@@ -734,7 +759,85 @@ class PlotsEditor implements SceneEditor {
   private commit(mutate: (state: PlotsState) => void): void {
     this.history.record(this.state);
     mutate(this.state);
+    this.state.plots = this.state.plots.map((plot) => this.withFormulaLabel(plot));
     this.afterChange();
+  }
+
+  /** Подпись-формула следует за кривой, пока у неё стоит флажок. */
+  private withFormulaLabel(plot: PlotItem): PlotItem {
+    if (!this.state.formulaLabels.includes(plot.id)) return plot;
+
+    const label = functionLabel(plot, this.functionPanel.form, this.locale);
+
+    return label === null ? plot : { ...plot, label };
+  }
+
+  /** Кривая из блока «Функция» вместо выделенной: id и чужие поля — прежние. */
+  private replaceSelected(next: Plot): PlotItem | null {
+    const index = this.state.plots.findIndex((plot) => plot.id === this.selectedId);
+    const current = this.state.plots[index];
+
+    if (!current) return null;
+
+    const item = this.withFormulaLabel({ ...next, id: current.id, ...(current.extra ? { extra: current.extra } : {}) });
+
+    this.state.plots[index] = item;
+
+    return item;
+  }
+
+  /** Живой просмотр жеста ползунка: шаг истории — один на жест, записан перед первым движением. */
+  private previewFunction(next: Plot, first: boolean): void {
+    if (first) this.history.record(this.state);
+
+    const item = this.replaceSelected(next);
+
+    this.render();
+
+    if (item) this.refreshFunction(item);
+  }
+
+  /** Окончательное значение параметра: шаг истории (если жест его ещё не записал) и сцена наружу. */
+  private commitFunction(next: Plot, gesture: boolean): void {
+    const before = this.selectedPlot();
+
+    if (!before) return;
+
+    if (!gesture) this.history.record(this.state);
+
+    const item = this.replaceSelected(next);
+
+    this.render();
+    this.changes.emit();
+
+    // Прямая по точкам стала `y = kx + b`: поля ниже блока другие — панель собирается заново.
+    if (item && propertiesShape(item) === propertiesShape(before)) this.refreshFunction(item);
+    else this.renderProperties();
+  }
+
+  private setFormulaLabel(checked: boolean): void {
+    const { selectedId } = this;
+
+    if (selectedId === null) return;
+
+    this.commit((state) => {
+      state.formulaLabels = state.formulaLabels.filter((id) => id !== selectedId);
+
+      if (checked) {
+        state.formulaLabels.push(selectedId);
+      } else {
+        state.plots = state.plots.map((plot) => (plot.id === selectedId ? { ...plot, label: undefined } : plot));
+      }
+    });
+  }
+
+  /** Формула, параметры и подпись выделенной кривой — на месте, без пересоздания панели. */
+  private refreshFunction(plot: PlotItem): void {
+    if (!isFunctionPlot(plot)) return;
+
+    this.functionPanel.update(plot, this.state.formulaLabels.includes(plot.id));
+
+    if (this.labelInput) this.labelInput.value = plot.label ?? '';
   }
 
   private afterChange(): void {
@@ -907,8 +1010,13 @@ class PlotsEditor implements SceneEditor {
         this.drag.moved = true;
       }
 
-      this.state.plots[index] = translatePlot(this.drag.snapshot, delta);
+      const moved = this.withFormulaLabel(translatePlot(this.drag.snapshot, delta));
+
+      this.state.plots[index] = moved;
       this.render();
+
+      // Формула и параметры следуют за графиком на каждом движении.
+      if (moved.id === this.selectedId) this.refreshFunction(moved);
 
       return;
     }
@@ -1141,6 +1249,7 @@ class PlotsEditor implements SceneEditor {
     const { t } = this;
 
     this.properties.replaceChildren();
+    this.labelInput = null;
 
     const plot = this.selectedPlot();
 
@@ -1150,7 +1259,13 @@ class PlotsEditor implements SceneEditor {
       return;
     }
 
+    const isFunction = isFunctionPlot(plot);
+
     this.properties.appendChild(el('h4', { class: 'rte-builder__props-title', text: t(`drawings_plots_selected_${plot.type}`) }));
+
+    // Блок «Функция» — первым: формула и параметры вместо направлений и растяжений.
+    if (isFunction) this.properties.appendChild(this.functionPanel.show(plot, this.state.formulaLabels.includes(plot.id)));
+
     this.appendColorFields(plot);
 
     if (plot.type !== 'point' && plot.type !== 'shading') {
@@ -1161,63 +1276,22 @@ class PlotsEditor implements SceneEditor {
       );
     }
 
-    this.appendText(
+    this.labelInput = this.appendText(
       t('drawings_prop_label'),
       plot.label ?? '',
       (value) =>
-        this.updatePlot(plot, (draft) => {
-          draft.label = value || undefined;
+        // Подпись, набранная руками, — уже не формула: признак снимается.
+        this.commit((state) => {
+          state.formulaLabels = state.formulaLabels.filter((id) => id !== plot.id);
+          state.plots = state.plots.map((item) => (item.id === plot.id ? { ...item, label: value || undefined } : item));
         }),
       true,
     );
 
     switch (plot.type) {
       case 'parabola':
-        this.appendSelect(t('drawings_plots_prop_direction'), this.directionOptions('up', 'down'), plot.direction, (value) =>
-          this.updatePlot(plot, (draft) => {
-            draft.direction = value === 'down' ? 'down' : 'up';
-          }),
-        );
-        this.appendNumber(t('drawings_plots_prop_stretch_x'), plot.stretchX, (value) =>
-          this.updatePlot(plot, (draft) => {
-            draft.stretchX = Math.max(MIN_STRETCH, value);
-          }),
-        );
-        this.appendNumber(t('drawings_plots_prop_stretch_y'), plot.stretchY, (value) =>
-          this.updatePlot(plot, (draft) => {
-            draft.stretchY = Math.max(MIN_STRETCH, value);
-          }),
-        );
-        this.appendDomain(plot);
-        break;
       case 'sqrt':
-        this.appendSelect(t('drawings_plots_prop_direction_x'), this.directionOptions('right', 'left'), plot.directionX, (value) =>
-          this.updatePlot(plot, (draft) => {
-            draft.directionX = value === 'left' ? 'left' : 'right';
-          }),
-        );
-        this.appendSelect(t('drawings_plots_prop_direction_y'), this.directionOptions('up', 'down'), plot.directionY, (value) =>
-          this.updatePlot(plot, (draft) => {
-            draft.directionY = value === 'down' ? 'down' : 'up';
-          }),
-        );
-        this.appendNumber(t('drawings_plots_prop_stretch'), plot.stretch, (value) =>
-          this.updatePlot(plot, (draft) => {
-            draft.stretch = Math.max(MIN_STRETCH, value);
-          }),
-        );
-        this.appendDomain(plot);
-        break;
       case 'hyperbola':
-        this.appendNumber(
-          t('drawings_plots_prop_k'),
-          plot.k,
-          (value) =>
-            this.updatePlot(plot, (draft) => {
-              draft.k = value;
-            }),
-          (value) => value !== 0,
-        );
         this.appendDomain(plot);
         break;
       case 'circle':
@@ -1256,16 +1330,6 @@ class PlotsEditor implements SceneEditor {
             }),
           );
         } else {
-          this.appendNumber(t('drawings_plots_prop_k'), plot.k ?? 0, (value) =>
-            this.updatePlot(plot, (draft) => {
-              draft.k = value;
-            }),
-          );
-          this.appendNumber(t('drawings_plots_prop_b'), plot.b ?? 0, (value) =>
-            this.updatePlot(plot, (draft) => {
-              draft.b = value;
-            }),
-          );
           this.appendDomain(plot);
         }
         break;
@@ -1277,6 +1341,8 @@ class PlotsEditor implements SceneEditor {
 
     remove.addEventListener('click', () => this.deleteSelection());
     this.properties.appendChild(remove);
+
+    if (isFunction) this.properties.appendChild(el('p', { class: 'rte-plots__fn-hint', text: t('drawings_plots_fn_hint') }));
   }
 
   /** Без выделения панель показывает оси: подписи и числа на них. */
@@ -1302,10 +1368,6 @@ class PlotsEditor implements SceneEditor {
         draft.showAxesTicks = checked;
       }),
     );
-  }
-
-  private directionOptions(...values: Array<'up' | 'down' | 'left' | 'right'>): Array<{ value: string; label: string }> {
-    return values.map((value) => ({ value, label: this.t(`drawings_plots_${value}`) }));
   }
 
   /** Цвет: именованный из списка или любой hex; пустой hex возвращает цвет по умолчанию. */
@@ -1343,11 +1405,13 @@ class PlotsEditor implements SceneEditor {
     this.properties.appendChild(propertyField(t('drawings_plots_prop_hex'), hex));
   }
 
-  private appendText(label: string, value: string, apply: (value: string) => void, autofocus = false): void {
+  private appendText(label: string, value: string, apply: (value: string) => void, autofocus = false): HTMLInputElement {
     const input = el('input', { class: 'rte-input', attrs: { type: 'text', value, 'data-autofocus': autofocus } });
 
     input.addEventListener('change', () => apply(input.value.trim()));
     this.properties.appendChild(propertyField(label, input));
+
+    return input;
   }
 
   private appendNumber(label: string, value: number, apply: (value: number) => void, accept: (value: number) => boolean = () => true): void {
@@ -1365,13 +1429,6 @@ class PlotsEditor implements SceneEditor {
       apply(roundTo(next));
     });
     this.properties.appendChild(propertyField(label, input));
-  }
-
-  private appendSelect(label: string, options: Array<{ value: string; label: string }>, value: string, apply: (value: string) => void): void {
-    const select = selectControl(options, value);
-
-    select.addEventListener('change', () => apply(select.value));
-    this.properties.appendChild(propertyField(label, select));
   }
 
   private appendCheckbox(label: string, checked: boolean, apply: (checked: boolean) => void): void {

@@ -21,3 +21,135 @@
   grid-template-columns: 1fr 1fr;
   gap: 4px;
 }
+
+/*
+ * Блок «Функция»: формула выделенной кривой и её параметры. Помещается в
+ * боковую колонку 280px без горизонтальной прокрутки; ползунок и число — 40px.
+ */
+.rte-plots-fn {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rte-plots-fn__title {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  font-weight: var(--rte-title-font-weight, 600);
+  color: var(--rte-color-muted, #898794);
+}
+
+/* Карточка формулы: цвет — цвет графика (из сцены, через style), иначе цвет текста. */
+.rte-plots-fn__formula {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-bg, #fff);
+  color: var(--rte-color-text, #221f2e);
+  font-size: 20px;
+  line-height: 1.6;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.rte-plots-fn__var {
+  font-style: italic;
+}
+
+.rte-plots-fn__formula sup {
+  font-size: 0.65em;
+  line-height: 0;
+}
+
+/* Дробь: числитель над знаменателем, черта — цветом формулы. */
+.rte-plots-fn__frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 2px;
+  font-size: 0.8em;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.rte-plots-fn__num {
+  padding: 0 3px;
+  border-bottom: 1px solid currentColor;
+}
+
+.rte-plots-fn__den {
+  padding: 0 3px;
+}
+
+/* Корень: знак и черта над подкоренным выражением. */
+.rte-plots-fn__sqrt {
+  display: inline-flex;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.rte-plots-fn__radicand {
+  padding: 0 2px;
+  border-top: 1px solid currentColor;
+  line-height: 1.3;
+}
+
+.rte-plots-fn__switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.rte-builder .rte-plots-fn__switch .rte-plots-fn__option {
+  height: auto;
+  min-height: 40px;
+  min-width: 0;
+  padding: 4px 6px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.rte-plots-fn__param {
+  display: grid;
+  gap: 2px;
+}
+
+/* Буква, ползунок и число в строку; ползунок забирает остаток ширины. */
+.rte-plots-fn__controls {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 6px;
+}
+
+.rte-plots-fn__letter {
+  font-size: var(--rte-ui-font-size, 15px);
+  text-align: center;
+}
+
+.rte-plots-fn__range {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  margin: 0;
+  accent-color: var(--rte-color-primary, #ff892e);
+  cursor: pointer;
+}
+
+.rte-builder__props .rte-plots-fn__number {
+  width: 100%;
+  min-width: 0;
+  padding: 0 6px;
+}
+
+/* Своя подсказка, не `rte-builder__hint`: та в диалоге занимает область сетки `hint`. */
+.rte-plots-fn__hint,
+.rte-plots__fn-hint {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  line-height: 1.3;
+  color: var(--rte-color-muted, #898794);
+}

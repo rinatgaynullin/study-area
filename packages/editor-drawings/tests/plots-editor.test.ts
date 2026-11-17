@@ -109,6 +109,54 @@ const change = (control: HTMLInputElement | HTMLSelectElement, value: string): v
 
 const plotsOf = (editor: SceneEditor): Array<Record<string, unknown>> => editor.getScene().plots as Array<Record<string, unknown>>;
 
+/** Ползунок или числовое поле параметра блока «Функция». */
+const paramControl = (editor: SceneEditor, id: string, kind: 'range' | 'number'): HTMLInputElement => {
+  const input = editor.element.querySelector<HTMLInputElement>(`.rte-plots-fn input[type="${kind}"][data-param="${id}"]`);
+
+  if (!input) throw new Error(`Нет поля параметра ${id}`);
+
+  return input;
+};
+
+const paramIds = (editor: SceneEditor): string[] =>
+  [...editor.element.querySelectorAll<HTMLInputElement>('.rte-plots-fn input[type="range"]')].map((input) => input.dataset.param ?? '');
+
+const formulaOf = (editor: SceneEditor): string | null | undefined =>
+  editor.element.querySelector('.rte-plots-fn__formula[role="img"]')?.getAttribute('aria-label');
+
+/** Движение ползунка: событие `input`, а `change` — когда отпустили. */
+const slide = (input: HTMLInputElement, value: string): void => {
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+const release = (input: HTMLInputElement): void => {
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
+const option = (editor: SceneEditor, value: string): HTMLButtonElement => {
+  const button = editor.element.querySelector<HTMLButtonElement>(`.rte-plots-fn [role="radio"][data-value="${value}"]`);
+
+  if (!button) throw new Error(`Нет переключателя ${value}`);
+
+  return button;
+};
+
+/** Клик по первой точке пути кривой данного цвета: после загрузки окно просмотра подогнано под сцену. */
+const clickCurve = (editor: SceneEditor, color: string): void => {
+  const d = canvasOf(editor).querySelector(`.rte-sketch__layer path[stroke="${color}"]`)?.getAttribute('d') ?? '';
+  const [, x, y] = /M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(d) ?? [];
+
+  if (x === undefined || y === undefined) throw new Error(`Нет кривой цвета ${color}`);
+
+  const init = { bubbles: true, cancelable: true, button: 0, clientX: Number(x), clientY: Number(y), pointerId: 1 };
+
+  canvasOf(editor).dispatchEvent(new PointerEvent('pointerdown', init));
+  canvasOf(editor).dispatchEvent(new PointerEvent('pointerup', init));
+};
+
+const formulaLabelToggle = (editor: SceneEditor): HTMLInputElement | null => editor.element.querySelector<HTMLInputElement>('.rte-plots-fn input[data-formula-label]');
+
 /** Сцена графика из README PinQueen: парабола с вершиной в A и сама точка A. */
 const README_SCENE = {
   type: 'plot_2d',
@@ -295,12 +343,16 @@ describe('конструктор графиков', () => {
     change(controlOf<HTMLInputElement>(plots, 'Метка'), 'y = 2/x');
     expect(plotsOf(plots)[0].label).toBe('y = 2/x');
 
-    change(controlOf<HTMLInputElement>(plots, 'Коэффициент k'), '2');
+    change(paramControl(plots, 'k', 'number'), '2');
     expect(plotsOf(plots)[0].k).toBe(2);
 
-    // Ноль для гиперболы не годится — значение остаётся прежним.
-    change(controlOf<HTMLInputElement>(plots, 'Коэффициент k'), '0');
-    expect(plotsOf(plots)[0].k).toBe(2);
+    // Ноль для гиперболы не годится — наименьшее допустимое со знаком прежнего значения.
+    change(paramControl(plots, 'k', 'number'), '0');
+    expect(plotsOf(plots)[0].k).toBe(0.1);
+    // Пустое число не меняет кривую, поле показывает прежнее значение.
+    change(paramControl(plots, 'k', 'number'), '');
+    expect(plotsOf(plots)[0].k).toBe(0.1);
+    expect(paramControl(plots, 'k', 'number').value).toBe('0.1');
 
     // Одна граница — полуоткрытая область: бесконечный конец в JSON становится `null`.
     change(controlsOf<HTMLInputElement>(plots, 'Область по x (от, до)')[0], '0.5');
@@ -321,12 +373,19 @@ describe('конструктор графиков', () => {
     expect(plotsOf(plots)[1]).toMatchObject({ type: 'circle', radius: 1.5, fill: true });
 
     pickTemplate(plots, 'line');
-    change(controlOf<HTMLInputElement>(plots, 'Сдвиг b'), '-1');
+    change(paramControl(plots, 'b', 'number'), '-1');
     expect(plotsOf(plots)[2]).toMatchObject({ type: 'line', k: 1, b: -1 });
 
     pickTemplate(plots, 'sqrt');
-    change(controlOf<HTMLSelectElement>(plots, 'Направление по x'), 'left');
+    expect(option(plots, 'right').getAttribute('aria-checked')).toBe('true');
+    option(plots, 'left').click();
     expect(plotsOf(plots)[3]).toMatchObject({ type: 'sqrt', directionX: 'left', directionY: 'up', stretch: 1 });
+    expect(option(plots, 'left').getAttribute('aria-checked')).toBe('true');
+    expect(formulaOf(plots)).toBe('y = √(−x)');
+
+    // Знак a заменяет «Направление по y».
+    change(paramControl(plots, 'a', 'number'), '-2');
+    expect(plotsOf(plots)[3]).toMatchObject({ directionX: 'left', directionY: 'down', stretch: 2 });
   });
 
   it('без выделения панель правит подписи осей и числа на них; кнопка сетки выключает сетку', () => {
@@ -484,6 +543,227 @@ describe('конструктор графиков', () => {
     // Повторный id заменяется свободным, бесконечная граница области остаётся `null`.
     expect(items[1]).toMatchObject({ id: 'plot_1', type: 'line', k: 2, b: 1, domain: [null, 3] });
     expect(items[2]).toMatchObject({ id: 'plot_2', type: 'circle', center: [2, 2], radius: 1 });
+  });
+});
+
+describe('блок «Функция»', () => {
+  let editor: SceneEditor | undefined;
+
+  afterEach(() => {
+    editor?.destroy();
+    editor = undefined;
+  });
+
+  const create = (): SceneEditor => {
+    editor = plotsEditorFactory.create({ t });
+    document.body.appendChild(editor.element);
+
+    return editor;
+  };
+
+  it('у параболы — карточка формулы и три ползунка; жест ползунка — один шаг отмены', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+
+    pickTemplate(plots, 'parabola');
+    expect(formulaOf(plots)).toBe('y = x²');
+    expect(paramIds(plots)).toEqual(['a', 'm', 'n']);
+    // Блок — первым в свойствах, под заголовком.
+    expect(plots.element.querySelector('.rte-builder__props > .rte-plots-fn')?.previousElementSibling?.textContent).toBe('Парабола');
+
+    const slider = paramControl(plots, 'a', 'range');
+
+    expect(slider).toMatchObject({ min: '-5', max: '5', step: '0.1' });
+    slide(slider, '1.5');
+    expect(plotsOf(plots)[0]).toMatchObject({ direction: 'up', stretchX: 1, stretchY: 1.5 });
+    expect(formulaOf(plots)).toBe('y = 1,5x²');
+    // Во время жеста блок не пересоздаётся: ползунок — тот же элемент.
+    expect(paramControl(plots, 'a', 'range')).toBe(slider);
+    expect(paramControl(plots, 'a', 'number').value).toBe('1.5');
+
+    slide(slider, '-2');
+    slide(slider, '-2.5');
+    release(slider);
+    expect(plotsOf(plots)[0]).toMatchObject({ direction: 'down', stretchY: 2.5 });
+    expect(formulaOf(plots)).toBe('y = −2,5x²');
+    expect(paramControl(plots, 'a', 'range')).toBe(slider);
+
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf(plots)[0]).toMatchObject({ direction: 'up', stretchX: 1, stretchY: 1 });
+    expect(formulaOf(plots)).toBe('y = x²');
+    expect(paramControl(plots, 'a', 'number').value).toBe('1');
+
+    // Ещё одна отмена убирает саму параболу: жест был одним шагом.
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf(plots)).toHaveLength(0);
+
+    // Число — тоже шаг истории.
+    pickTemplate(plots, 'parabola');
+    change(paramControl(plots, 'm', 'number'), '1');
+    change(paramControl(plots, 'n', 'number'), '-3');
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [1, -3] });
+    expect(formulaOf(plots)).toBe('y = (x − 1)² − 3');
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [1, 0] });
+  });
+
+  it('общий вид параболы: параметры a, b, c, другая запись, та же сцена; выбор действует на все параболы', () => {
+    const plots = create();
+
+    plots.load({ type: 'plot_2d', plots: [{ type: 'parabola', vertex: [1, 3], direction: 'up', stretchX: 1, stretchY: 2, color: '#3b82f6' }] });
+    clickCurve(plots, '#3b82f6');
+    expect(formulaOf(plots)).toBe('y = 2(x − 1)² + 3');
+
+    const scene = JSON.stringify(plots.getScene());
+
+    expect(option(plots, 'vertex').getAttribute('aria-checked')).toBe('true');
+    option(plots, 'standard').click();
+    expect(paramIds(plots)).toEqual(['a', 'b', 'c']);
+    expect(formulaOf(plots)).toBe('y = 2x² − 4x + 5');
+    expect(option(plots, 'standard').getAttribute('aria-checked')).toBe('true');
+    expect(JSON.stringify(plots.getScene())).toBe(scene);
+
+    change(paramControl(plots, 'c', 'number'), '7');
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [1, 5], stretchY: 2 });
+
+    // Новая парабола открывается в том же виде записи.
+    pickTemplate(plots, 'parabola');
+    expect(paramIds(plots)).toEqual(['a', 'b', 'c']);
+    expect(formulaOf(plots)).toBe('y = x²');
+  });
+
+  it('перетаскивание параболы меняет формулу и значения m, n на каждом движении', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+
+    pickTemplate(plots, 'parabola');
+    pickTool(plots, 'select');
+
+    pointer(canvas, 'pointerdown', [0, 0]);
+
+    const card = plots.element.querySelector('.rte-plots-fn__formula');
+    const m = paramControl(plots, 'm', 'range');
+
+    pointer(canvas, 'pointermove', [1.1, -0.9]);
+    expect(formulaOf(plots)).toBe('y = (x − 1)² − 1');
+    expect(m.value).toBe('1');
+    expect(paramControl(plots, 'n', 'number').value).toBe('-1');
+    pointer(canvas, 'pointermove', [-2, 2.1]);
+    expect(formulaOf(plots)).toBe('y = (x + 2)² + 2');
+    // Блок не пересоздавался.
+    expect(plots.element.querySelector('.rte-plots-fn__formula')).toBe(card);
+    pointer(canvas, 'pointerup', [-2, 2.1]);
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [-2, 2] });
+    expect(paramControl(plots, 'm', 'number').value).toBe('-2');
+  });
+
+  it('флажок «Подписать график формулой»: подпись следует за параметром, ручная правка снимает флажок', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+
+    pickTemplate(plots, 'line');
+
+    const toggle = formulaLabelToggle(plots);
+
+    expect(toggle?.checked).toBe(false);
+
+    if (!toggle) return;
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(plotsOf(plots)[0].label).toBe('y = x');
+    expect(controlOf<HTMLInputElement>(plots, 'Метка').value).toBe('y = x');
+
+    const b = paramControl(plots, 'b', 'range');
+
+    slide(b, '2');
+    expect(plotsOf(plots)[0].label).toBe('y = x + 2');
+    release(b);
+    change(paramControl(plots, 'k', 'number'), '-0.5');
+    expect(plotsOf(plots)[0].label).toBe('y = -0,5x + 2');
+    expect(controlOf<HTMLInputElement>(plots, 'Метка').value).toBe('y = -0,5x + 2');
+
+    // Перетаскивание тоже переписывает подпись.
+    pickTool(plots, 'select');
+    pointer(canvas, 'pointerdown', [0, 2]);
+    pointer(canvas, 'pointermove', [0, 3]);
+    expect(plotsOf(plots)[0].label).toBe('y = -0,5x + 3');
+    pointer(canvas, 'pointerup', [0, 3]);
+
+    // Отмена возвращает и подпись.
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf(plots)[0].label).toBe('y = -0,5x + 2');
+
+    change(controlOf<HTMLInputElement>(plots, 'Метка'), 'моя прямая');
+    expect(formulaLabelToggle(plots)?.checked).toBe(false);
+    change(paramControl(plots, 'b', 'number'), '0');
+    expect(plotsOf(plots)[0].label).toBe('моя прямая');
+
+    // Выключенный флажок очищает подпись.
+    const again = formulaLabelToggle(plots);
+
+    if (!again) return;
+
+    again.checked = true;
+    again.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(plotsOf(plots)[0].label).toBe('y = -0,5x');
+    again.checked = false;
+    again.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(plotsOf(plots)[0].label).toBeUndefined();
+
+    // Сцена с подписью-формулой открывается с включённым флажком.
+    plots.load({ type: 'plot_2d', plots: [{ type: 'hyperbola', center: [1, 0], k: 2, label: 'y = 2/(x - 1)', color: '#10b981' }] });
+    clickCurve(plots, '#10b981');
+    expect(formulaLabelToggle(plots)?.checked).toBe(true);
+    change(paramControl(plots, 'n', 'number'), '1');
+    expect(plotsOf(plots)[0].label).toBe('y = 2/(x - 1) + 1');
+  });
+
+  it('старых полей направления и растяжения нет; у параболы и окружности нет подписи-формулы', () => {
+    const plots = create();
+    const labels = (): string[] =>
+      [...plots.element.querySelectorAll('.rte-builder__props .rte-builder__prop-label')].map((label) => label.textContent ?? '');
+
+    (['parabola', 'sqrt', 'hyperbola', 'line', 'circle'] as const).forEach((template) => {
+      pickTemplate(plots, template);
+      expect(plots.element.querySelector('.rte-plots-fn')).not.toBeNull();
+      expect(labels().filter((label) => /Направление|Растяжение|Коэффициент|Сдвиг b/.test(label))).toEqual([]);
+      expect(plots.element.querySelector('.rte-builder__props select:not([class*="select"])')).toBeNull();
+    });
+
+    pickTemplate(plots, 'parabola');
+    expect(formulaLabelToggle(plots)).toBeNull();
+    expect(labels()).toContain('Область по x (от, до)');
+
+    pickTemplate(plots, 'circle');
+    expect(formulaOf(plots)).toBe('x² + y² = 4');
+    expect(paramIds(plots)).toEqual([]);
+    expect(formulaLabelToggle(plots)).toBeNull();
+    expect(labels()).toEqual(expect.arrayContaining(['Радиус', 'Заливка']));
+    expect(plots.element.querySelector('.rte-plots__fn-hint')?.textContent).toBe('Двигай ползунки или тащи график — формула меняется вместе с ним');
+
+    // У точки блока нет.
+    pickTool(plots, 'point');
+    click(canvasOf(plots), [5, 5]);
+    expect(plots.element.querySelector('.rte-plots-fn')).toBeNull();
+    expect(plots.element.querySelector('.rte-plots__fn-hint')).toBeNull();
+  });
+
+  it('прямая по двум точкам: k и b вычислены; правка переводит её в запись k/b, точки из панели уходят', () => {
+    const plots = create();
+
+    pickTool(plots, 'pencil');
+    stroke(
+      canvasOf(plots),
+      Array.from({ length: 9 }, (_, i) => [-2 + i / 2, -2 + i / 2] as Point),
+    );
+    expect(formulaOf(plots)).toBe('y = x');
+    expect(controlsOf<HTMLInputElement>(plots, 'Первая точка (x, y)')).toHaveLength(2);
+
+    change(paramControl(plots, 'b', 'number'), '1');
+    expect(plotsOf(plots)[0]).toEqual({ id: 'plot_1', type: 'line', k: 1, b: 1, style: 'solid' });
+    expect(() => controlsOf(plots, 'Первая точка (x, y)')).toThrow();
+    expect(controlsOf(plots, 'Область по x (от, до)')).toHaveLength(2);
   });
 });
 
