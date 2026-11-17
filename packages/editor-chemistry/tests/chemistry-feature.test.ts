@@ -190,28 +190,61 @@ describe('возможность целиком: кнопка, диалог, п�
     expect(editor.core.getHTML()).toContain('data-chemistry-code="CH_3-CH=CH_2"');
   });
 
-  it('неразобранный код в поле объявляется и конструктор не трогает', () => {
-    mountEditor({ features: [createChemistryFeature({ code: true })] });
+  it('пока код в поле не разбирается: сохранить нельзя, конструктор заперт и текст не затирает', () => {
+    const editor = mountEditor({ features: [createChemistryFeature({ code: true })] });
 
     toolbarButton('Структурная формула').click();
 
     const dialog = openDialog();
     const status = dialog.querySelector('.rte-chemistry-dialog__status');
-
-    typeCode(dialog, 'A-(B');
-
-    expect(status?.textContent).toBe('Не удалось разобрать код chemfig');
-    expect(status?.classList.contains('rte-chemistry-dialog__status--error')).toBe(true);
-    expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+    const input = dialog.querySelector<HTMLTextAreaElement>('textarea');
+    const saveButton = dialog.querySelector<HTMLButtonElement>('.rte-button--primary');
+    const press = (selector: string): void => {
+      dialog.querySelector(selector)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    };
 
     typeCode(dialog, 'CH_3-OH');
     typeCode(dialog, 'CH_3-(');
+
     expect(status?.textContent).toBe('Не удалось разобрать код chemfig');
-    expect(dialog.querySelector('.rte-chem-builder__canvas')?.textContent).toContain('OH');
-    expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(false);
+    expect(status?.classList.contains('rte-chemistry-dialog__status--error')).toBe(true);
+    expect(saveButton?.disabled).toBe(true);
+    expect(dialog.querySelector('.rte-chem-builder')?.hasAttribute('inert')).toBe(true);
+
+    // Нажатия в конструкторе не затирают текст в поле.
+    press('[data-atom="1"]');
+    press('button[data-code="**6(------)"]');
+    expect(input?.value).toBe('CH_3-(');
+    expect(status?.textContent).toBe('Не удалось разобрать код chemfig');
+
+    // Ctrl+Enter в поле тоже ничего не пишет.
+    input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
+    expect(editor.core.getHTML()).not.toContain('data-chemistry');
+
+    typeCode(dialog, '');
+    expect(dialog.querySelector('.rte-chem-builder')?.hasAttribute('inert')).toBe(false);
+    press('[data-action="start"]');
+    expect(input?.value).toBe('CH_3');
+    expect(saveButton?.disabled).toBe(false);
   });
 
-  it('битый код узла без поля кода: пустой конструктор и просьба собрать заново', () => {
+  it('правка поля — шаг истории конструктора: отмена возвращает прежнюю структуру', () => {
+    mountEditor({ features: [createChemistryFeature({ code: true })] });
+
+    toolbarButton('Структурная формула').click();
+
+    const dialog = openDialog();
+    const input = dialog.querySelector<HTMLTextAreaElement>('textarea');
+
+    typeCode(dialog, 'CH_3-OH');
+    typeCode(dialog, 'CH_3-O');
+    typeCode(dialog, 'CH_3-OH');
+    typeCode(dialog, 'CH_3-OH ');
+    dialog.querySelector('[data-action="undo"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(input?.value).toBe('CH_3-O');
+  });
+
+  it('битый код узла без поля кода: пустой конструктор, просьба собрать заново, сохранение заменяет код', () => {
     const editor = mountEditor();
 
     editor.core.setHTML('<p><span data-chemistry-code="A-(B"></span></p>');
@@ -222,10 +255,63 @@ describe('возможность целиком: кнопка, диалог, п�
     const dialog = openDialog();
 
     expect(dialog.querySelector('.rte-chemistry-dialog__status')?.textContent).toBe(
-      'Не получилось прочитать формулу. Собери её заново',
+      'Эту формулу не получилось открыть. Собери её заново',
     );
     expect(dialog.querySelector('[data-action="start"]')).not.toBeNull();
     expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+
+    dialog.querySelector('[data-action="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+    expect(editor.core.getHTML()).toContain('data-chemistry-code="CH_3"');
+  });
+
+  it('сохранение без правок оставляет исходный код байт в байт, правка пишет запись конструктора', () => {
+    const original = 'CH_3-[::30,1.5]CH_2-OH';
+    const editor = mountEditor();
+    const openNode = (): HTMLElement => {
+      editor.element
+        .querySelector<HTMLElement>('.rte-content .rte-chemistry')
+        ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+      return openDialog();
+    };
+    const press = (dialog: HTMLElement, selector: string): void => {
+      dialog.querySelector(selector)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    };
+
+    editor.core.setHTML(`<p><span data-chemistry-code="${original}"></span></p>`);
+
+    let dialog = openNode();
+
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+    expect(editor.core.getHTML()).toContain(`data-chemistry-code="${original}"`);
+
+    // Правка и её отмена — тоже «без правок».
+    dialog = openNode();
+    press(dialog, '[data-atom="2"]');
+    press(dialog, '[data-plus]');
+    press(dialog, '[data-action="undo"]');
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+    expect(editor.core.getHTML()).toContain(`data-chemistry-code="${original}"`);
+
+    dialog = openNode();
+    press(dialog, '[data-atom="2"]');
+    press(dialog, '[data-plus][data-angle="90"]');
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+    expect(editor.core.getHTML()).toContain('data-chemistry-code="CH_3-CH_2-OH-[:90]CH_3"');
+  });
+
+  it('с полем кода сохранение без правок тоже оставляет исходный код', () => {
+    const original = '[:30]**6(------)';
+    const editor = mountEditor({ features: [createChemistryFeature({ code: true })] });
+
+    editor.core.setHTML(`<p><span data-chemistry-code="${original}"></span></p>`);
+    editor.element
+      .querySelector<HTMLElement>('.rte-content .rte-chemistry')
+      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+    openDialog().querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+    expect(editor.core.getHTML()).toContain(`data-chemistry-code="${original}"`);
   });
 
   it('клик по узлу открывает диалог на правку; сохранение меняет код, удаление убирает узел', () => {

@@ -38,6 +38,15 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
 
   private payload: ChemistryPayload | null = null;
 
+  /** Код узла как он был: без правок он и сохраняется, байт в байт. */
+  private originalCode = '';
+
+  /** Запись структуры сразу после загрузки: совпала — значит, правок не было. */
+  private loadedCode = '';
+
+  /** В поле кода текст, который не разбирается: сохранять нечего, конструктор заперт. */
+  private codeInvalid = false;
+
   private readonly modal: Modal;
 
   private readonly editor: StructureEditor;
@@ -115,19 +124,26 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
   /** Открывает диалог: со структурой из документа — на правку, с `null` — на вставку. */
   open(next: ChemistryPayload | null): void {
     const editing = next !== null && next.pos !== null;
-    const code = next?.code.trim() ?? '';
+    const code = next?.code ?? '';
     const loaded = this.editor.load(code);
 
     this.payload = next;
+    this.originalCode = code;
+    this.loadedCode = this.editor.getCode();
     this.modal.setTitle(this.t(editing ? 'chemistry_title_edit' : 'chemistry_title_insert'));
     this.saveButton.textContent = this.t(editing ? 'chemistry_apply_save' : 'chemistry_apply_insert');
     this.removeButton.hidden = !editing;
 
     if (this.codeInput) this.codeInput.value = code;
 
-    // Код, который не разобрать: с полем кода он остаётся в поле, без поля —
-    // формулу собирают заново.
-    if (code !== '' && !loaded) {
+    // Код, который не разобрать: с полем кода он остаётся в поле, а
+    // конструктор заперт, чтобы первое нажатие не затёрло текст; без поля
+    // формулу собирают заново на пустом полотне.
+    const unreadable = code.trim() !== '' && !loaded;
+
+    this.setCodeInvalid(unreadable && this.codeInput !== null);
+
+    if (unreadable) {
       this.setStatus(this.t(this.codeInput ? 'chemistry_invalid' : 'chemistry_unreadable'), true);
     } else {
       this.setStatus('', false);
@@ -184,9 +200,34 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
     });
   }
 
-  /** Сохранить можно только непустую структуру конструктора. */
+  /** Сохранить можно только непустую структуру и только когда поле кода разбирается. */
   private updateSaveButton(): void {
-    this.saveButton.disabled = this.editor.getCode() === '';
+    this.saveButton.disabled = this.codeInvalid || this.editor.getCode() === '';
+  }
+
+  private setCodeInvalid(invalid: boolean): void {
+    this.codeInvalid = invalid;
+    this.editor.setLocked(invalid);
+  }
+
+  /**
+   * Код для сохранения. Без правок — исходный код узла как есть: в нём может
+   * быть то, чего модель не хранит (относительные углы, длина связи), а
+   * сервер рисует настоящий chemfig. После правки в конструкторе — его запись,
+   * после правки поля — текст поля.
+   */
+  private codeToSave(): string {
+    const code = this.editor.getCode();
+
+    if (!code) return '';
+
+    if (this.codeInput) {
+      const text = this.codeInput.value.trim();
+
+      return text === this.originalCode.trim() ? this.originalCode : text;
+    }
+
+    return code === this.loadedCode && this.originalCode.trim() ? this.originalCode : code;
   }
 
   private setStatus(text: string, isError: boolean): void {
@@ -195,25 +236,31 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
     this.status.classList.toggle('rte-chemistry-dialog__status--error', isError);
   }
 
-  /** Правка в конструкторе переписывает поле кода. */
+  /** Правка в конструкторе переписывает поле кода; вернулись к исходной структуре — и к исходному коду. */
   private readonly onEditorChange = (): void => {
-    if (this.codeInput) this.codeInput.value = this.editor.getCode();
+    const code = this.editor.getCode();
+
+    if (this.codeInput) this.codeInput.value = code === this.loadedCode && code !== '' ? this.originalCode : code;
 
     this.setStatus('', false);
     this.updateSaveButton();
   };
 
   /**
-   * Правка поля загружает код в конструктор. Код, который не разбирается,
-   * конструктор не трогает: ошибка — в статусе.
+   * Правка поля — шаг истории конструктора. Код, который не разбирается,
+   * конструктор не трогает и запирает его: ошибка — в статусе, сохранить
+   * нельзя. Очистил поле или исправил код — конструктор снова работает.
    */
   private readonly onCodeInput = (): void => {
     const code = this.codeInput?.value.trim() ?? '';
+    const invalid = code !== '' && !tryParseChemfig(code);
 
-    if (code !== '' && !tryParseChemfig(code)) {
+    this.setCodeInvalid(invalid);
+
+    if (invalid) {
       this.setStatus(this.t('chemistry_invalid'), true);
     } else {
-      this.editor.load(code);
+      this.editor.applyCode(code);
       this.setStatus('', false);
     }
 
@@ -245,7 +292,9 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
   };
 
   private save(): void {
-    const code = this.editor.getCode();
+    if (this.codeInvalid) return;
+
+    const code = this.codeToSave();
 
     if (!code) return;
 

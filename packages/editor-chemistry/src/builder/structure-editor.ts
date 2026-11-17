@@ -38,8 +38,20 @@ const RINGS: Array<{ id: string; size: number; aromatic: boolean; labelKey: stri
   { id: 'pentagon', size: 5, aromatic: false, labelKey: 'chemistry_builder_pentagon' },
 ];
 
+/** Названия направлений «плюсов» для читалки: угол округляется до ближайших 45°. */
+const DIRECTION_KEYS: Record<number, string> = {
+  0: 'chemistry_builder_dir_right',
+  45: 'chemistry_builder_dir_up_right',
+  90: 'chemistry_builder_dir_up',
+  135: 'chemistry_builder_dir_up_left',
+  180: 'chemistry_builder_dir_left',
+  225: 'chemistry_builder_dir_down_left',
+  270: 'chemistry_builder_dir_down',
+  315: 'chemistry_builder_dir_down_right',
+};
+
 /** Миниатюры готовых формул — тем же рендером в масштабе. */
-const TEMPLATE_SCALE = 0.45;
+const TEMPLATE_SCALE = 0.36;
 
 /** Геометрия слоя поверх структуры, в пикселях раскладки при масштабе 1. */
 const ATOM_HIT_RADIUS = 14;
@@ -97,9 +109,12 @@ const iconButton = (name: string, label: string, action: string): HTMLButtonElem
 const isTextField = (target: EventTarget | null): boolean =>
   target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 
+const directionKey = (angle: number): string =>
+  DIRECTION_KEYS[(Math.round(angle / 45) * 45) % 360] ?? 'chemistry_builder_dir_right';
+
 /**
  * Конструктор структурной формулы: полотно со структурой и «плюсами»,
- * палитра групп, тип связи, свойства выделенного, готовые формулы.
+ * палитра групп, тип связи, свойства выделенного, кольца, готовые формулы.
  *
  * Правит ту же модель, что даёт разбор chemfig, рисует её тем же рендером,
  * что и документ, а код получает сериализацией. Класс: модель, выделение,
@@ -132,6 +147,9 @@ export class StructureEditor {
 
   private historyIndex = 0;
 
+  /** Конструктор заперт: например, в поле кода текст, который не разбирается. */
+  private locked = false;
+
   private readonly stage: HTMLElement;
 
   private readonly hint: HTMLElement;
@@ -153,6 +171,8 @@ export class StructureEditor {
   private readonly bondProps: HTMLElement;
 
   private readonly clearLabelButton: HTMLButtonElement;
+
+  private readonly atomDeleteButton: HTMLButtonElement;
 
   private readonly bondDeleteButton: HTMLButtonElement;
 
@@ -185,13 +205,18 @@ export class StructureEditor {
         spellcheck: 'false',
         autocapitalize: 'off',
         autocomplete: 'off',
-        placeholder: 'C2H5',
+        placeholder: `${t('chemistry_builder_custom')}: C2H5`,
         'aria-label': t('chemistry_builder_custom'),
       },
     });
 
     this.replaceToggle = el('input', { attrs: { type: 'checkbox' } });
     this.clearLabelButton = builderButton(t('chemistry_builder_clear_label'), { action: 'clear-label' });
+    this.atomDeleteButton = builderButton(
+      t('chemistry_builder_delete'),
+      { action: 'delete' },
+      'rte-chem-builder__button--danger',
+    );
     this.bondDeleteButton = builderButton(
       t('chemistry_builder_delete'),
       { action: 'delete' },
@@ -207,7 +232,7 @@ export class StructureEditor {
           children: [this.replaceToggle, el('span', { text: t('chemistry_builder_replace') })],
         }),
         this.clearLabelButton,
-        builderButton(t('chemistry_builder_delete'), { action: 'delete' }, 'rte-chem-builder__button--danger'),
+        this.atomDeleteButton,
       ],
     });
     this.bondProps = el('div', {
@@ -222,16 +247,37 @@ export class StructureEditor {
       children: [this.propsTitle, this.atomProps, this.bondProps],
     });
 
-    const section = (titleKey: string, ...children: HTMLElement[]): HTMLElement =>
+    const section = (area: string, titleKey: string, ...children: HTMLElement[]): HTMLElement =>
       el('section', {
-        class: 'rte-chem-builder__section',
+        class: `rte-chem-builder__section rte-chem-builder__section--${area}`,
         children: [el('h3', { class: 'rte-chem-builder__title', text: t(titleKey) }), ...children],
       });
+
+    const templates = section(
+      'templates',
+      'chemistry_templates',
+      el('div', {
+        class: 'rte-chem-builder__templates',
+        children: CHEMISTRY_TEMPLATES.map((template) => {
+          const label = t(template.labelKey);
+          const svg = chemfigToSvg(template.code, { scale: TEMPLATE_SCALE });
+
+          return el('button', {
+            class: 'rte-chem-builder__template',
+            attrs: { type: 'button', title: label, 'aria-label': label, 'data-code': template.code },
+            // Миниатюра — наш же SVG, тем же путём через санитайзер.
+            html: svg ? sanitizeSvg(svg) : '',
+            text: svg ? undefined : label,
+          });
+        }),
+      }),
+    );
 
     this.side = el('div', {
       class: 'rte-chem-builder__side',
       children: [
         section(
+          'groups',
           'chemistry_builder_groups',
           el('div', {
             class: 'rte-chem-builder__palette',
@@ -240,23 +286,15 @@ export class StructureEditor {
               builderButton(formatChemLabel(group), { group }, 'rte-chem-builder__button--group'),
             ),
           }),
+          // «Своя группа» — подписью внутри поля: отдельная строка заголовка не
+          // помещается в высоту модалки на ноутбуке.
           el('div', {
-            class: 'rte-chem-builder__custom',
-            children: [
-              el('span', { class: 'rte-chem-builder__label', text: t('chemistry_builder_custom') }),
-              el('div', {
-                class: 'rte-chem-builder__row rte-chem-builder__row--nowrap',
-                children: [this.customInput, builderButton(t('chemistry_builder_custom_apply'), { action: 'custom' })],
-              }),
-            ],
-          }),
-          el('div', {
-            class: 'rte-chem-builder__row',
-            attrs: { role: 'group', 'aria-label': t('chemistry_builder_rings') },
-            children: RINGS.map(({ id, labelKey }) => builderButton(t(labelKey), { ring: id })),
+            class: 'rte-chem-builder__row rte-chem-builder__row--nowrap',
+            children: [this.customInput, builderButton(t('chemistry_builder_custom_apply'), { action: 'custom' })],
           }),
         ),
         section(
+          'bond',
           'chemistry_builder_bond',
           el('div', {
             class: 'rte-chem-builder__row',
@@ -266,26 +304,19 @@ export class StructureEditor {
         ),
         this.props,
         section(
-          'chemistry_templates',
+          'rings',
+          'chemistry_builder_rings',
           el('div', {
-            class: 'rte-chem-builder__templates',
-            children: CHEMISTRY_TEMPLATES.map((template) => {
-              const label = t(template.labelKey);
-              const svg = chemfigToSvg(template.code, { scale: TEMPLATE_SCALE });
-
-              return el('button', {
-                class: 'rte-chem-builder__template',
-                attrs: { type: 'button', title: label, 'aria-label': label, 'data-code': template.code },
-                // Миниатюра — наш же SVG, тем же путём через санитайзер.
-                html: svg ? sanitizeSvg(svg) : '',
-                text: svg ? undefined : label,
-              });
-            }),
+            class: 'rte-chem-builder__row',
+            attrs: { role: 'group', 'aria-label': t('chemistry_builder_rings') },
+            children: RINGS.map(({ id, labelKey }) => builderButton(t(labelKey), { ring: id })),
           }),
         ),
       ],
     });
 
+    // Готовые формулы — в левой колонке под полотном: на широком окне так всё
+    // помещается без прокрутки; на узком порядок задают стили.
     this.element = el('div', {
       class: 'rte-chem-builder',
       children: [
@@ -299,6 +330,7 @@ export class StructureEditor {
             this.stage,
             this.hint,
             this.status,
+            templates,
           ],
         }),
         this.side,
@@ -327,9 +359,43 @@ export class StructureEditor {
     return structure !== null;
   }
 
+  /**
+   * Код из поля как правка конструктора: один шаг истории, `onChange` не
+   * зовётся. Если запись кода совпадает с текущей структурой, конструктор не
+   * перезагружается. `false` — код не разбирается, конструктор не тронут.
+   */
+  applyCode(code: string): boolean {
+    const trimmed = code.trim();
+    const structure = trimmed ? parseForEditing(trimmed) : null;
+
+    if (trimmed && !structure) return false;
+
+    if (structureCode(structure) === this.getCode()) return true;
+
+    // Выделение переносим по номеру атома в обходе: правка в поле обычно
+    // меняет подпись или угол, а не порядок атомов.
+    const selectedIndex = this.layout?.atoms.findIndex((placed) => placed.atom === this.selectedAtom) ?? -1;
+
+    this.structure = structure;
+
+    const next = structure && selectedIndex !== -1 ? layoutChemistry(structure).atoms[selectedIndex] : undefined;
+
+    this.selection = next ? { kind: 'atom', atom: next.atom } : null;
+    this.commit(false);
+
+    return true;
+  }
+
   /** Код chemfig текущей структуры; пустая строка, если структуры нет. */
   getCode(): string {
     return structureCode(this.structure);
+  }
+
+  /** Запирает конструктор: нажатия и клавиши не принимаются, элементы вне обхода. */
+  setLocked(locked: boolean): void {
+    this.locked = locked;
+    this.element.toggleAttribute('inert', locked);
+    this.element.classList.toggle('rte-chem-builder--locked', locked);
   }
 
   focus(): void {
@@ -343,10 +409,11 @@ export class StructureEditor {
 
   /**
    * Фиксирует правку модели: код в историю, перерисовка, уведомление. Код,
-   * который не разбирается обратно, не принимается — модель возвращается к
-   * последнему снимку. Так ни одно действие не даёт неразборчивого кода.
+   * который не разбирается обратно в ту же структуру, не принимается — модель
+   * возвращается к последнему снимку. Так ни одно действие не даёт
+   * неразборчивого кода.
    */
-  private commit(): void {
+  private commit(notify = true): void {
     const code = this.getCode();
     const current = this.history[this.historyIndex] ?? '';
 
@@ -367,7 +434,7 @@ export class StructureEditor {
     this.setStatus('');
     this.render();
 
-    if (code !== current) this.options.onChange?.();
+    if (notify && code !== current) this.options.onChange?.();
   }
 
   /** Модель из снимка истории; выделение на старые объекты больше не указывает. */
@@ -397,7 +464,7 @@ export class StructureEditor {
     return this.selection?.kind === 'atom' ? this.selection.atom : null;
   }
 
-  /** Выделенная вершина кольца (атом без родителя в дереве вершины). */
+  /** Вершина кольца (атом без родителя в дереве вершины). */
   private isRingVertex(atom: ChemAtom): boolean {
     if (this.structure?.kind !== 'ring') return false;
 
@@ -410,6 +477,20 @@ export class StructureEditor {
     this.layout = this.structure ? layoutChemistry(this.structure) : null;
     this.renderStage();
     this.renderPanel();
+  }
+
+  /**
+   * Фокус после действия на полотне: элементы полотна пересоздаются, поэтому
+   * фокус ставится заново — на выделенный атом, иначе на само полотно. Так
+   * Delete, Escape, отмена и обход Tab продолжают работать.
+   */
+  private restoreFocus(): void {
+    const atom = this.selectedAtom;
+    const index = atom ? (this.layout?.atoms.findIndex((placed) => placed.atom === atom) ?? -1) : -1;
+    const target = index === -1 ? null : this.stage.querySelector<SVGElement>(`[data-atom="${index}"]`);
+
+    if (target) target.focus({ preventScroll: true });
+    else this.focus();
   }
 
   /** Полотно: структура тем же рендером и поверх — области нажатия, подсветка, «плюсы». */
@@ -442,8 +523,8 @@ export class StructureEditor {
     const canvas = svgElement('svg', {
       class: 'rte-chem-builder__canvas',
       viewBox: `${num(layout.width / 2 - width / 2)} ${num(layout.height / 2 - height / 2)} ${num(width)} ${num(height)}`,
-      'aria-hidden': 'true',
-      focusable: 'false',
+      role: 'group',
+      'aria-label': this.t('chemistry_builder_canvas'),
     });
 
     // Структура — тем же путём, каким её вставлял предпросмотр: строка рендера
@@ -461,9 +542,13 @@ export class StructureEditor {
     this.stage.appendChild(canvas);
   }
 
+  /**
+   * Слой поверх структуры. Связи — только для мыши и пальца; атомы и «плюсы» —
+   * кнопки в обходе Tab: атомы в порядке обхода структуры, затем «плюсы».
+   */
   private renderOverlay(layout: ChemLayout): SVGElement {
+    const { t, selection } = this;
     const overlay = svgElement('g', { class: 'rte-chem-builder__overlay' });
-    const { selection } = this;
 
     layout.bonds.forEach((placed, index) => {
       const ref = placed.bond;
@@ -487,6 +572,7 @@ export class StructureEditor {
 
     layout.atoms.forEach((placed, index) => {
       const isSelected = selection?.kind === 'atom' && selection.atom === placed.atom;
+      const label = formatChemLabel(placed.atom.label) || t('chemistry_builder_atom_unnamed');
 
       overlay.appendChild(
         svgElement('circle', {
@@ -494,6 +580,10 @@ export class StructureEditor {
           cx: placed.x,
           cy: placed.y,
           r: isSelected ? SELECTED_RADIUS : ATOM_HIT_RADIUS,
+          tabindex: '0',
+          role: 'button',
+          'aria-pressed': String(isSelected),
+          'aria-label': t('chemistry_builder_atom', { label }),
           'data-atom': String(index),
         }),
       );
@@ -508,8 +598,9 @@ export class StructureEditor {
         const cy = origin.y - PLUS_DISTANCE * Math.sin(radians);
         const plus = svgElement('g', {
           class: 'rte-chem-builder__plus',
+          tabindex: '0',
           role: 'button',
-          'aria-label': this.t('chemistry_builder_add'),
+          'aria-label': t('chemistry_builder_add', { direction: t(directionKey(angle)) }),
           'data-plus': String(index),
           'data-angle': String(angle),
         });
@@ -556,10 +647,14 @@ export class StructureEditor {
       else button.removeAttribute('title');
     });
 
+    // У вершины кольца удалять нечего: подпись можно убрать, само кольцо — «Очистить».
+    const isVertex = atom !== null && this.isRingVertex(atom);
+
     this.props.hidden = selection === null;
     this.atomProps.hidden = atom === null;
     this.bondProps.hidden = selection === null || selection.kind === 'atom';
-    this.clearLabelButton.hidden = !atom || !this.isRingVertex(atom) || atom.label === '';
+    this.clearLabelButton.hidden = !isVertex || atom?.label === '';
+    this.atomDeleteButton.hidden = isVertex;
 
     if (atom) {
       const label = formatChemLabel(atom.label);
@@ -661,7 +756,11 @@ export class StructureEditor {
     this.commit();
   }
 
-  /** Удаляет выделенное: атом с веткой, связь с веткой за ней. Связь кольца не удаляется. */
+  /**
+   * Удаляет выделенное: атом с веткой (выделение переходит к родителю), связь
+   * с веткой за ней. У вершины кольца убирается только подпись; сторона кольца
+   * не удаляется.
+   */
   private deleteSelection(): void {
     const { selection, structure } = this;
 
@@ -669,8 +768,16 @@ export class StructureEditor {
 
     const atom = selection.kind === 'atom' ? selection.atom : selection.bond.target;
 
+    if (this.isRingVertex(atom)) {
+      this.clearVertexLabel();
+
+      return;
+    }
+
+    const parent = locateAtom(structure, atom)?.parent ?? null;
+
     this.structure = removeAtom(structure, atom);
-    this.selection = null;
+    this.selection = parent && this.structure ? { kind: 'atom', atom: parent } : null;
     this.commit();
   }
 
@@ -721,7 +828,7 @@ export class StructureEditor {
   private clearVertexLabel(): void {
     const atom = this.selectedAtom;
 
-    if (!atom || !this.isRingVertex(atom)) return;
+    if (!atom || !this.isRingVertex(atom) || atom.label === '') return;
 
     atom.label = '';
     this.commit();
@@ -733,11 +840,8 @@ export class StructureEditor {
     this.commit();
   }
 
-  private readonly onStageClick = (event: MouseEvent): void => {
-    const { target } = event;
-
-    if (!(target instanceof Element)) return;
-
+  /** Нажатие по полотну мышью, пальцем или с клавиатуры (Enter и пробел на атоме или «плюсе»). */
+  private activate(target: Element): void {
     const plus = target.closest('[data-plus]');
     const atomHit = target.closest('[data-atom]');
     const bondHit = target.closest('[data-bond]');
@@ -759,15 +863,21 @@ export class StructureEditor {
       this.select(null);
     }
 
-    // Нажатые элементы полотна пересоздаются: фокус остаётся на полотне,
-    // чтобы Delete, Escape и отмена работали дальше.
-    this.focus();
+    this.restoreFocus();
+  }
+
+  private readonly onStageClick = (event: MouseEvent): void => {
+    const { target } = event;
+
+    if (this.locked || !(target instanceof Element)) return;
+
+    this.activate(target);
   };
 
   private readonly onPanelClick = (event: MouseEvent): void => {
     const { target } = event;
 
-    if (!(target instanceof Element) || this.stage.contains(target)) return;
+    if (this.locked || !(target instanceof Element) || this.stage.contains(target)) return;
 
     const button = target.closest('button');
 
@@ -808,19 +918,31 @@ export class StructureEditor {
   }
 
   /**
-   * Клавиши конструктора: отмена и повтор, Delete и Backspace для выделенного,
-   * Escape снимает выделение и тогда диалог не закрывает. В полях ввода
-   * клавиши остаются полю.
+   * Клавиши конструктора: Enter и пробел на атоме или «плюсе», отмена и
+   * повтор, Delete и Backspace для выделенного, Escape снимает выделение и
+   * тогда диалог не закрывает. В полях ввода клавиши остаются полю.
    */
   private readonly onKeydown = (event: KeyboardEvent): void => {
-    if (isTextField(event.target)) return;
+    const { target } = event;
+
+    if (this.locked || isTextField(target)) return;
 
     const modifier = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
+    const onStage = target instanceof Element && this.stage.contains(target);
+
+    if ((event.key === 'Enter' || event.key === ' ') && onStage && target.closest('[data-atom], [data-plus]')) {
+      event.preventDefault();
+      this.activate(target);
+
+      return;
+    }
 
     if (modifier && (key === 'z' || key === 'y')) {
       event.preventDefault();
       this.stepHistory(key === 'y' || event.shiftKey ? 1 : -1);
+
+      if (onStage) this.restoreFocus();
 
       return;
     }
@@ -829,18 +951,32 @@ export class StructureEditor {
       event.preventDefault();
       this.deleteSelection();
 
+      if (onStage) this.restoreFocus();
+
       return;
     }
 
     if (event.key === 'Escape' && this.selection) {
       event.preventDefault();
       event.stopPropagation();
+
+      const atom = this.selectedAtom;
+
       this.select(null);
+
+      // Фокус остаётся на том же атоме, уже без выделения.
+      const index = atom ? (this.layout?.atoms.findIndex((placed) => placed.atom === atom) ?? -1) : -1;
+      const element = index === -1 ? null : this.stage.querySelector<SVGElement>(`[data-atom="${index}"]`);
+
+      if (onStage) {
+        if (element) element.focus({ preventScroll: true });
+        else this.focus();
+      }
     }
   };
 
   private readonly onCustomKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Enter') return;
+    if (this.locked || event.key !== 'Enter') return;
 
     event.preventDefault();
     this.applyCustomGroup();

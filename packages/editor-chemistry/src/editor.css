@@ -47,7 +47,8 @@
 
 .rte-chem-builder {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 276px;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px;
   align-items: start;
 }
@@ -55,8 +56,20 @@
 .rte-chem-builder__main,
 .rte-chem-builder__side {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+}
+
+.rte-chem-builder__main {
+  position: relative;
+}
+
+/* Отмена, повтор и «Очистить» — поверх угла полотна: так полотно выше, а тело модалки не прокручивается. */
+.rte-chem-builder__toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
 }
 
 .rte-chem-builder__toolbar,
@@ -77,7 +90,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 340px;
+  height: 290px;
   border: 1px solid var(--rte-color-border, #dedce3);
   border-radius: var(--rte-radius, 8px);
   background: var(--rte-color-bg, #fff);
@@ -121,6 +134,32 @@
   stroke: transparent;
   stroke-linecap: round;
   cursor: pointer;
+}
+
+.rte-chem-builder__atom:focus {
+  outline: none;
+}
+
+/* Рамка фокуса на атоме и «плюсе»: SVG-элементы обводятся штрихом, не outline. */
+.rte-chem-builder__atom:focus-visible {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+
+.rte-chem-builder__plus:focus {
+  outline: none;
+}
+
+.rte-chem-builder__plus:focus-visible .rte-chem-builder__plus-hit {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+
+.rte-chem-builder--locked .rte-chem-builder__main,
+.rte-chem-builder--locked .rte-chem-builder__side {
+  opacity: 0.5;
 }
 
 .rte-chem-builder__bond--selected {
@@ -177,23 +216,13 @@
 
 .rte-chem-builder__section {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .rte-chem-builder__title {
   margin: 0;
   font-size: var(--rte-ui-font-size-sm, 14px);
   font-weight: var(--rte-title-font-weight, 600);
-}
-
-.rte-chem-builder__label {
-  font-size: var(--rte-ui-font-size-xs, 13px);
-  color: var(--rte-color-muted, #898794);
-}
-
-.rte-chem-builder__custom {
-  display: grid;
-  gap: 4px;
 }
 
 .rte-chem-builder__custom-input {
@@ -208,7 +237,7 @@
 }
 
 .rte-chem-builder__props {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--rte-color-border, #dedce3);
   border-radius: var(--rte-radius, 8px);
   background: var(--rte-color-subtle-bg, #f5f5f7);
@@ -236,7 +265,7 @@
   justify-content: center;
   min-width: 40px;
   height: 40px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--rte-color-border, #dedce3);
   border-radius: var(--rte-radius, 8px);
   background: var(--rte-color-bg, #fff);
@@ -289,9 +318,9 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  min-width: 56px;
-  height: 56px;
-  padding: 4px 8px;
+  min-width: 44px;
+  height: 44px;
+  padding: 2px 4px;
   border: 1px solid var(--rte-color-border, #dedce3);
   border-radius: var(--rte-radius, 8px);
   background: transparent;
@@ -314,8 +343,8 @@
 
 .rte-chem-builder__template svg {
   display: block;
-  max-height: 44px;
-  max-width: 96px;
+  max-height: 36px;
+  max-width: 56px;
   width: auto;
   height: auto;
 }
@@ -325,10 +354,40 @@
   fill: var(--rte-color-subtle-bg, #f5f5f7);
 }
 
-/* Узкий экран: всё в столбик, палитра — одной прокручиваемой строкой. */
+/*
+ * Узкий экран: всё в столбик. Колонки растворяются в общей сетке, порядок
+ * сверху вниз: полотно, подсказка, группы, связь, свойства, кольца, готовые
+ * формулы. Палитра и готовые формулы — одной прокручиваемой строкой.
+ */
 @media (max-width: 640px) {
   .rte-chem-builder {
     grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .rte-chem-builder__main,
+  .rte-chem-builder__side {
+    display: contents;
+  }
+
+  .rte-chem-builder__section--groups {
+    order: 1;
+  }
+
+  .rte-chem-builder__section--bond {
+    order: 2;
+  }
+
+  .rte-chem-builder__props {
+    order: 3;
+  }
+
+  .rte-chem-builder__section--rings {
+    order: 4;
+  }
+
+  .rte-chem-builder__section--templates {
+    order: 5;
   }
 
   .rte-chem-builder__stage {

@@ -11,7 +11,12 @@ afterEach(() => {
   editor = undefined;
 });
 
-const t = (key: string): string => CHEMISTRY_MESSAGES.ru?.[key] ?? key;
+const t = (key: string, params: Record<string, string | number> = {}): string =>
+  (CHEMISTRY_MESSAGES.ru?.[key] ?? key).replace(/\{(\w+)\}/g, (match, name: string) => String(params[name] ?? match));
+
+const keydown = (target: Element, key: string, init: KeyboardEventInit = {}): void => {
+  target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+};
 
 const mount = (onChange?: () => void): StructureEditor => {
   editor = new StructureEditor({ t, onChange });
@@ -375,5 +380,108 @@ describe('конструктор структуры: группы, загруз�
     });
 
     expect(atomCount(builder.getCode())).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('конструктор структуры: вершина кольца, клавиатура, правка кодом', () => {
+  it('у вершины кольца Delete убирает подпись, у вершины без подписи ничего не делает', () => {
+    const builder = mount();
+    const stage = find(builder, '.rte-chem-builder__stage');
+
+    click(button(builder, 'button[data-ring="hexagon"]'));
+    click(builder.element.querySelector('[data-atom="0"]'));
+
+    // Удалять у вершины нечего: кнопки нет, Delete ничего не меняет.
+    expect(visibleDeletes(builder)).toHaveLength(0);
+    keydown(stage, 'Delete');
+    expect(builder.getCode()).toBe('*6(------)');
+
+    click(builder.element.querySelector('[data-atom="0"]'));
+    builder.element.querySelector<HTMLInputElement>('.rte-chem-builder__toggle input')?.click();
+    chooseGroup(builder, 'N');
+    expect(builder.getCode()).toBe('*6(N------)');
+    expect(visibleDeletes(builder)).toHaveLength(0);
+    expect(button(builder, 'button[data-action="clear-label"]').closest('[hidden]')).toBeNull();
+
+    keydown(stage, 'Backspace');
+    expect(builder.getCode()).toBe('*6(------)');
+
+    click(button(builder, 'button[data-action="clear"]'));
+    expect(builder.getCode()).toBe('');
+  });
+
+  it('атомы и «плюсы» — кнопки в обходе Tab с подписями; Enter выделяет и присоединяет, фокус на новом атоме', () => {
+    const builder = mount();
+
+    click(find(builder, '[data-action="start"]'));
+
+    const atom = find(builder, '[data-atom="0"]');
+
+    expect(atom.getAttribute('tabindex')).toBe('0');
+    expect(atom.getAttribute('role')).toBe('button');
+    expect(atom.getAttribute('aria-label')).toBe('Атом CH₃');
+
+    const plus = find(builder, '[data-plus][data-angle="90"]');
+
+    expect(plus.getAttribute('tabindex')).toBe('0');
+    expect(plus.getAttribute('aria-label')).toBe('Присоединить группу: вверх');
+    expect(find(builder, '[data-plus][data-angle="315"]').getAttribute('aria-label')).toBe(
+      'Присоединить группу: вниз-вправо',
+    );
+
+    // Порядок обхода: атомы, затем «плюсы» выделенного.
+    const focusable = [...builder.element.querySelectorAll('.rte-chem-builder__overlay [tabindex="0"]')];
+
+    expect(focusable[0]?.hasAttribute('data-atom')).toBe(true);
+    expect(focusable.slice(1).every((item) => item.hasAttribute('data-plus'))).toBe(true);
+
+    chooseGroup(builder, 'OH');
+    keydown(find(builder, '[data-plus][data-angle="0"]'), 'Enter');
+    expect(builder.getCode()).toBe('CH_3-[:0]OH');
+    expect(document.activeElement?.getAttribute('data-atom')).toBe('1');
+
+    keydown(find(builder, '[data-atom="0"]'), ' ');
+    expect(find(builder, '[data-atom="0"]').getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement?.getAttribute('data-atom')).toBe('0');
+  });
+
+  it('applyCode — один шаг истории; та же запись не перезагружает и не сбрасывает выделение', () => {
+    const builder = mount();
+
+    builder.load('CH_3-OH');
+    click(builder.element.querySelector('[data-atom="1"]'));
+
+    expect(builder.applyCode(' CH_3-OH ')).toBe(true);
+    expect(find(builder, '[data-atom="1"]').getAttribute('aria-pressed')).toBe('true');
+    expect(button(builder, 'button[data-action="undo"]').disabled).toBe(true);
+
+    expect(builder.applyCode('CH_3-Cl')).toBe(true);
+    expect(builder.getCode()).toBe('CH_3-Cl');
+    // Выделение переехало на атом с тем же номером.
+    expect(find(builder, '[data-atom="1"]').getAttribute('aria-pressed')).toBe('true');
+
+    expect(builder.applyCode('A-(B')).toBe(false);
+    expect(builder.getCode()).toBe('CH_3-Cl');
+
+    click(button(builder, 'button[data-action="undo"]'));
+    expect(builder.getCode()).toBe('CH_3-OH');
+  });
+
+  it('запертый конструктор не принимает нажатий', () => {
+    const onChange = vi.fn();
+    const builder = mount(onChange);
+
+    builder.setLocked(true);
+    expect(builder.element.hasAttribute('inert')).toBe(true);
+
+    click(find(builder, '[data-action="start"]'));
+    click(button(builder, 'button[data-ring="benzene"]'));
+    click(button(builder, 'button[data-code="**6(------)"]'));
+    expect(builder.getCode()).toBe('');
+    expect(onChange).not.toHaveBeenCalled();
+
+    builder.setLocked(false);
+    click(find(builder, '[data-action="start"]'));
+    expect(builder.getCode()).toBe('CH_3');
   });
 });

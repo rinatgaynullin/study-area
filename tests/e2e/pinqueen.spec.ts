@@ -84,6 +84,50 @@ test.describe('структурные формулы', () => {
     await expect(page.locator(`${EDITOR} .rte-chemistry`)).toHaveAttribute('data-chemistry-code', 'CH_3-CH=CH_2');
   });
 
+  test('с клавиатуры: CH₃–OH — фокус на атом, Enter, фокус на «плюс», Enter — и вставка', async ({ page }) => {
+    await openDemo(page);
+
+    await page.locator(`${EDITOR} p`).first().click();
+    await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').click();
+
+    await page.locator(`${OPEN_MODAL} .rte-chem-builder__start`).focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await expect(page.locator(MODAL_PANEL)).toBeVisible();
+
+    await page.locator(`${OPEN_MODAL} [data-atom="0"]`).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toHaveAttribute('aria-pressed', 'true');
+
+    await page.locator(`${OPEN_MODAL} button[data-group="OH"]`).focus();
+    await page.keyboard.press('Enter');
+    await page.locator(`${OPEN_MODAL} [data-plus][aria-label="Присоединить группу: вправо"]`).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="1"]`)).toBeFocused();
+
+    await page.getByRole('button', { name: 'Вставить', exact: true }).click();
+    await expect(page.locator(`${EDITOR} .rte-chemistry`)).toHaveAttribute('data-chemistry-code', 'CH_3-[:0]OH');
+  });
+
+  test.describe('окно 1280×720', () => {
+    test.use({ viewport: { width: 1280, height: 720 } });
+
+    test('тело модалки конструктора не прокручивается, в том числе с выделенным атомом', async ({ page }) => {
+      await openDemo(page);
+
+      await page.locator(`${EDITOR} p`).first().click();
+      await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').click();
+      await page.locator(`${OPEN_MODAL} .rte-chem-builder__start`).click();
+      await page.locator(`${OPEN_MODAL} [data-plus][data-angle="0"]`).click();
+
+      const body = page.locator(`${OPEN_MODAL} .rte-modal__body`);
+      const overflow = await body.evaluate((element) => element.scrollHeight - element.clientHeight);
+
+      expect(overflow).toBeLessThanOrEqual(0);
+      await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__section--templates`)).toBeInViewport();
+    });
+  });
+
   test('разметка PinQueen из образца становится структурами, код вне подмножества остаётся текстом', async ({ page }) => {
     await openDemo(page);
     await applySample(page, 'Структурные формулы PinQueen');
