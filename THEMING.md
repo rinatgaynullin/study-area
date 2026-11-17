@@ -153,8 +153,8 @@ the link dialog, the colour input, scrollbars — follow.
 
 The drawing editor (`@rich-editor/drawings`) also reads `--rte-builder-side`
 (default `280px`): the width of the right column with the palette and
-properties next to the canvas, on screens wider than 860 px. It is set on the
-package's own elements, so it is not declared with the core tokens above.
+properties next to the canvas, on screens wider than 860 px (below that the
+column goes under the canvas). It is set on the package's own elements, so it is not declared with the core tokens above.
 
 ## Content and media
 

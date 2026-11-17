@@ -7,6 +7,26 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `createModal({ fill })` in `@rich-editor/core`: a panel almost the full screen
+  (`.rte-modal__panel--fill`, token `--rte-modal-width-fill`, 1280px; the whole
+  screen on a phone).
+- `@rich-editor/drawings`: the `json?: boolean` option of `createDrawingsFeature`
+  and `DrawingDialogOptions` (off by default). Only with it the dialog has the
+  JSON tab, the sample scenes, the preview and the TikZ field (in a collapsible
+  block); without it the user works in the constructors only.
+- `@rich-editor/drawings`: the `builders/builder-icons` module — `BUILDER_ICONS`,
+  `createBuilderIcon(id, size = 20)` and the `BuilderIconId` type; an optional
+  `icon` on `SceneEditorFactory`; the `rte-builder__tool--icon` modifier for
+  square icon buttons; the `--rte-builder-side` token (280px).
+- `@rich-editor/core`: the «Частые» formula category (`id: 'popular'`, key
+  `formula_categories_popular`) with 17 templates; `'popular'` joins
+  `TemplateCategoryId`.
+- `@rich-editor/core`: the formula dialog turns on the MathLive on-screen
+  keyboard on `pointer: coarse` devices; the window lifts above it and restores
+  on close. Checked in phone emulation (Chromium) only.
+- `@rich-editor/core`: separate formula errors — `formula_load_failed`,
+  `formula_unreadable`, `formula_invalid`.
+- Demo: the «JSON в диалоге чертежа» checkbox.
 - `@rich-editor/drawings`: cones and spheres in the 3D scene format and in the
   stereometry constructor. `cones: [{ base, apex, radius }]` is a right circular
   cone (the base circle is centred at `base`, perpendicular to the axis
@@ -253,6 +273,30 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Changed
 
+- `@rich-editor/drawings`: the drawing dialog is one row of tabs «Планиметрия /
+  Стереометрия / Графики / Физика» instead of the view switch and separate tabs;
+  a new drawing takes its kind from the selected tab, an existing one shows only
+  the tabs of its kind. Each constructor tab keeps its own draft while the
+  window is open, and the active tab's drawing is inserted. The dialog opens
+  with `fill: true`.
+- `@rich-editor/drawings`: the JSON tab and the preview are shown only with
+  `json: true`. Editing a node whose scene has no constructor shows
+  `drawings_unavailable` and cannot be saved; an unreadable scene gives a blank
+  canvas and `drawings_unreadable` (with `json: true` both open the JSON tab).
+- `@rich-editor/drawings`: the constructor layout — the canvas on the left, a
+  `--rte-builder-side` column with the palette, properties and hint on the
+  right (under the canvas on narrow screens); buttons are 40px high; hints are
+  written in plain language.
+- `@rich-editor/drawings` (breaking): `ToolButton.glyph: string` is replaced by
+  `icon: BuilderIconId`; `actionButton(label, icon, onClick)` takes an icon id.
+  The physics palette still uses symbols.
+- `@rich-editor/core`: `TEMPLATE_CATEGORIES` now contains the `popular`
+  category; its templates are the same objects as in their own categories, so
+  they appear twice. `findTemplate(id)` works as before.
+- `@rich-editor/core`: the formula dialog shows categories in one horizontally
+  scrolling row, template buttons are at least 48×48 (five per row on a phone),
+  the input field is larger, and the MathLive menu («≡» and the context menu) is
+  disabled.
 - `@rich-editor/drawings`: a click on a drawing opens its editor, instead of the
   press as before — the press now goes to the editor so the node can be dragged.
 - `@rich-editor/drawings`: in the stereometry constructor dragging empty space
@@ -294,6 +338,8 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Removed
 
+- The «Предпросмотр» block of the formula dialog and the `formula_preview`
+  message key: the formula is visible in the field itself.
 - From `@rich-editor/vue`: `EditorToolbar`, `RteModal`, `RtePopover`,
   `LinkPopover`, `FormulaDialog`, `AudioRecorderDialog`, `RteDropdown`,
   `RteToolbarButton`, `ColorPanel`, `readToolbarState`, `emptyToolbarState`,

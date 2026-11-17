@@ -159,7 +159,7 @@ interface FeatureBuildOptions {
 
 ```ts
 const createModal: (options: ModalOptions) => Modal;
-interface ModalOptions { title: string; closeLabel: string; wide?: boolean; onClose?(): void }
+interface ModalOptions { title: string; closeLabel: string; wide?: boolean; fill?: boolean; onClose?(): void }   // fill — почти весь экран (1280px), на телефоне весь
 interface Modal extends DialogComponent { readonly body: HTMLElement; readonly footer: HTMLElement; setTitle(title: string): void }
 const MODAL_CLOSE_EVENT = 'rte:modal-close';
 
@@ -231,11 +231,11 @@ const renderLatexPreview: (latex: string, type?: FormulaType, scale?: number) =>
 const getCachedLatexPreview: (latex: string, type?: FormulaType, scale?: number) => string | undefined;
 const clearPreviewCache: () => void;
 
-type TemplateCategoryId = 'basic' | 'fractions' | 'roots' | 'scripts' | 'sums' | 'integrals' | 'limits'
+type TemplateCategoryId = 'popular' | 'basic' | 'fractions' | 'roots' | 'scripts' | 'sums' | 'integrals' | 'limits'
   | 'matrices' | 'greek' | 'relations' | 'functions' | 'chemReactions' | 'chemStates' | 'chemIsotopes' | 'chemPatterns';
 interface FormulaTemplate { id: string; category: TemplateCategoryId; latex: string; preview: string }
 interface TemplateCategory { id: TemplateCategoryId; type: FormulaType; labelKey: string; templates: FormulaTemplate[] }
-const TEMPLATE_CATEGORIES: TemplateCategory[];
+const TEMPLATE_CATEGORIES: TemplateCategory[];   // 'popular' — первая у math; её шаблоны те же объекты, что и в исходных категориях, поэтому встречаются дважды
 const getTemplateCategories: (type: FormulaType) => TemplateCategory[];
 const findTemplate: (id: string) => FormulaTemplate | undefined;
 
@@ -411,18 +411,18 @@ type ChemStructure = ChemChain | ChemRing;
 ```ts
 // 17-drawings.md. Вход `.` — возможность для редактора.
 const createDrawingsFeature: (options?: DrawingsFeatureOptions) => EditorFeature;
-interface DrawingsFeatureOptions { toolbarItems?: boolean; editors?: SceneEditorFactory[]; scans?: () => string[] }
+interface DrawingsFeatureOptions { toolbarItems?: boolean; editors?: SceneEditorFactory[]; scans?: () => string[]; json?: boolean }   // json: вкладка JSON, образцы, предпросмотр, TikZ; по умолчанию false
 const GeometryNode: Node<DrawingOptions>; const PhysicsNode: Node<DrawingOptions>;   // узлы `geometry`, `physics`
 const createDrawingNode: (kind: DrawingKind) => Node<DrawingOptions>;
 interface DrawingOptions { t: Translate | null; onEdit: ((payload: DrawingPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
 const createDrawingDialog: (context: EditorUiContext, options: DrawingDialogOptions) => DialogComponent<DrawingPayload | null>;
 interface DrawingDialogOptions {
-  onSave(payload: DrawingPayload): void; onRemove(pos: number): void; editors?: SceneEditorFactory[]; scans?: () => string[];
+  onSave(payload: DrawingPayload): void; onRemove(pos: number): void; editors?: SceneEditorFactory[]; scans?: () => string[]; json?: boolean;
 }
 const DEFAULT_SCENE_EDITORS: SceneEditorFactory[];                       // встроенные вкладки конструкторов
 // Конструкторы (17-drawings.md, «Конструкторы»)
 interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScene(): RawScene; onChange(listener: () => void): Unsubscribe; focus(): void }
-interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
+interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; icon?: BuilderIconId; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
 interface SceneEditorContext { t: Translate; scans?: string[] }
 type RawScene = Record<string, unknown>;
 const planimetryEditorFactory: SceneEditorFactory; const stereometryEditorFactory: SceneEditorFactory;
@@ -434,6 +434,11 @@ class SketchCanvas { constructor(options: SketchCanvasOptions); readonly element
   setOverlay(markup: string): void; toSvg(point: Vec2): SvgPoint; toWorld(point: SvgPoint): Vec2; zoomAt(point: SvgPoint, factor: number): void;
   zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void; focus(): void; destroy(): void; readonly hitRadius: number }
 class HistoryStack<T> { constructor(limit?: number); record(current: T): void; undo(current: T): T | null; redo(current: T): T | null; clear(): void }
+interface ToolButton<TId extends string = string> { id: TId; labelKey: string; icon: BuilderIconId }   // раньше glyph: string
+const actionButton: (label: string, icon: BuilderIconId, onClick: () => void) => HTMLButtonElement;   // квадратная кнопка-значок
+type BuilderIconId = 'select' | …;                                       // id значков из builder-icons.ts
+const BUILDER_ICONS: Record<BuilderIconId, BuilderIconSpec>;                         // набор значков конструкторов
+const createBuilderIcon: (id: BuilderIconId, size?: number) => SVGSVGElement;   // size = 20
 class ToolBar<TId extends string> { constructor(options: ToolBarOptions<TId>); setActive(id: TId | null): void; setEnabled(id: TId, enabled: boolean): void }
 const fitLine: (points: Vec2[]) => LineFit | null; const fitCircle: (points: Vec2[]) => CircleFit | null;
 const fitParabola: (points: Vec2[]) => ParabolaFit | null; const recognizeStroke: (points: Vec2[]) => RecognizedShape;

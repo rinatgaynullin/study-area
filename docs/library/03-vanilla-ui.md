@@ -132,7 +132,7 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 
 | Фабрика | Что даёт |
 | --- | --- |
-| `createModal({ title, closeLabel, wide?, onClose? })` | Модалка: `body`, `footer`, `open()`, `close()`, `setTitle()`; ловушка фокуса, `Escape`, замок прокрутки |
+| `createModal({ title, closeLabel, wide?, fill?, onClose? })` | Модалка (`fill` — почти на весь экран, на телефоне на весь; так открывается диалог чертежа): `body`, `footer`, `open()`, `close()`, `setTitle()`; ловушка фокуса, `Escape`, замок прокрутки |
 | `createPopover(options?)` | Панель у `DOMRect`: `open(anchor)`, `close(reason?)`, `reposition()`; не забирает фокус |
 | `createDropdown({ label, iconName?, text?, renderPanel })` | Кнопка с меню; `renderPanel` вызывается при каждом открытии |
 | `createMenuItem(options)`, `createMenuSeparator()` | Пункт меню с ролью `menuitem` / `menuitemradio` / `menuitemcheckbox` и разделитель |
