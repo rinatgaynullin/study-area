@@ -15,7 +15,18 @@ export {
   tryParseChemfig,
   unwrapChemfig,
 } from './parse-chemfig';
-export { chemfigToSvg, renderChemistrySvg, type ChemistrySvgOptions } from './render-svg';
+export {
+  chemfigToSvg,
+  layoutChemistry,
+  renderChemistrySvg,
+  ringVertexAngle,
+  type ChemistrySvgOptions,
+  type ChemLayout,
+  type ChemLayoutAtom,
+  type ChemLayoutBond,
+  type RingBondRef,
+} from './render-svg';
+export { serializeChemfig } from './serialize-chemfig';
 export type {
   ChemAtom,
   ChemBond,

@@ -29,6 +29,11 @@ ICONS.chemistry =
 export interface ChemistryFeatureOptions {
   /** Пункт тулбара не нужен — например, структуры вставляет только импорт. */
   toolbarItem?: boolean;
+  /**
+   * Поле кода chemfig под конструктором — для тех, кто знает синтаксис.
+   * По умолчанию выключено: структуру собирают нажатиями.
+   */
+  code?: boolean;
 }
 
 /**
@@ -77,6 +82,7 @@ class ChemistryFeature implements EditorFeature {
     const { editor } = context;
 
     this.dialog = createChemistryDialog(context, {
+      code: this.options.code === true,
       onSave: (payload) => {
         if (payload.pos === null) {
           editor.chain().focus().insertChemistry({ code: payload.code, type: payload.type }).run();

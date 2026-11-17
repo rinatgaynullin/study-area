@@ -30,40 +30,62 @@ const ocrFeature = createOcrFeature({
   recognize: async () => ({ text: HTML_SAMPLES.find((sample) => sample.id === 'ocr')?.html ?? '' }),
 });
 
+/** Флажки разработчика: вкладка JSON в диалоге чертежа и поле кода chemfig. */
+interface DevOptions {
+  json: boolean;
+  chemistryCode: boolean;
+}
+
 /**
- * Редактор собирается заново, когда меняется флажок JSON: возможности
+ * Редактор собирается заново, когда меняется флажок разработчика: возможности
  * читаются один раз при создании. Документ переезжает в новый экземпляр.
  */
-const mountEditor = (content: string, json: boolean): RichEditorUi =>
+const mountEditor = (content: string, dev: DevOptions): RichEditorUi =>
   createRichEditor({
     element: host,
     content,
     minHeight: '280px',
-    features: [createChemistryFeature(), createDrawingsFeature({ scans: ocrFeature.scans, json }), ocrFeature],
+    features: [
+      createChemistryFeature({ code: dev.chemistryCode }),
+      createDrawingsFeature({ scans: ocrFeature.scans, json: dev.json }),
+      ocrFeature,
+    ],
     onChange: (html) => void viewer.update({ html }),
   });
 
-let editor = mountEditor('<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>', false);
+let editor = mountEditor('<h2>Ванильный редактор</h2><p>Набран <strong>без</strong> фреймворка.</p>', {
+  json: false,
+  chemistryCode: false,
+});
 void viewer.update({ html: editor.core.getHTML() });
 
 // Для проверки из тестов: даём доступ к документу.
 Object.assign(window, { vanillaEditor: editor });
 
+/** Флажок разработчика над редактором. */
+const devToggle = (label: string): HTMLInputElement => {
+  const input = document.createElement('input');
+  const wrapper = document.createElement('label');
+
+  input.type = 'checkbox';
+  wrapper.className = 'demo__check';
+  wrapper.append(input, ` ${label}`);
+  host.before(wrapper);
+
+  return input;
+};
+
 // Вкладка JSON, образцы и TikZ в диалоге чертежа — инструменты разработчика.
-const jsonToggle = document.createElement('input');
+const jsonToggle = devToggle('JSON в диалоге чертежа');
+const chemistryCodeToggle = devToggle('Код chemfig в диалоге структуры');
 
-jsonToggle.type = 'checkbox';
-
-const jsonLabel = document.createElement('label');
-
-jsonLabel.className = 'demo__check';
-jsonLabel.append(jsonToggle, ' JSON в диалоге чертежа');
-host.before(jsonLabel);
-
-jsonToggle.addEventListener('change', () => {
+const remountEditor = (): void => {
   const content = editor.core.getHTML();
 
   editor.destroy();
-  editor = mountEditor(content, jsonToggle.checked);
+  editor = mountEditor(content, { json: jsonToggle.checked, chemistryCode: chemistryCodeToggle.checked });
   Object.assign(window, { vanillaEditor: editor });
-});
+};
+
+jsonToggle.addEventListener('change', remountEditor);
+chemistryCodeToggle.addEventListener('change', remountEditor);
