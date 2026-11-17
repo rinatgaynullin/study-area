@@ -1,7 +1,7 @@
 # @rich-editor/chemistry
 
 Структурные формулы для `@rich-editor/core`: атомарный узел `chemistry` с кодом
-chemfig в `data-chemistry-code`, диалог с шаблонами и живым превью, рендер в SVG
+chemfig в `data-chemistry-code`, диалог-конструктор с готовыми формулами (поле кода — с опцией `code: true`), рендер в SVG
 без внешних зависимостей и лёгкий вход для вьюера.
 
 ```ts

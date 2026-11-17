@@ -7,6 +7,18 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/chemistry`: the structure dialog is a visual constructor — a
+  canvas with «plus» buttons around the selected atom, a palette of groups, a
+  custom group field, bond types, rings (benzene, hexagon, pentagon), ready-made
+  formulas, undo, redo and clear. It builds one chain with branches or one ring
+  with substituents.
+- `@rich-editor/chemistry`: the `code?: boolean` option of
+  `createChemistryFeature` (off by default); only with it the dialog has the
+  chemfig code field.
+- `@rich-editor/chemistry`: `serializeChemfig` and `layoutChemistry`, exported
+  from `.`; the `chemistry_builder_*` and `chemistry_unreadable`
+  message keys.
+- Demo: the «Код chemfig в диалоге структуры» checkbox.
 - `createModal({ fill })` in `@rich-editor/core`: a panel almost the full screen
   (`.rte-modal__panel--fill`, token `--rte-modal-width-fill`, 1280px; the whole
   screen on a phone).
@@ -273,6 +285,11 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Changed
 
+- `@rich-editor/chemistry`: the dialog no longer asks for chemfig code by
+  default. Saving without edits keeps the original code byte for byte; after an
+  edit the normalized code is written. Code that cannot be parsed cannot be
+  saved (with `code: true` while it is in the field; without it the canvas is
+  empty and the formula must be rebuilt).
 - `@rich-editor/drawings`: the drawing dialog is one row of tabs «Планиметрия /
   Стереометрия / Графики / Физика» instead of the view switch and separate tabs;
   a new drawing takes its kind from the selected tab, an existing one shows only
@@ -338,6 +355,8 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Removed
 
+- `@rich-editor/chemistry`: the `chemistry_preview` and `chemistry_empty`
+  message keys.
 - The «Предпросмотр» block of the formula dialog and the `formula_preview`
   message key: the formula is visible in the field itself.
 - From `@rich-editor/vue`: `EditorToolbar`, `RteModal`, `RtePopover`,

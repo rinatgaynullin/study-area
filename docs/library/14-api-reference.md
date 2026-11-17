@@ -365,7 +365,7 @@ Subpath-экспорты: `@rich-editor/vue/viewer` (`RichContent` и реэкс
 ```ts
 // 16-chemistry.md. Вход `.` — возможность для редактора.
 const createChemistryFeature: (options?: ChemistryFeatureOptions) => EditorFeature;
-interface ChemistryFeatureOptions { toolbarItem?: boolean }
+interface ChemistryFeatureOptions { toolbarItem?: boolean; code?: boolean }  // code: поле кода chemfig в окне, по умолчанию выключено
 const ChemistryNode: Node<ChemistryOptions>;                               // TipTap-узел `chemistry`
 interface ChemistryOptions { t: Translate | null; onEdit: ((payload: ChemistryPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
 const createChemistryDialog: (context: EditorUiContext, options: ChemistryDialogOptions) => DialogComponent<ChemistryPayload | null>;
@@ -393,6 +393,9 @@ class ChemfigSyntaxError extends Error { readonly position: number }
 const renderChemistrySvg: (structure: ChemStructure, options?: ChemistrySvgOptions) => string;
 const chemfigToSvg: (code: string, options?: ChemistrySvgOptions) => string | null;
 interface ChemistrySvgOptions { scale?: number }
+const serializeChemfig: (structure: ChemStructure) => string;               // пустая модель → ''
+const layoutChemistry: (structure: ChemStructure, options?: ChemistrySvgOptions) => ChemLayout;
+interface ChemLayout { width: number; height: number; atoms: ChemLayoutAtom[]; bonds: ChemLayoutBond[] }
 const formatChemLabel: (label: string) => string;
 const layoutChemTree: (root: ChemAtom, x: number, y: number, options: TreeLayoutOptions) => ChemTreeLayout;
 
