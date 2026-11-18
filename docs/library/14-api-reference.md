@@ -435,10 +435,12 @@ const plotsEditorFactory: SceneEditorFactory; const physicsEditorFactory: SceneE
 const STEREOMETRY_MESSAGES, PLOTS_MESSAGES, PHYSICS_BUILDER_MESSAGES: Record<string, Messages>;
 const projectVertex: (point: Point, angleY: number, angleZ: number, viewport: Viewport) => SvgPoint;
 const unprojectToGround: (plane: Vec2, angleY: number, angleZ: number) => Vec2;   // экран → плоскость z = 0
+// опции SketchCanvasOptions: canPanFrom?(info: PointerInfo): boolean — можно ли начать перемещение листа с этого нажатия; grabOnHover?(): boolean — курсор «рука» над пустым местом
 class SketchCanvas { constructor(options: SketchCanvasOptions); readonly element: HTMLElement; readonly viewport: Viewport; setScene(svg: string): void;
   setOverlay(markup: string): void; toSvg(point: Vec2): SvgPoint; toWorld(point: SvgPoint): Vec2; zoomAt(point: SvgPoint, factor: number): void;
-  zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void; focus(): void; destroy(): void; readonly hitRadius: number }
-class HistoryStack<T> { constructor(limit?: number); record(current: T): void; undo(current: T): T | null; redo(current: T): T | null; clear(): void }
+  zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void;
+  panByKey(key: string, step: number): boolean; cancelPan(): void; resetGestures(): void; focus(): void; destroy(): void; readonly hitRadius: number }
+class HistoryStack<T> { constructor(limit?: number); record(current: T): void; undo(current: T): T | null; redo(current: T): T | null; discard(): T | null; clear(): void }   // discard — снять последний снимок, повтор не трогает
 interface ToolButton<TId extends string = string> { id: TId; labelKey: string; icon: BuilderIconId }   // раньше glyph: string
 const actionButton: (label: string, icon: BuilderIconId, onClick: () => void) => HTMLButtonElement;   // квадратная кнопка-значок
 type BuilderIconId = 'select' | …;                                       // id значков из builder-icons.ts

@@ -39,6 +39,16 @@ The packages are not published yet; everything below lands in the first release.
 - `@rich-editor/core`: separate formula errors — `formula_load_failed`,
   `formula_unreadable`, `formula_invalid`.
 - Demo: the «JSON в диалоге чертежа» checkbox.
+- `@rich-editor/drawings`: sheet panning in every constructor — dragging an
+  empty spot moves the view (below 4 px it is still a click; an object or a
+  handle under the pointer is dragged instead; the pencil in plots keeps
+  drawing). Two-finger pinch zooms around the midpoint and panning with both
+  fingers moves the sheet. The arrow keys pan the view when nothing is selected
+  (planimetry, plots, physics). `SketchCanvasOptions.canPanFrom` / `grabOnHover`,
+  `SketchCanvas.panByKey`, `cancelPan`, `resetGestures`, `HistoryStack.discard()`;
+  the `rte-sketch--grab` and `rte-sketch--panning` cursor classes. Two-finger
+  and touch panning are checked on synthetic events in phone emulation
+  (Chromium) only.
 - `@rich-editor/drawings`: cones and spheres in the 3D scene format and in the
   stereometry constructor. `cones: [{ base, apex, radius }]` is a right circular
   cone (the base circle is centred at `base`, perpendicular to the axis
@@ -383,6 +393,14 @@ The packages are not published yet; everything below lands in the first release.
   `closeOnEscape: false`); the cross and «Отмена» close them. In the drawing
   dialog Escape calls `SceneEditor.cancel()` of the active tab, in the structure
   dialog it clears the selection.
+- `@rich-editor/drawings`: a cancelled gesture (`pointercancel`, a lost pointer
+  capture, a second finger, Escape) leaves no result: the pencil stroke is
+  dropped, the dragged object and the stereometry view angles are restored and
+  no history step remains. Actions that write history during an unfinished drag
+  (Delete, paste, a rotation key) finish the drag first. This replaces the
+  earlier behaviour where Escape completed the drag. Stereometry uses the shared
+  canvas gesture for panning; the select-tool hint of planimetry, plots and
+  physics mentions moving the sheet.
 - `@rich-editor/chemistry`: bond options the model does not store (`[::30]`,
   `[:30,1.5]`) are kept verbatim and written back unchanged after an edit.
 - `@rich-editor/chemistry`: a chain before a ring (`CH_3-CH_2-*6(…)`) is parsed
