@@ -304,14 +304,67 @@ The packages are not published yet; everything below lands in the first release.
   rewrite without loss; the builder is locked and the code is not changed (with
   `code: true` the fixed code unlocks it).
 
-- `@rich-editor/drawings`: the «Функция» block of the plots constructor. A
-  selected line, parabola, hyperbola, root or circle gets a formula card in
-  school notation with the numbers filled in, and a slider, a number field and
-  a hint for every parameter; the parabola is written in vertex or general
-  form. The `plot_2d` scene format is unchanged. The «Подписать график
-  формулой» checkbox keeps the curve `label` equal to its formula. Exported:
-  `functionParams`, `applyFunctionParam`, `describeFunction`, `functionText`,
-  `functionLabel`, `isFunctionLabel` and the related types.
+- `@rich-editor/drawings`: typed function input in the plots constructor. The
+  «+ Функция» button adds a `y =` field; the graph is drawn while typing, with a
+  formula card (fractions, powers, root, modulus) above the field and insert
+  buttons (`x²`, power, `√`, `|x|`, brackets, `π`, `sin`, `cos`, `tg`, `ln`)
+  below it. A syntax error is shown under the field, the canvas keeps the last
+  correct graph and the scene gets the last correct expression.
+- `@rich-editor/drawings`: an own expression parser, with no `eval` or
+  `new Function` (`parseFunction`, `evaluateFunction`, `functionParts`,
+  `functionText`, `functionLabelText` and the related types). It reads
+  `y = …` / `f(x) = …`, a decimal point or comma, `+ - − * · × / : ^`, round,
+  square and curly brackets, implicit multiplication (`2x`, `2(x+1)`), powers
+  (`x^2`, `x²`, `2^x`), `|x|` and `abs`, `sqrt`, `√`, `cbrt`, `sin`, `cos`,
+  `tg`, `ctg` and the inverse ones, `ln`, `lg`, `log(a; x)`, `log₂ x`, `exp`,
+  `pi`, `e`, and the Cyrillic «х» and «у». Hyperbolic functions, `sgn` and
+  `log(x)` without a base are not understood. The expression is at most 300
+  characters long and 50 levels deep.
+- `@rich-editor/drawings`: letter parameters. Every single Latin letter other
+  than `x`, `y`, `e` gets a slider (−10 to 10, step 0.1) and a number field; one
+  slider gesture is one undo step, and a letter that left the expression is
+  forgotten.
+- `@rich-editor/drawings`: a typed function is stored as ordinary `freehand`
+  polylines, so every renderer, including a third-party server, draws it. Such
+  a polyline has the optional fields `expr`, `params`, `fn` (branches of one
+  function share it) and `domain`; there are no new curve types, a polyline
+  without `expr` is a plain freehand line, and a broken or too long `expr` makes
+  the branch a plain polyline on load.
+- `@rich-editor/drawings`: `sampleFunction` — points computed for the visible
+  canvas window. A branch ends at non-numeric values, at leaving the window
+  vertically and at discontinuities (asymptotes are not joined, checked by
+  refinement between neighbouring points); collinear points are dropped; one
+  call is limited to 60 000 evaluations and 12 000 points. Points are
+  recomputed on an edit and on a view change; an untouched function at an
+  unchanged view is returned from `getScene()` verbatim.
+- `@rich-editor/drawings`: a function outside the sheet gets a hint under the
+  field, and the scene gets the piece of the graph nearest to the sheet (a band
+  three window heights high; the x range is widened if needed). «Показать
+  целиком» takes typed functions into account. A function with no points is not
+  written to the scene.
+- `@rich-editor/drawings`: a typed function is not dragged (the formula sets its
+  place), is selected by pressing any branch, and is deleted, copied and pasted
+  as one object.
+- `@rich-editor/drawings`: the «Парабола», «Гипербола», «Прямая» and «Корень»
+  templates create a typed function; new «Синус» and «Модуль» templates;
+  «Окружность» stays a ready curve, and the pencil still recognizes a line and
+  a parabola as ready curves.
+- `@rich-editor/drawings`: the ready curves of old scenes (`line`, `parabola`,
+  `hyperbola`, `sqrt`) stay as they are and are draggable; their properties have
+  the same expression field, and once the expression is changed and parses the
+  curve becomes a typed function (same colour, dash, label). `isReadyFunction`
+  and `plotExpression` (two decimals) are exported. A vertical line and a
+  two-point segment have no «Функция» block; a circle has centre and radius
+  fields.
+- `@rich-editor/drawings`: the «Подписать график формулой» checkbox keeps the
+  label of a function equal to its expression on one line (`y = x^2 - 3x + 1`)
+  and follows its edits; a polyline label is drawn in SVG. In TikZ
+  (`toLatexMath`) function names become LaTeX commands, the modulus becomes
+  `\left|…\right|` and `π` becomes `\pi`.
+- `@rich-editor/drawings`: plot axes draw ticks, numbers and the grid only on the
+  visible part of the sheet; the step is chosen from 1, 2, 5, 10, 20, 50… so
+  that an axis has no more than about 40 ticks (the usual view is unchanged).
+  Hyperbola sampling is bounded, so a far view does not hang the render.
 - `@rich-editor/drawings`: a shared colour palette (`DRAWING_COLORS`,
   `findDrawingColor`, `ColorPicker`, `colorField`) and the `drawings_color_*`
   message keys.
@@ -422,8 +475,8 @@ The packages are not published yet; everything below lands in the first release.
   `formula_load_failed` (read-only field on open, instead of `formula_invalid` on
   save); a second open during the MathLive load does not create a second field.
 
-- `@rich-editor/drawings`: a plot label draws a power (`^2`, `^{…}`) as a
-  superscript in SVG; in TikZ a decimal comma between digits in math mode is
+- `@rich-editor/drawings`: a plot label (also of a polyline) draws a power
+  (`^2`, `^{…}`) as a superscript in SVG; in TikZ a decimal comma between digits in math mode is
   wrapped as `{,}` (`toLatexMath`), for every label.
 - `@rich-editor/drawings`: the parabola vertex and stretches and the points of
   a line segment are stored with 4 decimal places instead of 2.

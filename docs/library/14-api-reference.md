@@ -451,16 +451,34 @@ const fitLine: (points: Vec2[]) => LineFit | null; const fitCircle: (points: Vec
 const fitParabola: (points: Vec2[]) => ParabolaFit | null; const recognizeStroke: (points: Vec2[]) => RecognizedShape;
 const distance, distanceToSegment, projectOnSegment, nearestOnCircle, snapToGrid, angleBetween, angleDegrees, roundPoint, roundTo;
 const BUILDER_MESSAGES: Record<string, Messages>;
-// Блок «Функция» (builders/plot-functions.ts; сцена не меняется, формула выводится из полей кривой)
-type ParabolaForm = 'vertex' | 'standard'; type FunctionParamId = 'k' | 'b' | 'a' | 'm' | 'n' | 'c' | 'r';
-interface FunctionParam { id: FunctionParamId; value: number; min: number; max: number; step: number }
-type FormulaPart = { kind: 'text'; text: string } | { kind: 'var'; name: string } | { kind: 'sup'; text: string } | { kind: 'frac'; num: FormulaPart[]; den: FormulaPart[] } | { kind: 'sqrt'; body: FormulaPart[] };
-const functionParams: (plot: Plot, form: ParabolaForm) => FunctionParam[];                  // у не-функций пусто
-const applyFunctionParam: (plot: Plot, form: ParabolaForm, id: FunctionParamId, value: number) => Plot;   // новая кривая, вход не меняется
-const describeFunction: (plot: Plot, form: ParabolaForm, separator: string) => FormulaPart[] | null;
-const functionText: (plot: Plot, form: ParabolaForm, separator: string) => string;           // запись для подписи: `y = 2(x - 1)^2 - 3`
-const functionLabel: (plot: Plot, form: ParabolaForm, separator: string) => string | null;
-const isFunctionLabel: (label: string | undefined, plot: Plot, form: ParabolaForm, separator: string) => boolean;
+// Блок «Функция» (сцена не меняется по типам: набранная функция — ломаные `freehand` с необязательными полями)
+// builders/function-expr.ts: собственный разбор записи, без eval
+type FunctionName = 'sin' | 'cos' | 'tg' | 'ctg' | 'arcsin' | 'arccos' | 'arctg' | 'arcctg' | 'ln' | 'lg' | 'log' | 'exp' | 'abs' | 'sqrt' | 'cbrt';
+type FunctionNode = { kind: 'number'; value: number; text: string } | { kind: 'x' } | { kind: 'constant'; name: 'pi' | 'e' } | { kind: 'param'; name: string }
+  | { kind: 'negate'; operand: FunctionNode } | { kind: 'binary'; op: '+' | '-' | '*' | '/' | '^'; left: FunctionNode; right: FunctionNode }
+  | { kind: 'call'; fn: FunctionName; name: string; args: FunctionNode[] };
+type FunctionErrorKey = 'drawings_plots_fn_error_empty' | 'drawings_plots_fn_error_word' | …;   // ключи сообщений об ошибке разбора
+interface FunctionError { key: FunctionErrorKey; word?: string }
+type ParsedFunction = { ok: true; ast: FunctionNode; params: string[] } | { ok: false; error: FunctionError; position: number };
+type FormulaPart = { kind: 'text'; text: string } | { kind: 'var'; name: string } | { kind: 'sup' | 'sub'; body: FormulaPart[] } | { kind: 'frac'; num: FormulaPart[]; den: FormulaPart[] }
+  | { kind: 'sqrt'; body: FormulaPart[]; index?: string } | { kind: 'abs'; body: FormulaPart[] };
+const parseFunction: (text: string) => ParsedFunction;                                       // запись до 300 символов, вложенность до 50
+const evaluateFunction: (ast: FunctionNode, x: number, params?: Record<string, number>) => number;   // вне области определения — NaN
+const functionParts: (ast: FunctionNode, separator: string) => FormulaPart[];                // карточка формулы
+const functionText: (ast: FunctionNode, separator?: string) => string;                       // `y = x^2 - 3x + 1`
+const functionLabelText: (ast: FunctionNode, separator?: string) => string;                  // запись для подписи (степень — `^`, для SVG и TikZ)
+// builders/function-sampler.ts: точки под видимое окно
+interface SampleOptions { from: number; to: number; yFrom: number; yTo: number; domain?: [number, number]; step?: number; tolerance?: number }
+const sampleFunction: (ast: FunctionNode, params: Record<string, number>, options: SampleOptions) => Vec2[][];   // ветви; разрывы и асимптоты ветвь обрывают
+// builders/plot-functions.ts: готовые кривые (line, parabola, hyperbola, sqrt) как запись
+type ReadyFunctionPlot = LinePlot | ParabolaPlot | HyperbolaPlot | SqrtPlot;
+const isReadyFunction: (plot: Plot) => plot is ReadyFunctionPlot;
+const plotExpression: (plot: Plot, separator: string) => string | null;                      // запись готовой кривой, два знака после запятой
+// Необязательные поля ломаной `freehand` у набранной функции (в типе FreehandPlot их нет: их читает только конструктор)
+//   expr: string                       запись, как набрана; без неё ломаная — обычная линия от руки
+//   params: Record<string, number>     значения параметров-букв
+//   fn: string                         общий id ветвей одной функции (разрывы — несколько ломаных)
+//   domain: [number | null, number | null]   ограничение по x
 // Палитра цвета (builders/color-picker.ts): десять плиток, `radiogroup`
 type DrawingColorId = 'blue' | 'cyan' | 'green' | 'yellow' | 'orange' | 'red' | 'pink' | 'purple' | 'brown' | 'gray';
 interface DrawingColor { id: DrawingColorId; value: string; labelKey: string; synonyms: readonly string[] }   // synonyms — прежние hex того же цвета
