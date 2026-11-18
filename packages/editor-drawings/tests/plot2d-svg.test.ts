@@ -70,6 +70,117 @@ describe('renderPlot2dContent: оси и сетка', () => {
   });
 });
 
+describe('renderPlot2dContent: тики и сетка далёкого и мелкого вида', () => {
+  const SIZE = { width: 300, height: 300 };
+
+  /** Содержимое графика при заданном виде: сетка, оси, тики и кривые. */
+  const content = (viewport: { scale: number; cx: number; cy: number }, plots: unknown[] = [], size = SIZE): string => {
+    const builder = new SvgBuilder();
+
+    renderPlot2dContent(normalizeGeometryScene({ type: 'plot_2d', plots }), viewport, size, null, builder);
+
+    return builder.toString();
+  };
+
+  /** Тики осей: штрихи осей без двух самих осей. */
+  const tickCount = (svg: string): number => tags(svg, 'line').filter((line) => line.includes('rte-drawing__axis')).length - 2;
+
+  const gridCount = (svg: string): number => tags(svg, 'line').filter((line) => line.includes('rte-drawing__grid')).length;
+
+  const numbers = (svg: string): number[] => labels(svg).map(Number).filter((value) => Number.isFinite(value));
+
+  /** Все элементы разметки без `<defs>`. */
+  const elementCount = (svg: string): number => (body(svg).match(/<[a-z]+\b/g) ?? []).length;
+
+  it.each([
+    [10, 2],
+    [4, 5],
+    [2, 10],
+    [0.2, 100],
+    [0.002, 10000],
+  ])('масштаб %s — шаг тиков %s, числа на осях кратны шагу', (scale, step) => {
+    const values = numbers(content({ scale, cx: 150, cy: 150 }));
+
+    expect(values).toEqual(expect.arrayContaining([0, step, -step, 2 * step, -2 * step]));
+    expect(values.every((value) => value % step === 0)).toBe(true);
+    expect(values).not.toContain(step / 2);
+  });
+
+  it('на длинном листе шаг растёт, чтобы тиков на оси было не больше сорока', () => {
+    const svg = content({ scale: 20, cx: 500, cy: 150 }, [], { width: 1000, height: 300 });
+    const values = numbers(svg);
+
+    // Шаг 1 дал бы 48 тиков на оси x — берётся 2.
+    expect(values).toEqual(expect.arrayContaining([2, -2, 22, -22]));
+    expect(values).not.toContain(1);
+    expect(tickCount(svg)).toBeLessThanOrEqual(2 * 40);
+  });
+
+  it('сетка ложится на тики: при шаге тиков 5 линии сетки через 5', () => {
+    const xs = tags(content({ scale: 4, cx: 150, cy: 150 }), 'line')
+      .filter((line) => line.includes('rte-drawing__grid'))
+      .map((line) => Number(/x1="([\d.-]+)"/.exec(line)?.[1]))
+      .filter((x) => x > 0);
+
+    expect(xs.length).toBeGreaterThan(5);
+    expect(xs.every((x) => Math.abs((x - 150) % 20) < 1e-6)).toBe(true);
+  });
+
+  it('ось за листом — без тиков и чисел; у видимой оси — только видимые тики', () => {
+    // Начало координат на 20000 единиц ниже листа: ось x далеко, ось y видна.
+    const svg = content({ scale: 20, cx: 150, cy: 150 + 20000 * 20 });
+    const values = numbers(svg);
+
+    expect(values.length).toBeGreaterThan(5);
+    expect(values.every((value) => value > 19990 && value < 20010)).toBe(true);
+    expect(values).not.toContain(0);
+    expect(tickCount(svg)).toBeLessThanOrEqual(40);
+
+    // Начало координат за углом листа: тиков и чисел нет совсем.
+    const corner = content({ scale: 20, cx: -100000, cy: 100000 });
+
+    expect(tickCount(corner)).toBe(0);
+    expect(numbers(corner)).toEqual([]);
+  });
+
+  it('мелкий масштаб при видимом начале координат: тиков и линий сетки — считанные десятки', () => {
+    const svg = content({ scale: 0.0007, cx: 150, cy: 150 });
+
+    expect(tickCount(svg)).toBeLessThanOrEqual(2 * 40);
+    expect(gridCount(svg)).toBeLessThanOrEqual(2 * (300 / 6));
+    expect(numbers(svg).every((value) => value % 50000 === 0)).toBe(true);
+  });
+
+  it('далёкая сцена с autoFit рисуется за миллисекунды и даёт сотни элементов, а не тысячи', () => {
+    const scene = normalizeGeometryScene({
+      type: 'plot_2d',
+      plots: [
+        { type: 'point', coords: [0, 100000] },
+        { type: 'point', coords: [100000, 0] },
+        { type: 'freehand', points: [[0, 100000], [50000, 50000], [100000, 0]] },
+      ],
+    });
+    const started = performance.now();
+    const svg = renderGeometrySvg(scene, { autoFit: true });
+
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(elementCount(svg)).toBeLessThan(300);
+    expect(tickCount(svg)).toBe(0);
+    expect(gridCount(svg)).toBeLessThanOrEqual(2 * (300 / 6));
+  });
+
+  it('график далеко от начала координат без autoFit не раздувает картинку тиками', () => {
+    const started = performance.now();
+    const svg = renderGeometrySvg(
+      normalizeGeometryScene({ type: 'plot_2d', plots: [{ type: 'line', k: 0, b: 100000 }], scale: 20, offsetY: 100000 * 20 }),
+    );
+
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(elementCount(svg)).toBeLessThan(300);
+    expect(numbers(svg).every((value) => value > 99990 && value < 100010)).toBe(true);
+  });
+});
+
 describe('renderPlot2dContent: кривые', () => {
   it('парабола даёт путь из многих точек, вершина на месте', () => {
     const svg = plotSvg([{ type: 'parabola', vertex: [0, 0], direction: 'up', stretchY: 1 }]);

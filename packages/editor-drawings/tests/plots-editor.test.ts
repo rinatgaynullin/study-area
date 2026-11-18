@@ -182,6 +182,34 @@ const visiblePointsOf = (editor: SceneEditor, color: string): number => {
   return pairs.filter(([x, y]) => x >= 0 && x <= 560 && y >= 0 && y <= 420).length;
 };
 
+/** Доли отрезка, по которым `visibleSamplesOf` проверяет его видимость. */
+const SEGMENT_SAMPLES = Array.from({ length: 8 }, (_, index) => index / 8);
+
+/**
+ * Видимые на полотне точки кривой цвета `color` с промежуточными точками
+ * отрезков: у горизонтальной прямой оба конца за краями листа, а середина — на нём.
+ */
+const visibleSamplesOf = (editor: SceneEditor, color: string): number => {
+  const layer = canvasOf(editor).querySelector('.rte-sketch__layer');
+  const d = layer?.querySelector(`path[stroke="${color}"]`)?.getAttribute('d') ?? layer?.querySelector(`polyline[stroke="${color}"]`)?.getAttribute('points') ?? '';
+  const runs = d.split('M').map((run) => {
+    const numbers = (run.match(/-?[\d.]+/g) ?? []).map(Number);
+
+    return numbers.flatMap((value, index) => (index % 2 === 0 ? [[value, numbers[index + 1] ?? NaN] as const] : []));
+  });
+  const samples = runs.flatMap((run) =>
+    run.flatMap(([x, y], index) => {
+      const next = run[index + 1];
+
+      if (!next) return [[x, y] as const];
+
+      return SEGMENT_SAMPLES.map((share) => [x + (next[0] - x) * share, y + (next[1] - y) * share] as const);
+    }),
+  );
+
+  return samples.filter(([x, y]) => x >= 0 && x <= 560 && y >= 0 && y <= 420).length;
+};
+
 /** Движение ползунка: событие `input`, а `change` — когда отпустили. */
 const slide = (input: HTMLInputElement, value: string): void => {
   input.value = value;
@@ -1313,6 +1341,38 @@ describe('набранная функция', () => {
     expect(plotsOf(plots)[0]).toMatchObject({ expr });
 
     // Сохранённая сцена с запасными ветвями загружается обратно той же записью.
+    plots.load(saved);
+    expect(plots.getScene()).toEqual(saved);
+    clickCurve(plots, color);
+    expect(exprOf(plots).value).toBe(expr);
+  });
+
+  // Начало координат за сотни тысяч пикселей от листа: тики и сетка строятся только на листе, полотно не раздувается.
+  it.each(['20000', 'x^2 + 100000'])('%s: полотно лёгкое, загрузка отдаёт ту же запись, «Показать целиком» делает кривую видимой', async (expr) => {
+    const plots = create();
+    const elementCount = (): number => canvasOf(plots).querySelectorAll('.rte-sketch__layer *').length;
+
+    addFunction(plots);
+    typeExpr(plots, expr);
+    commitExpr(plots);
+
+    const color = String(plotsOf(plots)[0]?.color);
+
+    expect(visibleSamplesOf(plots, color)).toBe(0);
+    expect(elementCount()).toBeLessThan(500);
+
+    const saved = JSON.parse(JSON.stringify(plots.getScene())) as Record<string, unknown>;
+
+    actionButton(plots, 'Показать целиком').click();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(visibleSamplesOf(plots, color)).toBeGreaterThan(1);
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)[0]).toMatchObject({ expr });
+    expect(elementCount()).toBeLessThan(500);
+
+    // Сохранённая сцена загружается обратно той же записью.
     plots.load(saved);
     expect(plots.getScene()).toEqual(saved);
     clickCurve(plots, color);

@@ -29,7 +29,14 @@ const ARROW_HALF_WIDTH = 4;
 const TICK_HALF = 3;
 /** Минимальный шаг тиков в пикселях: ближе подписи чисел слипаются. */
 const MIN_TICK_PIXELS = 16;
-const TICK_STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+/** Не больше стольких тиков на оси: при далёком или мелком виде шаг растёт, а не число тиков. */
+const MAX_TICKS = 40;
+/** Ближе этого к краю листа, за которым они продолжались бы, тики не ставятся. */
+const TICK_EDGE = 20;
+/** Шаги тиков и сетки — ряд 1, 2, 5, 10, 20, 50, 100… */
+const STEP_MANTISSAS = [1, 2, 5];
+/** Предел перебора ряда: 10^308 — последний конечный шаг. */
+const MAX_STEP_INDEX = 3 * 308;
 /** Сетка не чаще шести пикселей, иначе она превращается в заливку. */
 const MIN_GRID_PIXELS = 6;
 
@@ -198,18 +205,48 @@ const drawPlotLabel = (builder: SvgBuilder, at: SvgPoint, label: string, options
   builder.text(at, markup ?? plotLabelText(label), { ...options, markup: markup !== null });
 };
 
-// Мелкие шаги не подошли — берётся крупнейший, он же последний: шаги идут по возрастанию.
-const tickStep = (scale: number): number =>
-  TICK_STEPS.find((step) => step * scale >= MIN_TICK_PIXELS) ?? Math.max(...TICK_STEPS);
+/** Шаг ряда 1, 2, 5, 10, 20, 50… по его номеру, начиная с нуля. */
+const seriesStep = (index: number): number => (STEP_MANTISSAS[index % STEP_MANTISSAS.length] ?? 1) * 10 ** Math.floor(index / STEP_MANTISSAS.length);
 
-const gridStep = (scale: number): number => (scale < MIN_GRID_PIXELS ? scale * Math.ceil(MIN_GRID_PIXELS / scale) : scale);
+/**
+ * Наименьший шаг ряда (в единицах мира), для которого `fits`; `fits`
+ * монотонно: подошёл шаг — подойдёт и крупнее. Перебор начинается на порядок
+ * ниже оценки `least`, поэтому идёт несколько шагов при любом масштабе.
+ */
+const niceStep = (least: number, fits: (step: number) => boolean): number => {
+  const from = Number.isFinite(least) && least > 1 ? 3 * Math.floor(Math.log10(least)) - 3 : 0;
+  let index = Math.max(0, from);
+
+  while (index < MAX_STEP_INDEX && !fits(seriesStep(index))) index += 1;
+
+  return seriesStep(index);
+};
+
+/** Шаг тиков в единицах мира: числа не слипаются и на длинной стороне листа их не больше `MAX_TICKS`. */
+const tickStep = (scale: number, size: PlotSize): number => {
+  const length = Math.max(size.width, size.height) - 2 * TICK_EDGE;
+
+  return niceStep(
+    Math.max(MIN_TICK_PIXELS, length / MAX_TICKS) / scale,
+    (step) => step * scale >= MIN_TICK_PIXELS && length <= MAX_TICKS * step * scale,
+  );
+};
+
+/** Шаг сетки в единицах мира: не чаще `MIN_GRID_PIXELS` и делит шаг тиков, чтобы тики ложились на линии. */
+const gridStep = (scale: number, unit: number): number =>
+  niceStep(MIN_GRID_PIXELS / scale, (step) => step * scale >= MIN_GRID_PIXELS && unit % step === 0);
+
+/** Шаг в пикселях годится для обхода листа: конечный и положительный. */
+const isUsableStep = (step: number): boolean => Number.isFinite(step) && step > 0;
 
 /** Первая линия сетки от левого/верхнего края, кратная шагу относительно начала координат. */
 const firstGridLine = (origin: number, step: number): number => ((origin % step) + step) % step;
 
 const renderGrid = (builder: SvgBuilder, viewport: Viewport, size: PlotSize): void => {
-  const step = gridStep(viewport.scale);
+  const step = gridStep(viewport.scale, tickStep(viewport.scale, size)) * viewport.scale;
   const stroke: StrokeOptions = { color: GRID_COLOR, width: 0.5, className: 'rte-drawing__grid' };
+
+  if (!isUsableStep(step)) return;
 
   for (let x = firstGridLine(viewport.cx, step); x < size.width; x += step) {
     if (Math.abs(x - viewport.cx) >= 1) builder.line({ x, y: 0 }, { x, y: size.height }, stroke);
@@ -253,12 +290,23 @@ const renderAxes = (builder: SvgBuilder, viewport: Viewport, size: PlotSize, lab
   if (labels.yLabel) builder.text({ x: cx - 15, y: 18 }, plotLabelText(labels.yLabel), text);
 };
 
+/**
+ * Номер первого тика (от начала координат, с единицы), который уже на листе:
+ * `beyond` — на сколько пикселей начало координат вышло за край листа с той
+ * стороны, откуда тики идут. Начало координат на листе — тики с первого.
+ */
+const firstTick = (beyond: number, step: number): number => Math.max(1, Math.ceil(beyond / step));
+
 const renderTicks = (builder: SvgBuilder, viewport: Viewport, size: PlotSize): void => {
   const { scale, cx, cy } = viewport;
-  const unit = tickStep(scale);
+  const unit = tickStep(scale, size);
   const step = unit * scale;
   const stroke: StrokeOptions = { color: AXIS_COLOR, width: 1, className: 'rte-drawing__axis' };
   const number = { size: 9, weight: 400, className: 'rte-drawing__axis-label' };
+  const xAxisShown = cy >= 0 && cy <= size.height;
+  const yAxisShown = cx >= 0 && cx <= size.width;
+
+  if (!isUsableStep(step)) return;
 
   const tickX = (x: number): void => {
     builder.line({ x, y: cy - TICK_HALF }, { x, y: cy + TICK_HALF }, stroke);
@@ -270,15 +318,20 @@ const renderTicks = (builder: SvgBuilder, viewport: Viewport, size: PlotSize): v
     builder.text({ x: cx - 12, y: y + 3 }, String(Math.round((cy - y) / scale)), { ...number, anchor: 'end' });
   };
 
-  for (let x = cx + step; x < size.width - 20; x += step) tickX(x);
+  // Ось за листом — без тиков и чисел; на листе — только видимые тики, сколько бы ни было до начала координат.
+  if (xAxisShown) {
+    for (let x = cx + firstTick(-cx, step) * step; x < size.width - TICK_EDGE; x += step) tickX(x);
 
-  for (let x = cx - step; x > 20; x -= step) tickX(x);
+    for (let x = cx - firstTick(cx - size.width, step) * step; x > TICK_EDGE; x -= step) tickX(x);
+  }
 
-  for (let y = cy - step; y > 20; y -= step) tickY(y);
+  if (yAxisShown) {
+    for (let y = cy - firstTick(cy - size.height, step) * step; y > TICK_EDGE; y -= step) tickY(y);
 
-  for (let y = cy + step; y < size.height - 20; y += step) tickY(y);
+    for (let y = cy + firstTick(-cy, step) * step; y < size.height - TICK_EDGE; y += step) tickY(y);
+  }
 
-  builder.text({ x: cx - 4, y: cy + 12 }, '0', { ...number, anchor: 'end' });
+  if (xAxisShown && yAxisShown) builder.text({ x: cx - 4, y: cy + 12 }, '0', { ...number, anchor: 'end' });
 };
 
 /** Видимый диапазон мира по x с запасом в единицу — им ограничиваются прямые и гиперболы без `domain`. */
