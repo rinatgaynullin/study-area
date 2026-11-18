@@ -85,6 +85,46 @@
   flex-wrap: nowrap;
 }
 
+/*
+ * Палитра групп — сетка из шести равных ячеек. Число строк не должно зависеть
+ * от шрифта: с переносом по ширине подписей на широкой гарнитуре появлялась
+ * лишняя строка, и тело окна на 1280×720 начинало прокручиваться.
+ */
+.rte-chem-builder__palette {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.rte-chem-builder__palette > .rte-chem-builder__button {
+  min-width: 0;
+  padding: 0 2px;
+}
+
+/*
+ * «Связь» и «Кольца» — три кнопки в одну строку всегда. Подпись, которая на
+ * широкой гарнитуре не помещается в ячейку, обрезается многоточием, а не
+ * переносит кнопку на новую строку: высота колонки не зависит от шрифта.
+ */
+.rte-chem-builder__row--thirds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* «Бензол» короче двух других названий — ему ячейка у́же. */
+.rte-chem-builder__row--rings {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.15fr) minmax(0, 1.15fr);
+}
+
+.rte-chem-builder__row--thirds > .rte-chem-builder__button {
+  display: block;
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rte-chem-builder__stage {
   position: relative;
   display: flex;
@@ -413,5 +453,15 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: 4px;
+  }
+
+  /* На телефоне палитра — снова одна прокручиваемая строка кнопок своей ширины. */
+  .rte-chem-builder__palette {
+    display: flex;
+  }
+
+  .rte-chem-builder__palette > .rte-chem-builder__button {
+    min-width: 40px;
+    padding: 0 8px;
   }
 }

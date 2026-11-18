@@ -144,6 +144,17 @@ test.describe('структурные формулы', () => {
 
       expect(overflow).toBeLessThanOrEqual(0);
       await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__section--templates`)).toBeInViewport();
+
+      // Высота колонки не зависит от шрифта: палитра групп — всегда три строки,
+      // «Связь» и «Кольца» — по одной (на CI гарнитура шире, чем на macOS).
+      const rowsOf = (selector: string): Promise<number> =>
+        page
+          .locator(`${OPEN_MODAL} ${selector} > button`)
+          .evaluateAll((buttons) => new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top))).size);
+
+      expect(await rowsOf('.rte-chem-builder__palette')).toBe(3);
+      expect(await rowsOf('.rte-chem-builder__section--bond .rte-chem-builder__row')).toBe(1);
+      expect(await rowsOf('.rte-chem-builder__section--rings .rte-chem-builder__row')).toBe(1);
     });
   });
 

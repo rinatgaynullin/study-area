@@ -326,7 +326,7 @@ export class StructureEditor {
           'bond',
           'chemistry_builder_bond',
           el('div', {
-            class: 'rte-chem-builder__row',
+            class: 'rte-chem-builder__row rte-chem-builder__row--thirds',
             attrs: { role: 'group', 'aria-label': t('chemistry_builder_bond') },
             children: BOND_TYPES.map(({ type, labelKey }) => builderButton(t(labelKey), { bond: type })),
           }),
@@ -336,7 +336,7 @@ export class StructureEditor {
           'rings',
           'chemistry_builder_rings',
           el('div', {
-            class: 'rte-chem-builder__row',
+            class: 'rte-chem-builder__row rte-chem-builder__row--thirds rte-chem-builder__row--rings',
             attrs: { role: 'group', 'aria-label': t('chemistry_builder_rings') },
             children: RINGS.map(({ id, labelKey }) => builderButton(t(labelKey), { ring: id })),
           }),
