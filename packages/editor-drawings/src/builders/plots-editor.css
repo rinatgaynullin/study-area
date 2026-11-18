@@ -5,6 +5,33 @@
   padding: 0 8px;
 }
 
+/* «+ Функция» — заметная кнопка над шаблонами: во всю ширину палитры. */
+.rte-builder .rte-plots__palette .rte-plots__add {
+  grid-column: 1 / -1;
+  justify-content: center;
+  height: 40px;
+  border-color: var(--rte-color-primary);
+  background: var(--rte-color-primary-soft);
+  color: var(--rte-color-primary);
+  font-weight: var(--rte-title-font-weight, 600);
+  white-space: nowrap;
+}
+
+.rte-builder .rte-plots__palette .rte-plots__add:hover:not(:disabled) {
+  border-color: var(--rte-color-primary-hover);
+  background: var(--rte-color-primary-soft);
+}
+
+/* Широкое окно, выделена функция: семь шаблонов одной строкой значков под кнопкой «+ Функция». */
+@media (min-width: 861px) {
+  @supports (width: 1cqw) {
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-builder__palette.rte-plots__palette.rte-plots__palette--compact {
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+    }
+  }
+}
+
 /* Выделена функция: палитра — строка значков, подпись шаблона — в title и aria-label. */
 .rte-plots__palette--compact .rte-builder__tool-label {
   display: none;
@@ -70,6 +97,16 @@
   padding: 0 3px;
 }
 
+/* Индекс (основание логарифма) и модуль. */
+.rte-plots-fn__formula sub {
+  font-size: 0.65em;
+  line-height: 0;
+}
+
+.rte-plots-fn__abs {
+  white-space: nowrap;
+}
+
 /* Корень: знак и черта над подкоренным выражением. */
 .rte-plots-fn__sqrt {
   display: inline-flex;
@@ -97,6 +134,61 @@
   white-space: normal;
   text-align: center;
   line-height: 1.2;
+}
+
+/* Поле записи: подпись «y =» слева, крупный шрифт — запись читается как формула. */
+.rte-builder__props .rte-plots-fn__field {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.rte-plots-fn__field .rte-builder__prop-label {
+  font-size: var(--rte-ui-font-size, 15px);
+  font-style: italic;
+  color: inherit;
+}
+
+.rte-builder__props .rte-plots-fn .rte-plots-fn__input {
+  min-width: 0;
+  height: 44px;
+  font-size: 18px;
+  font-family: var(--rte-font-mono, monospace);
+}
+
+.rte-plots-fn__input[aria-invalid='true'] {
+  border-color: var(--rte-color-danger);
+}
+
+.rte-plots-fn__error {
+  margin: -4px 0 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  line-height: 1.3;
+  color: var(--rte-color-danger);
+}
+
+/* Кнопки-подсказки: 40px, пять в строку — две строки в колонке 280px и на телефоне. */
+.rte-plots-fn__keys {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.rte-builder .rte-plots-fn__keys .rte-plots-fn__key {
+  justify-content: center;
+  min-width: 0;
+  height: 40px;
+  padding: 0 2px;
+  font-size: var(--rte-ui-font-size, 15px);
+}
+
+.rte-plots-fn__params {
+  display: grid;
+  gap: 8px;
+}
+
+.rte-plots-fn__params:empty {
+  display: none;
 }
 
 /*

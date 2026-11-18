@@ -37,6 +37,8 @@ const ICON_IDS: BuilderIconId[] = [
   'hyperbola',
   'lineFn',
   'root',
+  'sine',
+  'modulus',
   'plotCircle',
   'pointHollow',
   'tabPlane',
@@ -150,7 +152,7 @@ describe('createBuilderIcon', () => {
   });
 
   it('у параболы и корня нет креста осей: одна тонкая ось под кривой', () => {
-    (['parabola', 'root'] as const).forEach((id) => {
+    (['parabola', 'root', 'sine', 'modulus'] as const).forEach((id) => {
       const svg = createBuilderIcon(id);
 
       expect(svg.querySelectorAll('[stroke-width="1"]'), id).toHaveLength(1);

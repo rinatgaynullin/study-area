@@ -1,16 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * Блок «Функция» на вкладке «Графики»: формула выделенного графика и её
- * параметры. Проверяется то, чего не видит jsdom: настоящий ползунок с
- * клавиатуры перерисовывает кривую, а блок помещается в колонку свойств.
+ * Набранная функция на вкладке «Графики»: ученик сам пишет запись, график
+ * строится по ней. Проверяется то, чего не видит jsdom: настоящий набор с
+ * клавиатуры, ползунок параметра, вставка чертежа в документ и раскладка
+ * блока «Функция» в колонке свойств и на телефоне.
  */
 const EDITOR = '.rte-root .rte-content';
 const OPEN_MODAL = '.rte-modal:not([hidden])';
 const SKETCH = `${OPEN_MODAL} .rte-sketch`;
 const DIALOG_TABS = `${OPEN_MODAL} .rte-drawing-dialog__tabs [role="tab"]`;
+const PROPS = `${OPEN_MODAL} .rte-builder__props`;
 const BLOCK = `${OPEN_MODAL} .rte-plots-fn`;
 const FORMULA = `${BLOCK} .rte-plots-fn__formula[role="img"]`;
+const FIELD = `${BLOCK} input[data-prop="expr"]`;
+const DRAWING = `${EDITOR} [data-geometry-data]`;
 
 async function openPlots(page: Page): Promise<void> {
   await page.goto('/');
@@ -21,72 +25,158 @@ async function openPlots(page: Page): Promise<void> {
   await expect(page.locator(`${DIALOG_TABS}[aria-selected="true"]`)).toHaveText('Графики');
 }
 
-/** Пути кривых на полотне одной строкой: меняется, когда перерисована кривая. */
-const curvePaths = (page: Page): Promise<string> =>
-  page.locator(`${SKETCH} .rte-sketch__layer svg path`).evaluateAll((paths) => paths.map((path) => path.getAttribute('d') ?? '').join('|'));
+/** Ломаные функций на полотне одной строкой: меняется, когда перерисован график. */
+const curvePoints = (page: Page): Promise<string> =>
+  page.locator(`${SKETCH} .rte-sketch__layer svg polyline`).evaluateAll((lines) => lines.map((line) => line.getAttribute('points') ?? '').join('|'));
 
-test('шаблон параболы: блок «Функция» с формулой, ползунок a с клавиатуры меняет кривую и формулу', async ({ page }) => {
+/** «+ Функция» и набор записи с клавиатуры. */
+async function typeFunction(page: Page, text: string): Promise<void> {
+  await page.locator(`${OPEN_MODAL} button[data-plot-add="function"]`).click();
+  await expect(page.locator(FIELD)).toBeFocused();
+  await page.keyboard.type(text);
+}
+
+async function insertDrawing(page: Page): Promise<void> {
+  const count = await page.locator(DRAWING).count();
+
+  await page.locator(`${OPEN_MODAL} .rte-modal__footer`).getByRole('button', { name: 'Вставить', exact: true }).click();
+  await expect(page.locator(OPEN_MODAL)).toHaveCount(0);
+  await expect(page.locator(DRAWING)).toHaveCount(count + 1);
+}
+
+test('«+ Функция»: набранная запись строит график, правка меняет его, «Вставить» кладёт в документ сцену с expr', async ({ page }) => {
   await openPlots(page);
-  await page.locator(`${OPEN_MODAL} button[data-plot-template="parabola"]`).click();
+  await typeFunction(page, 'x^2 - 4');
 
-  await expect(page.locator(BLOCK)).toBeVisible();
+  await expect(page.locator(FORMULA)).toHaveAttribute('aria-label', 'y = x² − 4');
+  await expect(page.locator(FORMULA)).toHaveText('y = x2 − 4');
+
+  const parabola = await curvePoints(page);
+
+  expect(parabola).not.toBe('');
+
+  await page.locator(FIELD).fill('sin(x)');
+  await expect(page.locator(FORMULA)).toHaveAttribute('aria-label', 'y = sin(x)');
+  await expect.poll(() => curvePoints(page)).not.toBe(parabola);
+  await page.keyboard.press('Enter');
+  await insertDrawing(page);
+
+  const scene = JSON.parse((await page.locator(DRAWING).last().getAttribute('data-geometry-data')) ?? '{}') as { plots?: Array<Record<string, unknown>> };
+
+  expect(scene.plots?.length).toBeGreaterThan(0);
+  scene.plots?.forEach((plot) => expect(plot).toMatchObject({ type: 'freehand', expr: 'sin(x)' }));
+});
+
+test('функция x^2 - 4 в документе: кривая в картинке целиком, оси на месте', async ({ page }) => {
+  await openPlots(page);
+  await typeFunction(page, 'x^2 - 4');
+  await page.keyboard.press('Enter');
+  await insertDrawing(page);
+
+  const view = await page
+    .locator(DRAWING)
+    .last()
+    .locator('svg')
+    .first()
+    .evaluate((root) => {
+      const box = root.viewBox.baseVal;
+      const curve = root.querySelector('polyline');
+      const points = (curve?.getAttribute('points') ?? '')
+        .trim()
+        .split(/\s+/)
+        .map((pair) => pair.split(',').map(Number));
+      const xs = points.map(([x]) => x ?? NaN);
+      const ys = points.map(([, y]) => y ?? NaN);
+
+      return { width: box.width, height: box.height, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys), axes: root.querySelectorAll('line').length };
+    });
+
+  expect(view.minX).toBeGreaterThanOrEqual(0);
+  expect(view.maxX).toBeLessThanOrEqual(view.width);
+  expect(view.minY).toBeGreaterThanOrEqual(0);
+  expect(view.maxY).toBeLessThanOrEqual(view.height);
+  expect(view.axes).toBeGreaterThan(1);
+});
+
+test('неправильная запись x^ показывает ошибку, прежний график на месте', async ({ page }) => {
+  await openPlots(page);
+  await typeFunction(page, 'x^2');
+
+  const before = await curvePoints(page);
+
+  await page.keyboard.press('Backspace');
+  await expect(page.locator(`${BLOCK} .rte-plots-fn__error`)).toHaveText('Здесь должно быть число или x');
+  await expect(page.locator(FIELD)).toHaveAttribute('aria-invalid', 'true');
+  expect(await curvePoints(page)).toBe(before);
   await expect(page.locator(FORMULA)).toHaveAttribute('aria-label', 'y = x²');
-  await expect(page.locator(FORMULA)).toHaveText('y = x2');
+});
 
-  const before = await curvePaths(page);
+test('запись a*x^2 даёт ползунок a; сдвиг ползунка клавишей меняет график', async ({ page }) => {
+  await openPlots(page);
+  await typeFunction(page, 'a*x^2');
+  await page.keyboard.press('Enter');
+
   const slider = page.locator(`${BLOCK} input[type="range"][data-prop="a"]`);
+
+  await expect(slider).toBeVisible();
+
+  const before = await curvePoints(page);
 
   await slider.focus();
   await page.keyboard.press('ArrowRight');
-
-  await expect(page.locator(FORMULA)).toHaveAttribute('aria-label', 'y = 1,1x²');
-  await expect(page.locator(FORMULA)).toHaveText('y = 1,1x2');
-  expect(await curvePaths(page)).not.toBe(before);
-  // Ползунок не пересоздан и не потерял фокус: следующее нажатие продолжает жест.
-  await expect(slider).toBeFocused();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.locator(FORMULA)).toHaveAttribute('aria-label', 'y = 1,2x²');
+  await expect.poll(() => curvePoints(page)).not.toBe(before);
+  await expect(page.locator(`${BLOCK} input[type="number"][data-prop="a"]`)).toHaveValue('1.1');
+  // Карточка показывает букву, а не значение.
+  await expect(page.locator(FORMULA)).toHaveAttribute('aria-label', 'y = ax²');
 });
 
-/** Шаблон выделен: колонка свойств и блок без горизонтальной прокрутки, ползунки и числа не ниже 40px. */
-async function expectBlockFits(page: Page, template: string): Promise<void> {
-  await page.locator(`${OPEN_MODAL} button[data-plot-template="${template}"]`).click();
-  await expect(page.locator(BLOCK)).toBeVisible();
+test('кнопки-подсказки вставляют знак в поле и не уводят из него фокус', async ({ page }) => {
+  await openPlots(page);
+  await typeFunction(page, '2');
+  await page.locator(`${BLOCK} .rte-plots-fn__keys button[data-key="sin"]`).click();
+  await expect(page.locator(FIELD)).toBeFocused();
+  await page.keyboard.type('x');
+  await expect(page.locator(FIELD)).toHaveValue('2sin(x)');
+  await expect(page.locator(FORMULA)).toHaveAttribute('aria-label', 'y = 2sin(x)');
+});
 
-  const sizes = await page.locator(`${OPEN_MODAL} .rte-builder__props`).evaluate((props) => {
+test('карточка, поле и кнопки-подсказки видны без прокрутки; на телефоне блок без горизонтальной прокрутки', async ({ page, isMobile }) => {
+  if (!isMobile) await page.setViewportSize({ width: 1280, height: 720 });
+
+  await openPlots(page);
+  await typeFunction(page, 'a*sin(b*x)');
+
+  const layout = await page.locator(PROPS).evaluate((props) => {
+    const box = props.getBoundingClientRect();
+    const inside = (selector: string): boolean => {
+      const rect = props.querySelector(selector)?.getBoundingClientRect();
+
+      return rect !== undefined && rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1;
+    };
     const block = props.querySelector('.rte-plots-fn');
-    const controls = [...props.querySelectorAll<HTMLElement>('.rte-plots-fn input[type="range"], .rte-plots-fn input[type="number"]')];
+    const keys = [...props.querySelectorAll<HTMLElement>('.rte-plots-fn__key')].map((key) => key.getBoundingClientRect());
 
     return {
+      formula: inside('.rte-plots-fn__formula'),
+      field: inside('.rte-plots-fn__input'),
+      keys: inside('.rte-plots-fn__keys'),
+      scrollTop: props.scrollTop,
       props: { scrollWidth: props.scrollWidth, clientWidth: props.clientWidth },
       block: { scrollWidth: block?.scrollWidth ?? 0, clientWidth: block?.clientWidth ?? 0 },
-      heights: controls.map((control) => control.getBoundingClientRect().height),
-      sliders: [...props.querySelectorAll<HTMLElement>('.rte-plots-fn input[type="range"]')].map((range) => range.getBoundingClientRect().width),
+      keyHeights: keys.map((key) => key.height),
+      keyRows: new Set(keys.map((key) => Math.round(key.top))).size,
     };
   });
 
-  expect(sizes.props.scrollWidth, template).toBeLessThanOrEqual(sizes.props.clientWidth);
-  expect(sizes.block.scrollWidth, template).toBeLessThanOrEqual(sizes.block.clientWidth);
-  sizes.heights.forEach((height) => expect(height, template).toBeGreaterThanOrEqual(40));
-  // Ползунок забирает остаток строки, а не сжимается в точку.
-  sizes.sliders.forEach((width) => expect(width, template).toBeGreaterThanOrEqual(100));
-}
+  expect(layout.props.scrollWidth).toBeLessThanOrEqual(layout.props.clientWidth);
+  expect(layout.block.scrollWidth).toBeLessThanOrEqual(layout.block.clientWidth);
+  layout.keyHeights.forEach((height) => expect(height).toBeGreaterThanOrEqual(40));
+  expect(layout.keyRows).toBeLessThanOrEqual(2);
 
-test('блок «Функция» не даёт горизонтальной прокрутки колонки свойств, поля не ниже 40px', async ({ page }) => {
-  await openPlots(page);
-  await expectBlockFits(page, 'parabola');
-  await expectBlockFits(page, 'hyperbola');
-  await expectBlockFits(page, 'sqrt');
-  await expectBlockFits(page, 'line');
-  await expectBlockFits(page, 'circle');
+  if (isMobile) return;
 
-  // Колонка свойств — во всю ширину полотна на телефоне, сбоку от него на десктопе.
-  const sketch = await page.locator(SKETCH).boundingBox();
-  const props = await page.locator(`${OPEN_MODAL} .rte-builder__props`).boundingBox();
-
-  expect(sketch).not.toBeNull();
-  expect(props).not.toBeNull();
-
-  if (page.viewportSize()?.width === 1280) expect(props?.width ?? 0).toBeLessThanOrEqual(282);
-  else expect(props?.width ?? 0).toBeGreaterThanOrEqual((sketch?.width ?? 0) - 2);
+  expect(layout.scrollTop).toBe(0);
+  expect(layout.formula).toBe(true);
+  expect(layout.field).toBe(true);
+  expect(layout.keys).toBe(true);
 });

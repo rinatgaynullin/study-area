@@ -184,18 +184,134 @@ const SYMBOL_PATTERN = new RegExp(`[${Object.keys(SYMBOL_COMMANDS).join('')}]`, 
 const CYRILLIC_RUN = /\s*[Ѐ-ӿ][Ѐ-ӿ\s.,:;!?()-]*/g;
 
 /**
+ * Названия функций школьной записи → команды LaTeX. `\tg`, `\ctg`, `\arctg`
+ * есть только в русской раскладке babel, `\operatorname` — только с amsmath,
+ * поэтому такие названия — оператором из прямых букв: собирается без пакетов.
+ */
+const FUNCTION_COMMANDS: Record<string, string> = {
+  sin: '\\sin',
+  cos: '\\cos',
+  tan: '\\tan',
+  cot: '\\cot',
+  arcsin: '\\arcsin',
+  arccos: '\\arccos',
+  arctan: '\\arctan',
+  ln: '\\ln',
+  lg: '\\lg',
+  log: '\\log',
+  exp: '\\exp',
+  tg: '\\mathop{\\mathrm{tg}}\\nolimits',
+  ctg: '\\mathop{\\mathrm{ctg}}\\nolimits',
+  arctg: '\\mathop{\\mathrm{arctg}}\\nolimits',
+  arcctg: '\\mathop{\\mathrm{arcctg}}\\nolimits',
+  arccot: '\\mathop{\\mathrm{arccot}}\\nolimits',
+};
+
+/** Название функции отдельным словом: не часть другого слова и не команда после `\`. */
+const FUNCTION_PATTERN = new RegExp(
+  `(?<![A-Za-z\\\\])(${Object.keys(FUNCTION_COMMANDS)
+    .sort((a, b) => b.length - a.length)
+    .join('|')})(?![A-Za-z])`,
+  'g',
+);
+
+const SUBSCRIPT_DIGITS = '₀₁₂₃₄₅₆₇₈₉';
+
+/** Индекс закрывающей скобки к открывающей в `from`; нет пары — `-1`. */
+const matchingParen = (text: string, from: number): number => {
+  let depth = 0;
+  let index = from;
+
+  while (index < text.length) {
+    const char = text.charAt(index);
+
+    if (char === '(') depth += 1;
+
+    if (char === ')') {
+      depth -= 1;
+
+      if (depth === 0) return index;
+    }
+
+    index += 1;
+  }
+
+  return -1;
+};
+
+/** `√(…)` и `∛(…)` со скобками любой вложенности → `\sqrt{…}` и `\sqrt[3]{…}`. */
+const rootsToLatex = (text: string): string => {
+  const at = text.search(/[√∛]\(/);
+  const close = at < 0 ? -1 : matchingParen(text, at + 1);
+
+  if (close < 0) return text;
+
+  const command = text.charAt(at) === '∛' ? '\\sqrt[3]' : '\\sqrt';
+
+  return `${text.slice(0, at)}${command}{${rootsToLatex(text.slice(at + 2, close))}}${rootsToLatex(text.slice(close + 1))}`;
+};
+
+/** После этих знаков черта `|` открывает модуль, а не закрывает его. */
+const OPENS_MODULUS = new Set(['', '(', '[', '{', '+', '-', '−', '*', '·', '/', '^', '=', ',', ';', ':']);
+
+/**
+ * Модуль `|…|` → `\left|…\right|`. Черта открывает модуль в начале, после
+ * знака действия, скобки или открывающей черты, иначе закрывает. Если черты
+ * не сходятся в пары, строка остаётся как была.
+ */
+const modulusToLatex = (text: string): string => {
+  const kinds: Array<'open' | 'close'> = [];
+  let depth = 0;
+  let previous = '';
+  let previousOpened = false;
+  let broken = false;
+
+  [...text].forEach((char) => {
+    if (char === '|') {
+      const opens = depth === 0 || OPENS_MODULUS.has(previous) || (previous === '|' && previousOpened);
+
+      depth += opens ? 1 : -1;
+      kinds.push(opens ? 'open' : 'close');
+      previousOpened = opens;
+    }
+
+    if (!/\s/.test(char)) previous = char;
+
+    broken = broken || depth < 0;
+  });
+
+  if (broken || depth !== 0 || kinds.length === 0) return text;
+
+  let bar = 0;
+
+  return text.replace(/\|/g, () => {
+    const kind = kinds[bar];
+
+    bar += 1;
+
+    return kind === 'open' ? '\\left|' : '\\right|';
+  });
+};
+
+/**
  * Подпись из данных → содержимое математического режима. Команды LaTeX,
  * `\text{…}` и слеши остаются как есть; переводится только то, что в `$…$`
  * у pdflatex не компилируется.
  */
 export const toLatexMath = (text: string): string => {
   // `\t` из JSON без второго слеша читается как табуляция — это был `\text`.
-  let out = text.replace(/\t/g, '\\text').trim();
+  let out = rootsToLatex(text.replace(/\t/g, '\\text').trim());
+  const hasText = /\\text\s*\{/.test(out);
+
+  // Внутри `\text{…}` названия функций и черты — обычные буквы: их не трогают.
+  if (!hasText) out = modulusToLatex(out).replace(FUNCTION_PATTERN, (name: string) => FUNCTION_COMMANDS[name] ?? name);
 
   out = out
-    .replace(/√\(([^()]*)\)/g, '\\sqrt{$1}')
+    .replace(/[₀-₉]+/g, (digits) => `_{${[...digits].map((digit) => SUBSCRIPT_DIGITS.indexOf(digit)).join('')}}`)
     .replace(/√(\d+(?:[.,]\d+)?|[A-Za-z])/g, '\\sqrt{$1}')
+    .replace(/∛(\d+(?:[.,]\d+)?|[A-Za-z])/g, '\\sqrt[3]{$1}')
     .replace(/√/g, '\\sqrt')
+    .replace(/∛/g, '\\sqrt[3]')
     .replace(/°/g, '^{\\circ}')
     // Десятичная запятая между цифрами — в фигурных скобках: иначе LaTeX ставит после неё пробел.
     .replace(/(\d),(?=\d)/g, '$1{,}')
@@ -204,7 +320,7 @@ export const toLatexMath = (text: string): string => {
       `\\${SYMBOL_COMMANDS[char]}${/[A-Za-z]/.test(source[offset + 1] ?? '') ? ' ' : ''}`,
     );
 
-  if (!/\\text\s*\{/.test(out)) out = out.replace(CYRILLIC_RUN, (run) => `\\text{${run}}`);
+  if (!hasText) out = out.replace(CYRILLIC_RUN, (run) => `\\text{${run}}`);
 
   return out;
 };

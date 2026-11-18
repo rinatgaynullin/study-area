@@ -122,12 +122,12 @@ test('графики: плитка «Красный» красит парабо�
   await red.click();
   await expect(red).toHaveAttribute('aria-checked', 'true');
   await expect(red).toBeFocused();
-  await expect(page.locator(`${LAYER} svg path[stroke="#dc2626"]`).first()).toBeAttached();
+  await expect(page.locator(`${LAYER} svg polyline[stroke="#dc2626"]`).first()).toBeAttached();
   // Поля hex больше нет и здесь.
   await expect(page.locator(`${PROPS} input[type="text"][placeholder^="#"]`)).toHaveCount(0);
 });
 
-test('графики: при выделенной параболе шаблоны — одна строка, формула и три ползунка видны без прокрутки', async ({ page, isMobile }) => {
+test('графики: при выделенной параболе шаблоны — одна строка, формула, поле записи и подсказки видны без прокрутки', async ({ page, isMobile }) => {
   if (!isMobile) await page.setViewportSize({ width: 1280, height: 720 });
 
   await openDemo(page);
@@ -150,7 +150,7 @@ test('графики: при выделенной параболе шаблон�
         label: button.getAttribute('aria-label'),
         title: button.getAttribute('title'),
       })),
-      sliders: [...(props?.querySelectorAll('.rte-plots-fn input[type="range"]') ?? [])].map(inside),
+      controls: [...(props?.querySelectorAll('.rte-plots-fn input[data-prop="expr"], .rte-plots-fn__keys') ?? [])].map(inside),
       formula: formula ? inside(formula) : false,
       scrollTop: props?.scrollTop ?? NaN,
       stageTop: top(builder.querySelector('.rte-builder__stage')),
@@ -159,13 +159,13 @@ test('графики: при выделенной параболе шаблон�
     };
   });
 
-  expect(layout.templates).toHaveLength(5);
+  expect(layout.templates).toHaveLength(7);
   expect(new Set(layout.templates.map((template) => template.top)).size).toBe(1);
   layout.templates.forEach((template) => {
     expect(template.label).toBeTruthy();
     expect(template.title).toBe(template.label);
   });
-  expect(layout.hint).toBe('Двигай ползунки или тащи график — формула меняется вместе с ним');
+  expect(layout.hint).toBe('Напиши функцию — график построится сам. Буквы вроде a и b станут ползунками');
 
   if (isMobile) {
     // На телефоне порядок прежний: полотно, затем блок свойств.
@@ -176,5 +176,5 @@ test('графики: при выделенной параболе шаблон�
 
   expect(layout.scrollTop).toBe(0);
   expect(layout.formula).toBe(true);
-  expect(layout.sliders).toEqual([true, true, true]);
+  expect(layout.controls).toEqual([true, true]);
 });
