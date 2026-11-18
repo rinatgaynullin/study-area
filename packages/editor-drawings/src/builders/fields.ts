@@ -219,6 +219,8 @@ export interface SliderFieldOptions {
   step: number;
   /** Шаг стрелок числового поля, если он не совпадает с шагом ползунка. */
   inputStep?: number;
+  /** Числовое поле без `min` и `max`: вводить можно за пределами ползунка. */
+  freeInput?: boolean;
   /** `data-prop` числового поля. */
   prop?: string;
   /** `data-prop` ползунка. */
@@ -270,8 +272,8 @@ export const sliderField = (options: SliderFieldOptions): SliderField => {
     class: 'rte-input',
     attrs: {
       type: 'number',
-      min,
-      max,
+      min: options.freeInput ? undefined : min,
+      max: options.freeInput ? undefined : max,
       step: String(options.inputStep ?? options.step),
       value,
       'aria-label': options.inputLabel ?? options.label,

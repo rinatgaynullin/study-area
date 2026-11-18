@@ -1101,6 +1101,44 @@ describe('блок «Функция»', () => {
     expect(controlsOf<HTMLInputElement>(plots, 'Вторая точка (x, y)').map((input) => input.value)).toEqual(['3', '2']);
   });
 
+  it('правка одной координаты точки отрезка не округляет вторую до двух знаков', () => {
+    const plots = create();
+
+    plots.load({ type: 'plot_2d', plots: [{ id: 's', type: 'line', p1: [0.5, 0.175], p2: [3, 1] }] });
+    pickTool(plots, 'select');
+    click(canvasOf(plots), [1.75, 0.5875]);
+    expect(propsTitle(plots)).toBe('Прямая');
+
+    const [x] = controlsOf<HTMLInputElement>(plots, 'Первая точка (x, y)');
+
+    change(x, '1');
+    expect(plotsOf(plots)[0]).toMatchObject({ p1: [1, 0.175], p2: [3, 1] });
+  });
+
+  it('жест ползунка, вернувший кривую на место, не оставляет шага истории и не зовёт слушателей', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+    let changes = 0;
+
+    pickTemplate(plots, 'parabola');
+    change(paramControl(plots, 'm', 'number'), '1');
+    plots.onChange(() => {
+      changes += 1;
+    });
+
+    const m = paramControl(plots, 'm', 'range');
+
+    slide(m, '3');
+    slide(m, '1');
+    release(m);
+    expect(changes).toBe(0);
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [1, 0] });
+
+    // Одна отмена возвращает состояние до настоящей правки m, а не пустой шаг.
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [0, 0] });
+  });
+
   it('при выделенной функции палитра шаблонов — строка значков с именами, подсказка — о блоке «Функция»', () => {
     const plots = create();
     const palette = plots.element.querySelector('.rte-plots__palette');

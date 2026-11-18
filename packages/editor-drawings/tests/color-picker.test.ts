@@ -97,9 +97,11 @@ describe('палитра цвета', () => {
     expect(checked(mounted)).toEqual(['blue']);
     expect(mounted.tiles()).toHaveLength(10);
     expect(mounted.changes).toEqual([]);
-    // Синий уже выбран: нажатие на него пишет цвет палитры — это действие пользователя.
+    // Синий уже выбран (старое значение — его синоним): нажатие на него сцену не переписывает.
     mounted.tile('blue').click();
-    expect(mounted.changes).toEqual(['#2563eb']);
+    expect(mounted.changes).toEqual([]);
+    mounted.tile('red').click();
+    expect(mounted.changes).toEqual(['#dc2626']);
   });
 
   it('цвет не из палитры — одиннадцатая выбранная плитка «Цвет из чертежа»; выбор палитры её убирает', () => {

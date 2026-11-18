@@ -199,7 +199,10 @@ export class ColorPicker {
   private choose(value: string, focusTarget: string): void {
     const host = this.element.closest('.rte-builder__props');
 
-    if (value.toLowerCase() !== this.value.toLowerCase()) {
+    const known = findDrawingColor(value);
+    const same = value.toLowerCase() === this.value.toLowerCase() || (known !== undefined && known === findDrawingColor(this.value));
+
+    if (!same) {
       this.setValue(value);
       this.options.onChange(value);
     }

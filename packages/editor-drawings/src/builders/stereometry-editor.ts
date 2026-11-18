@@ -2224,6 +2224,7 @@ class StereometryEditor implements SceneEditor {
       max: limit,
       step: 1,
       inputStep: 5,
+      freeInput: angle === 'angleZ',
       prop: angle,
       rangeProp: `${angle}Range`,
       onSlide: (value) => this.slideView(angle, value),

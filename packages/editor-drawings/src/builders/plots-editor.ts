@@ -521,6 +521,9 @@ class PlotsEditor implements SceneEditor {
   /** Поля точек выделенной прямой-отрезка: правка `k` или `b` двигает точки — поля обновляются на месте. */
   private pointFields: Array<[HTMLInputElement, HTMLInputElement]> = [];
 
+  /** Сцена в начале жеста ползунка параметра функции. */
+  private functionFrom: PlotsState | null = null;
+
   constructor(context: SceneEditorContext) {
     this.t = context.t;
     this.separator = this.t('drawings_decimal_separator');
@@ -819,9 +822,9 @@ class PlotsEditor implements SceneEditor {
     return item;
   }
 
-  /** Живой просмотр жеста ползунка: шаг истории — один на жест, записан перед первым движением. */
+  /** Живой просмотр жеста ползунка: сцена до жеста запоминается при первом движении, шаг истории — по его итогу. */
   private previewFunction(next: Plot, first: boolean): void {
-    if (first) this.history.record(this.state);
+    if (first) this.functionFrom = cloneScene(this.state);
 
     const item = this.replaceSelected(next);
 
@@ -830,16 +833,27 @@ class PlotsEditor implements SceneEditor {
     if (item) this.refreshFunction(item);
   }
 
-  /** Окончательное значение параметра: шаг истории (если жест его ещё не записал) и сцена наружу. */
+  /**
+   * Окончательное значение параметра: шаг истории и сцена наружу. Жест, который
+   * вернул кривую на место, шага не оставляет и слушателей не зовёт.
+   */
   private commitFunction(next: Plot, gesture: boolean): void {
+    const from = gesture ? this.functionFrom : null;
+
+    this.functionFrom = null;
+
     if (!this.selectedPlot()) return;
 
     if (!gesture) this.history.record(this.state);
 
     const item = this.replaceSelected(next);
+    const unchanged = from !== null && JSON.stringify(from) === JSON.stringify(this.state);
+
+    if (from && !unchanged) this.history.record(from);
 
     this.render();
-    this.changes.emit();
+
+    if (!unchanged) this.changes.emit();
 
     if (item) this.refreshFunction(item);
   }
@@ -1504,7 +1518,7 @@ class PlotsEditor implements SceneEditor {
           return;
         }
 
-        apply(roundPoint([x, y]));
+        apply(roundPoint([x, y], FINE_DIGITS));
       },
     });
     const [x, y] = row.querySelectorAll('input');

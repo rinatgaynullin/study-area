@@ -498,6 +498,15 @@ describe('конструктор стереометрии', () => {
     setValue(propsOf(stereo).querySelector<HTMLInputElement>('input[data-prop="angleZ"]')!, '200');
     expect(stereo.getScene().angleZ).toBe(-160);
 
+    // Числовое поле поворота не ограничено: 270 — допустимый ввод, ползунок свой диапазон сохраняет.
+    const turn = propsOf(stereo).querySelector<HTMLInputElement>('input[type="number"][data-prop="angleZ"]');
+
+    expect(turn?.hasAttribute('min')).toBe(false);
+    expect(turn?.hasAttribute('max')).toBe(false);
+    expect(propsOf(stereo).querySelector('input[type="range"][data-prop="angleZRange"]')?.getAttribute('max')).toBe('180');
+    setValue(propsOf(stereo).querySelector<HTMLInputElement>('input[data-prop="angleZ"]')!, '270');
+    expect(stereo.getScene().angleZ).toBe(-90);
+
     // Панель перерисовывается после каждого изменения, поэтому чекбоксы берём заново.
     const checkboxes = (): NodeListOf<HTMLInputElement> => propsOf(stereo).querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
 
