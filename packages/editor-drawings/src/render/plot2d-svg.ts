@@ -1,7 +1,7 @@
 import type { CirclePlot, GeometryHighlight, GeometryScene, Plot, Vec2 } from '../scene/types';
 import { worldToSvg, type SvgPoint, type Viewport } from './coords';
 import { prettifyMathText, safeColor, translucent } from './geometry-marks';
-import { HIGHLIGHT_COLOR, SvgBuilder, polylinePath, type StrokeOptions } from './svg-builder';
+import { HIGHLIGHT_COLOR, SvgBuilder, escapeXml, polylinePath, type StrokeOptions, type TextOptions } from './svg-builder';
 
 /**
  * Графики функций (`plot_2d`): сетка, оси со стрелками и тиками, кривые,
@@ -38,6 +38,9 @@ const CURVE_DASH = '4';
 const POINT_RADIUS = 5;
 const CENTER_RADIUS = 2.5;
 const LABEL_SIZE = 11;
+/** Показатель степени в подписи графика: мельче и выше строки, как индекс в `latex-label.ts`, только вверх. */
+const POWER_SIZE = 8.5;
+const POWER_SHIFT = 4.5;
 
 /** Параметр кривых: парабола по `t ∈ [-15, 15]`, корень по `s ∈ [0, 50]`. */
 const PARABOLA_RANGE = 15;
@@ -95,6 +98,63 @@ const drawCurve = (builder: SvgBuilder, d: string, color: string, dashed: boolea
 
 /** Подпись графика: дроби и греческие буквы в юникод, остальные команды — без слеша. */
 const plotLabelText = (label: string): string => prettifyMathText(label).replace(/\\/g, '');
+
+/** Степень в подписи: `^2`, `^{…}` или один знак после `^`. */
+const POWER_PATTERN = /\^(?:\{([^{}]*)\}|([^\s{}]))/g;
+
+interface LabelPiece {
+  text: string;
+  power: boolean;
+}
+
+/** Подпись графика кусками: обычный текст и показатели степени по порядку; пустые куски выброшены. */
+const labelPieces = (label: string): LabelPiece[] => {
+  const pieces: LabelPiece[] = [];
+  let from = 0;
+
+  [...label.matchAll(POWER_PATTERN)].forEach((match) => {
+    const at = match.index;
+
+    pieces.push({ text: label.slice(from, at), power: false }, { text: match[1] ?? match[2] ?? '', power: true });
+    from = at + match[0].length;
+  });
+  pieces.push({ text: label.slice(from), power: false });
+
+  return pieces.filter((piece) => piece.text !== '');
+};
+
+/**
+ * Подпись графика → разметка для `<text>`: показатель степени поднят и
+ * мельче, текст после него возвращается на строку. Без степеней — `null`:
+ * подпись идёт простой строкой, как раньше. Всё экранировано.
+ */
+const plotLabelMarkup = (label: string): string | null => {
+  const pieces = labelPieces(plotLabelText(label));
+
+  if (!pieces.some((piece) => piece.power)) return null;
+
+  let raised = false;
+
+  return pieces
+    .map((piece) => {
+      const safe = escapeXml(piece.text);
+      const shift = piece.power === raised ? '' : ` dy="${piece.power ? -POWER_SHIFT : POWER_SHIFT}"`;
+
+      raised = piece.power;
+
+      if (piece.power) return `<tspan${shift} font-size="${POWER_SIZE}">${safe}</tspan>`;
+
+      return shift ? `<tspan${shift}>${safe}</tspan>` : safe;
+    })
+    .join('');
+};
+
+/** Подпись кривой: степени верхним индексом, остальное — строкой через `plotLabelText`. */
+const drawPlotLabel = (builder: SvgBuilder, at: SvgPoint, label: string, options: TextOptions): void => {
+  const markup = plotLabelMarkup(label);
+
+  builder.text(at, markup ?? plotLabelText(label), { ...options, markup: markup !== null });
+};
 
 // Мелкие шаги не подошли — берётся крупнейший, он же последний: шаги идут по возрастанию.
 const tickStep = (scale: number): number =>
@@ -222,7 +282,7 @@ export const renderCirclePlot = (
   builder.text({ x: (center.x + rim.x) / 2, y: (center.y + rim.y) / 2 - 4 }, String(plot.radius), { size: 10, halo: true });
 
   if (plot.label) {
-    builder.text({ x: center.x + radius + 8, y: center.y - 8 }, plotLabelText(plot.label), {
+    drawPlotLabel(builder, { x: center.x + radius + 8, y: center.y - 8 }, plot.label, {
       size: LABEL_SIZE,
       color,
       anchor: 'start',
@@ -449,7 +509,7 @@ const renderPlotLabel = (context: PlotContext, plot: Plot): void => {
     at = context.toSvg([plot.vertex[0] + (plot.directionX === 'left' ? -2 : 2), plot.vertex[1] + (plot.directionY === 'down' ? -1.5 : 1.5)]);
   }
 
-  if (at) context.builder.text(at, plotLabelText(plot.label), { size: LABEL_SIZE, color, anchor: 'start', halo: 3.5 });
+  if (at) drawPlotLabel(context.builder, at, plot.label, { size: LABEL_SIZE, color, anchor: 'start', halo: 3.5 });
 };
 
 const isPlotHighlighted = (plot: Plot, highlight: GeometryHighlight | null): boolean =>
