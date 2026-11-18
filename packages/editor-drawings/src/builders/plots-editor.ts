@@ -7,7 +7,7 @@ import type { BuilderIconId } from './builder-icons';
 import { FunctionPanel } from './function-panel';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
-import { MIN_STRETCH, functionLabel, isFunctionLabel, isFunctionPlot } from './plot-functions';
+import { MIN_RADIUS, MIN_STRETCH, functionLabel, isFunctionLabel, isFunctionPlot } from './plot-functions';
 import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
@@ -82,7 +82,6 @@ const HYPERBOLA_NEAR_ZERO = 0.05;
 const LINE_FAR = 1e4;
 /** Точки штриха ближе этого шага не добавляются: дрожание руки не должно раздувать ломаную. */
 const STROKE_MIN_STEP = 0.02;
-const MIN_RADIUS = 0.25;
 
 /** Поля сцены, которые конструктор понимает; остальные уходят обратно нетронутыми. */
 const KNOWN_SCENE_KEYS = new Set(['type', 'plots', 'axes', 'circle', 'circles', 'showGrid', 'grid', 'showAxesTicks', 'scale', 'offsetX', 'offsetY']);
@@ -516,8 +515,8 @@ class PlotsEditor implements SceneEditor {
 
   private clipboard: PlotItem | null = null;
 
-  /** Локаль записи формул: от неё десятичный разделитель. */
-  private readonly locale: string;
+  /** Десятичный разделитель в формулах: `,` или `.` — из таблицы переводов. */
+  private readonly separator: string;
 
   /** Блок «Функция»: живёт всё время, пересобирается при смене выделения. */
   private readonly functionPanel: FunctionPanel;
@@ -527,10 +526,10 @@ class PlotsEditor implements SceneEditor {
 
   constructor(context: SceneEditorContext) {
     this.t = context.t;
-    this.locale = this.t('drawings_plots_fn_locale');
+    this.separator = this.t('drawings_decimal_separator');
     this.functionPanel = new FunctionPanel({
       t: this.t,
-      locale: this.locale,
+      separator: this.separator,
       onPreview: (plot, first) => this.previewFunction(plot, first),
       onCommit: (plot, gesture) => this.commitFunction(plot, gesture),
       onFormulaLabel: (checked) => this.setFormulaLabel(checked),
@@ -633,7 +632,7 @@ class PlotsEditor implements SceneEditor {
       showAxesTicks: scene.showAxesTicks,
       extra: extraOf(raw, KNOWN_SCENE_KEYS),
       // Подпись, уже равная формуле, — признак подписи-формулы (как у величины угла).
-      formulaLabels: plots.filter((plot) => isFunctionLabel(plot.label, plot, this.functionPanel.form, this.locale)).map((plot) => plot.id),
+      formulaLabels: plots.filter((plot) => isFunctionLabel(plot.label, plot, this.functionPanel.form, this.separator)).map((plot) => plot.id),
     };
     this.history.clear();
     this.selectedId = null;
@@ -767,7 +766,7 @@ class PlotsEditor implements SceneEditor {
   private withFormulaLabel(plot: PlotItem): PlotItem {
     if (!this.state.formulaLabels.includes(plot.id)) return plot;
 
-    const label = functionLabel(plot, this.functionPanel.form, this.locale);
+    const label = functionLabel(plot, this.functionPanel.form, this.separator);
 
     return label === null ? plot : { ...plot, label };
   }
@@ -1295,15 +1294,7 @@ class PlotsEditor implements SceneEditor {
         this.appendDomain(plot);
         break;
       case 'circle':
-        this.appendNumber(
-          t('drawings_prop_radius'),
-          plot.radius,
-          (value) =>
-            this.updatePlot(plot, (draft) => {
-              draft.radius = value;
-            }),
-          (value) => value >= MIN_RADIUS,
-        );
+        // Центр и радиус — параметры `a`, `b`, `r` блока «Функция».
         this.appendCheckbox(t('drawings_plots_prop_fill'), plot.fill === true, (checked) =>
           this.updatePlot(plot, (draft) => {
             draft.fill = checked;
@@ -1412,23 +1403,6 @@ class PlotsEditor implements SceneEditor {
     this.properties.appendChild(propertyField(label, input));
 
     return input;
-  }
-
-  private appendNumber(label: string, value: number, apply: (value: number) => void, accept: (value: number) => boolean = () => true): void {
-    const input = el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value: String(value) } });
-
-    input.addEventListener('change', () => {
-      const next = Number(input.value);
-
-      if (input.value.trim() === '' || !Number.isFinite(next) || !accept(next)) {
-        this.renderProperties();
-
-        return;
-      }
-
-      apply(roundTo(next));
-    });
-    this.properties.appendChild(propertyField(label, input));
   }
 
   private appendCheckbox(label: string, checked: boolean, apply: (checked: boolean) => void): void {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MIN_HYPERBOLA_K,
+  MIN_RADIUS,
   MIN_STRETCH,
   applyFunctionParam,
   describeFunction,
@@ -11,7 +12,10 @@ import {
   type FunctionParamId,
   type ParabolaForm,
 } from '../src/builders/plot-functions';
-import type { HyperbolaPlot, LinePlot, ParabolaPlot, Plot, SqrtPlot } from '../src/scene/types';
+import { normalizeGeometryScene } from '../src/scene/normalize';
+import type { CirclePlot, HyperbolaPlot, LinePlot, ParabolaPlot, Plot, SqrtPlot } from '../src/scene/types';
+import { mathLabel } from '../src/tikz/common';
+import { geometryToTikz } from '../src/tikz/geometry-tikz';
 
 const parabola = (fields: Partial<ParabolaPlot> = {}): ParabolaPlot => ({ type: 'parabola', vertex: [0, 0], direction: 'up', stretchX: 1, stretchY: 1, ...fields });
 const sqrt = (fields: Partial<SqrtPlot> = {}): SqrtPlot => ({ type: 'sqrt', vertex: [0, 0], directionX: 'right', directionY: 'up', stretch: 1, ...fields });
@@ -88,18 +92,40 @@ describe('параметры функции из полей сцены', () => {
     expect(values(sqrt({ vertex: [2, 1], directionX: 'left', directionY: 'down', stretch: 1.5 }))).toEqual({ a: -1.5, m: 2, n: 1 });
   });
 
-  it('диапазоны: a и k — от −5 до 5 шагом 0,1; сдвиги — от −10 до 10 шагом 0,5; у окружности параметров нет', () => {
+  it('окружность: a и b — центр, r — радиус', () => {
+    expect(values({ type: 'circle', center: [1, -2], radius: 2.5 })).toEqual({ a: 1, b: -2, r: 2.5 });
+  });
+
+  it('диапазоны: a и k — от −5 до 5 шагом 0,1; сдвиги и центр — от −10 до 10 шагом 0,5; радиус — от 0,5 до 10', () => {
     const [a, m] = functionParams(parabola(), 'vertex');
 
     expect(a).toMatchObject({ id: 'a', min: -5, max: 5, step: 0.1 });
     expect(m).toMatchObject({ id: 'm', min: -10, max: 10, step: 0.5 });
     expect(functionParams({ type: 'line', k: 1, b: 0 }, 'vertex')[0]).toMatchObject({ id: 'k', min: -5, max: 5, step: 0.1 });
-    expect(functionParams({ type: 'circle', center: [0, 0], radius: 2 }, 'vertex')).toEqual([]);
+    expect(functionParams({ type: 'circle', center: [0, 0], radius: 2 }, 'vertex')).toEqual([
+      { id: 'a', value: 0, min: -10, max: 10, step: 0.5 },
+      { id: 'b', value: 0, min: -10, max: 10, step: 0.5 },
+      { id: 'r', value: 2, min: MIN_RADIUS, max: 10, step: 0.5 },
+    ]);
+    expect(MIN_RADIUS).toBe(0.5);
     expect(functionParams({ type: 'point', coords: [0, 0], pointStyle: 'solid' }, 'vertex')).toEqual([]);
   });
 
-  it('значения округляются до трёх знаков', () => {
-    expect(values(parabola({ stretchX: 3, stretchY: 1 })).a).toBe(0.111);
+  it('значения округляются до двух знаков — как их сохраняет сцена', () => {
+    expect(values(parabola({ stretchX: 3, stretchY: 1 })).a).toBe(0.11);
+    expect(values(hyperbola({ center: [1.234, -0.005], k: 2.346 }))).toEqual({ k: 2.35, m: 1.23, n: -0.01 });
+    expect(values({ type: 'circle', center: [0.125, 0], radius: 1.004 })).toEqual({ a: 0.13, b: 0, r: 1 });
+  });
+
+  it('параметры и формула считаются от чисел, которые сохранит сцена: после сохранения — те же', () => {
+    // Растяжение 0,333 сцена запишет как 0,33: a = 0,33, а не 0,333 → 0,33 после загрузки.
+    const loaded = parabola({ vertex: [1.006, -2.994], stretchX: 1, stretchY: 0.333 });
+    const stored = parabola({ vertex: [1.01, -2.99], stretchX: 1, stretchY: 0.33 });
+
+    expect(values(loaded)).toEqual(values(stored));
+    expect(values(loaded, 'standard')).toEqual(values(stored, 'standard'));
+    expect(functionText(loaded, 'vertex', ',')).toBe(functionText(stored, 'vertex', ','));
+    expect(functionText({ type: 'circle', center: [0, 0], radius: 1.257 }, 'vertex', ',')).toBe('x² + y² = 1,5876');
   });
 });
 
@@ -150,14 +176,17 @@ describe('правка параметра', () => {
   });
 
   it('общий вид ↔ вершина: туда и обратно', () => {
-    const plot = parabola({ vertex: [-1.5, 2], stretchY: 0.5, direction: 'down' });
+    // c = am² + n = 0,875 — в блоке два знака, как в сцене.
+    expect(values(parabola({ vertex: [-1.5, 2], stretchY: 0.5, direction: 'down' }), 'standard')).toEqual({ a: -0.5, b: -1.5, c: 0.88 });
+
+    const plot = parabola({ vertex: [-1, 2], stretchY: 0.5, direction: 'down' });
     const standard = values(plot, 'standard');
 
-    expect(standard).toEqual({ a: -0.5, b: -1.5, c: 0.875 });
+    expect(standard).toEqual({ a: -0.5, b: -1, c: 1.5 });
 
     const back = applyFunctionParam(applyFunctionParam(plot, 'standard', 'b', standard.b ?? 0), 'standard', 'c', standard.c ?? 0);
 
-    expect(values(back)).toEqual({ a: -0.5, m: -1.5, n: 2 });
+    expect(values(back)).toEqual({ a: -0.5, m: -1, n: 2 });
   });
 
   it('ноль для a и k гиперболы заменяется наименьшим допустимым со знаком прежнего значения', () => {
@@ -168,6 +197,23 @@ describe('правка параметра', () => {
     expect(applyFunctionParam(hyperbola({ k: 2 }), 'vertex', 'k', 0.04)).toMatchObject({ k: MIN_HYPERBOLA_K });
     // У прямой k = 0 разрешён.
     expect(applyFunctionParam({ type: 'line', k: 2, b: 1 }, 'vertex', 'k', 0)).toMatchObject({ k: 0, b: 1 });
+  });
+
+  it('окружность: a и b двигают центр, r меняет радиус; r меньше 0,5 заменяется на 0,5', () => {
+    const circle: CirclePlot = { type: 'circle', center: [1, -2], radius: 2, fill: true, color: '#10b981' };
+    const before = JSON.stringify(circle);
+
+    expect(applyFunctionParam(circle, 'vertex', 'a', -3.5)).toEqual({ ...circle, center: [-3.5, -2] });
+    expect(applyFunctionParam(circle, 'vertex', 'b', 4)).toEqual({ ...circle, center: [1, 4] });
+    expect(applyFunctionParam(circle, 'vertex', 'r', 3.25)).toEqual({ ...circle, radius: 3.25 });
+    expect(applyFunctionParam(circle, 'vertex', 'r', 0.2)).toMatchObject({ radius: MIN_RADIUS });
+    expect(applyFunctionParam(circle, 'vertex', 'r', 0)).toMatchObject({ radius: 0.5 });
+    expect(applyFunctionParam(circle, 'vertex', 'r', -4)).toMatchObject({ radius: 0.5 });
+    // Чужой параметр — та же кривая; вход не меняется.
+    expect(applyFunctionParam(circle, 'vertex', 'm', 3)).toBe(circle);
+    expect(JSON.stringify(circle)).toBe(before);
+    // Туда и обратно: параметры новой окружности — те, что ввели.
+    expect(values(applyFunctionParam(applyFunctionParam(circle, 'vertex', 'a', 0.5), 'vertex', 'r', 1.5))).toEqual({ a: 0.5, b: -2, r: 1.5 });
   });
 
   it('кривая без правок не меняется: растяжения и точки остаются как загружены', () => {
@@ -186,7 +232,7 @@ describe('правка параметра', () => {
 });
 
 describe('запись формулы', () => {
-  const ru = (plot: Plot, form: ParabolaForm = 'vertex'): string => functionText(plot, form, 'ru');
+  const ru = (plot: Plot, form: ParabolaForm = 'vertex'): string => functionText(plot, form, ',');
 
   it.each<[string, Plot, string]>([
     ['шаблон параболы', parabola(), 'y = x²'],
@@ -218,11 +264,11 @@ describe('запись формулы', () => {
   });
 
   it('английская локаль — с десятичной точкой', () => {
-    expect(functionText(parabola({ vertex: [0.5, -1.25], stretchY: 1.5 }), 'vertex', 'en')).toBe('y = 1.5(x − 0.5)² − 1.25');
+    expect(functionText(parabola({ vertex: [0.5, -1.25], stretchY: 1.5 }), 'vertex', '.')).toBe('y = 1.5(x − 0.5)² − 1.25');
   });
 
   it('части формулы: степень, дробь, корень — отдельными узлами', () => {
-    expect(describeFunction(parabola({ vertex: [1, 0] }), 'vertex', 'ru')).toEqual([
+    expect(describeFunction(parabola({ vertex: [1, 0] }), 'vertex', ',')).toEqual([
       { kind: 'var', name: 'y' },
       { kind: 'text', text: ' = ' },
       { kind: 'text', text: '(' },
@@ -231,28 +277,61 @@ describe('запись формулы', () => {
       { kind: 'text', text: ')' },
       { kind: 'sup', text: '2' },
     ]);
-    expect(describeFunction(hyperbola(), 'vertex', 'ru')?.[2]).toEqual({ kind: 'frac', num: [{ kind: 'text', text: '1' }], den: [{ kind: 'var', name: 'x' }] });
-    expect(describeFunction(sqrt(), 'vertex', 'ru')?.[2]).toEqual({ kind: 'sqrt', body: [{ kind: 'var', name: 'x' }] });
-    expect(describeFunction({ type: 'point', coords: [0, 0], pointStyle: 'solid' }, 'vertex', 'ru')).toBeNull();
+    expect(describeFunction(hyperbola(), 'vertex', ',')?.[2]).toEqual({ kind: 'frac', num: [{ kind: 'text', text: '1' }], den: [{ kind: 'var', name: 'x' }] });
+    expect(describeFunction(sqrt(), 'vertex', ',')?.[2]).toEqual({ kind: 'sqrt', body: [{ kind: 'var', name: 'x' }] });
+    expect(describeFunction({ type: 'point', coords: [0, 0], pointStyle: 'solid' }, 'vertex', ',')).toBeNull();
   });
 });
 
 describe('подпись формулой', () => {
   it('запись для обоих рендеров: дефис, дробь в скобках, корень знаком', () => {
-    expect(functionLabel({ type: 'line', k: -2, b: 1 }, 'vertex', 'ru')).toBe('y = -2x + 1');
-    expect(functionLabel(hyperbola({ center: [1, -2], k: 3 }), 'vertex', 'ru')).toBe('y = 3/(x - 1) - 2');
-    expect(functionLabel(sqrt({ vertex: [1, 0], stretch: 0.5 }), 'vertex', 'ru')).toBe('y = 0,5√(x - 1)');
-    // Степень ни одним рендером верно не рисуется — у параболы и окружности подписи-формулы нет.
-    expect(functionLabel(parabola(), 'vertex', 'ru')).toBeNull();
-    expect(functionLabel({ type: 'circle', center: [0, 0], radius: 1 }, 'vertex', 'ru')).toBeNull();
+    expect(functionLabel({ type: 'line', k: -2, b: 1 }, 'vertex', ',')).toBe('y = -2x + 1');
+    expect(functionLabel(hyperbola({ center: [1, -2], k: 3 }), 'vertex', ',')).toBe('y = 3/(x - 1) - 2');
+    expect(functionLabel(sqrt({ vertex: [1, 0], stretch: 0.5 }), 'vertex', ',')).toBe('y = 0,5√(x - 1)');
+    // Степень — `^2`: SVG рисует её верхним индексом, TikZ — в математическом режиме.
+    expect(functionLabel(parabola({ vertex: [1, -3], stretchY: 2 }), 'vertex', ',')).toBe('y = 2(x - 1)^2 - 3');
+    expect(functionLabel(parabola({ vertex: [1, 3], stretchY: 2 }), 'standard', ',')).toBe('y = 2x^2 - 4x + 5');
+    expect(functionLabel({ type: 'circle', center: [1, -2], radius: 2.5 }, 'vertex', ',')).toBe('(x - 1)^2 + (y + 2)^2 = 6,25');
+    expect(functionLabel({ type: 'circle', center: [0, 0], radius: 2 }, 'vertex', ',')).toBe('x^2 + y^2 = 4');
+    expect(functionLabel({ type: 'point', coords: [0, 0], pointStyle: 'solid' }, 'vertex', ',')).toBeNull();
+  });
+
+  it('TikZ получает корректную математическую запись: степень, дробь, корень', () => {
+    const tikz = (plot: Plot, form: ParabolaForm = 'vertex'): string => mathLabel(functionLabel(plot, form, ',') ?? '');
+
+    expect(tikz(parabola({ vertex: [1, -3], stretchY: 2 }))).toBe('$y = 2(x - 1)^2 - 3$');
+    expect(tikz(parabola({ vertex: [1, 3], stretchY: 2 }), 'standard')).toBe('$y = 2x^2 - 4x + 5$');
+    expect(tikz(hyperbola({ center: [1, -2], k: 3 }))).toBe('$y = 3/(x - 1) - 2$');
+    expect(tikz(hyperbola({ k: -1 }))).toBe('$y = -1/x$');
+    expect(tikz(sqrt({ vertex: [1, 0], stretch: 0.5 }))).toBe('$y = 0,5\\sqrt{x - 1}$');
+    expect(tikz(sqrt({ vertex: [3, 0], directionX: 'left', directionY: 'down' }))).toBe('$y = -\\sqrt{3 - x}$');
+    expect(tikz({ type: 'circle', center: [1, -2], radius: 2.5 })).toBe('$(x - 1)^2 + (y + 2)^2 = 6,25$');
+    expect(tikz({ type: 'line', k: -2, b: 1 })).toBe('$y = -2x + 1$');
+  });
+
+  it('подпись-формула параболы и окружности попадает в TikZ сцены', () => {
+    const label = functionLabel(parabola({ vertex: [1, -3], stretchY: 2 }), 'vertex', ',') ?? '';
+    const ring = functionLabel({ type: 'circle', center: [1, -2], radius: 2.5 }, 'vertex', ',') ?? '';
+    const tikz = geometryToTikz(
+      normalizeGeometryScene({
+        type: 'plot_2d',
+        plots: [
+          { type: 'parabola', vertex: [1, -3], direction: 'up', stretchX: 1, stretchY: 2, label },
+          { type: 'circle', center: [1, -2], radius: 2.5, label: ring },
+        ],
+      }),
+    );
+
+    expect(tikz).toContain('{$y = 2(x - 1)^2 - 3$}');
+    expect(tikz).toContain('{$(x - 1)^2 + (y + 2)^2 = 6,25$}');
   });
 
   it('подпись, равная формуле, узнаётся без учёта пробелов, минуса и разделителя', () => {
     const line: LinePlot = { type: 'line', k: 0.5, b: -1 };
 
-    expect(isFunctionLabel('y=0.5x-1', line, 'vertex', 'ru')).toBe(true);
-    expect(isFunctionLabel('y = 0,5x − 1', line, 'vertex', 'ru')).toBe(true);
-    expect(isFunctionLabel('y = x', line, 'vertex', 'ru')).toBe(false);
-    expect(isFunctionLabel(undefined, line, 'vertex', 'ru')).toBe(false);
+    expect(isFunctionLabel('y=0.5x-1', line, 'vertex', ',')).toBe(true);
+    expect(isFunctionLabel('y = 0,5x − 1', line, 'vertex', ',')).toBe(true);
+    expect(isFunctionLabel('y = x', line, 'vertex', ',')).toBe(false);
+    expect(isFunctionLabel(undefined, line, 'vertex', ',')).toBe(false);
   });
 });

@@ -14,8 +14,8 @@ import {
 
 export interface FunctionPanelOptions {
   t: Translate;
-  /** Локаль записи чисел: запятая для `ru`, точка для `en`. */
-  locale: string;
+  /** Десятичный разделитель в формуле: `,` или `.` (из таблицы переводов). */
+  separator: string;
   /** Живой просмотр жеста ползунка; `first` — первое движение жеста: пора записать шаг истории. */
   onPreview(plot: Plot, first: boolean): void;
   /** Окончательное значение; `gesture` — завершает жест, шаг истории уже записан. */
@@ -30,7 +30,7 @@ interface ParamRow {
   number: HTMLInputElement;
 }
 
-/** Пояснения к параметрам простыми словами; `m` и `n` везде — сдвиги. */
+/** Пояснения к параметрам простыми словами; `m` и `n` везде — сдвиги, у окружности `a`, `b` — сдвиги центра. */
 const HINT_KEYS: Record<string, string> = {
   line_k: 'drawings_plots_fn_hint_line_k',
   line_b: 'drawings_plots_fn_hint_line_b',
@@ -40,6 +40,9 @@ const HINT_KEYS: Record<string, string> = {
   parabola_c: 'drawings_plots_fn_hint_parabola_c',
   hyperbola_k: 'drawings_plots_fn_hint_hyperbola_k',
   sqrt_a: 'drawings_plots_fn_hint_sqrt_a',
+  circle_a: 'drawings_plots_fn_hint_circle_a',
+  circle_b: 'drawings_plots_fn_hint_circle_b',
+  circle_r: 'drawings_plots_fn_hint_circle_r',
   shift_m: 'drawings_plots_fn_hint_shift_x',
   shift_n: 'drawings_plots_fn_hint_shift_y',
 };
@@ -188,10 +191,10 @@ export class FunctionPanel {
 
     if (!plot) return;
 
-    const parts = describeFunction(plot, this.parabolaForm, this.options.locale) ?? [];
+    const parts = describeFunction(plot, this.parabolaForm, this.options.separator) ?? [];
 
     this.card.replaceChildren(...formulaNodes(parts));
-    this.card.setAttribute('aria-label', functionText(plot, this.parabolaForm, this.options.locale));
+    this.card.setAttribute('aria-label', functionText(plot, this.parabolaForm, this.options.separator));
     // Цвет графика: строка из сцены идёт через CSSOM, недопустимую браузер просто не примет.
     this.card.style.color = plot.color ?? '';
   }

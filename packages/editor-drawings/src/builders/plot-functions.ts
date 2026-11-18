@@ -12,7 +12,7 @@ export type FunctionPlot = LinePlot | ParabolaPlot | HyperbolaPlot | SqrtPlot | 
 /** Запись параболы: «через вершину» `y = a(x − m)² + n` или «общий вид» `y = ax² + bx + c`. */
 export type ParabolaForm = 'vertex' | 'standard';
 
-export type FunctionParamId = 'k' | 'b' | 'a' | 'm' | 'n' | 'c';
+export type FunctionParamId = 'k' | 'b' | 'a' | 'm' | 'n' | 'c' | 'r';
 
 export interface FunctionParam {
   id: FunctionParamId;
@@ -36,11 +36,16 @@ export const MIN_STRETCH = 0.05;
 /** Наименьший по модулю `k` гиперболы. */
 export const MIN_HYPERBOLA_K = 0.1;
 
-const DIGITS = 3;
+/** Наименьший радиус окружности. */
+export const MIN_RADIUS = 0.5;
 
-/** Ползунки: множители `a`, `k` — мелким шагом, сдвиги — шагом сетки полотна. */
+/** Знаков после запятой — столько же, сколько пишет в сцену `serializePlot`. */
+const DIGITS = 2;
+
+/** Ползунки: множители `a`, `k` — мелким шагом, сдвиги и радиус — шагом сетки полотна. */
 const SLOPE_RANGE = { min: -5, max: 5, step: 0.1 };
 const SHIFT_RANGE = { min: -10, max: 10, step: 0.5 };
+const RADIUS_RANGE = { min: MIN_RADIUS, max: 10, step: 0.5 };
 
 /** Две точки прямой с почти равными x — вертикальная прямая `x = c`. */
 const VERTICAL_EPSILON = 1e-9;
@@ -49,9 +54,6 @@ const VERTICAL_EPSILON = 1e-9;
 const MINUS = '−';
 
 const SUPERSCRIPTS: Record<string, string> = { '2': '²', '3': '³' };
-
-/** Кривые, подпись-формула которых верно рисуется и SVG, и TikZ (см. `functionLabel`). */
-const LABEL_TYPES: ReadonlySet<Plot['type']> = new Set<Plot['type']>(['line', 'hyperbola', 'sqrt']);
 
 export const isFunctionPlot = (plot: Plot): plot is FunctionPlot =>
   plot.type === 'line' || plot.type === 'parabola' || plot.type === 'hyperbola' || plot.type === 'sqrt' || plot.type === 'circle';
@@ -103,8 +105,36 @@ const sqrtA = (plot: SqrtPlot): number => (plot.directionY === 'down' ? -plot.st
 /** Общий вид параболы из вершины: `b = −2am`, `c = am² + n`. */
 const standardCoefficients = (a: number, [m, n]: Vec2): { a: number; b: number; c: number } => ({ a, b: -2 * a * m, c: a * m * m + n });
 
-/** Параметры функции кривой в школьных обозначениях; у окружности и не-функций — пусто. */
-export const functionParams = (plot: Plot, form: ParabolaForm): FunctionParam[] => {
+/**
+ * Числа кривой так, как их сохранит сцена (`serializePlot` округляет до двух
+ * знаков): параметры и формула считаются от них, поэтому после сохранения и
+ * повторной загрузки в блоке те же значения. Кривая в сцене не меняется.
+ */
+const asStored = (plot: Plot): Plot => {
+  const point = (value: Vec2): Vec2 => [round(value[0]), round(value[1])];
+
+  switch (plot.type) {
+    case 'line':
+      return plot.p1 && plot.p2
+        ? { ...plot, p1: point(plot.p1), p2: point(plot.p2) }
+        : { ...plot, k: round(plot.k ?? 0), b: round(plot.b ?? 0) };
+    case 'parabola':
+      return { ...plot, vertex: point(plot.vertex), stretchX: round(plot.stretchX), stretchY: round(plot.stretchY) };
+    case 'sqrt':
+      return { ...plot, vertex: point(plot.vertex), stretch: round(plot.stretch) };
+    case 'hyperbola':
+      return { ...plot, center: point(plot.center), k: round(plot.k) };
+    case 'circle':
+      return { ...plot, center: point(plot.center), radius: round(plot.radius) };
+    default:
+      return plot;
+  }
+};
+
+/** Параметры функции кривой в школьных обозначениях; у не-функций — пусто. */
+export const functionParams = (source: Plot, form: ParabolaForm): FunctionParam[] => {
+  const plot = asStored(source);
+
   switch (plot.type) {
     case 'line': {
       const line = lineCoefficients(plot);
@@ -126,6 +156,8 @@ export const functionParams = (plot: Plot, form: ParabolaForm): FunctionParam[] 
       return [param('k', plot.k, SLOPE_RANGE), param('m', plot.center[0], SHIFT_RANGE), param('n', plot.center[1], SHIFT_RANGE)];
     case 'sqrt':
       return [param('a', sqrtA(plot), SLOPE_RANGE), param('m', plot.vertex[0], SHIFT_RANGE), param('n', plot.vertex[1], SHIFT_RANGE)];
+    case 'circle':
+      return [param('a', plot.center[0], SHIFT_RANGE), param('b', plot.center[1], SHIFT_RANGE), param('r', plot.radius, RADIUS_RANGE)];
     default:
       return [];
   }
@@ -210,6 +242,17 @@ const applyHyperbola = (plot: HyperbolaPlot, id: FunctionParamId, value: number)
   return plot;
 };
 
+/** Окружность `(x − a)² + (y − b)² = r²`: `a`, `b` — центр, `r` не меньше `MIN_RADIUS`. */
+const applyCircle = (plot: CirclePlot, id: FunctionParamId, value: number): CirclePlot => {
+  if (id === 'a') return { ...plot, center: [value, plot.center[1]] };
+
+  if (id === 'b') return { ...plot, center: [plot.center[0], value] };
+
+  if (id === 'r') return { ...plot, radius: Math.max(MIN_RADIUS, value) };
+
+  return plot;
+};
+
 /**
  * Новая кривая с изменённым параметром; вход не меняется. Поля, которых
  * параметр не касается, и чужие поля элемента копируются как были.
@@ -228,6 +271,8 @@ export const applyFunctionParam = (plot: Plot, form: ParabolaForm, id: FunctionP
       return applySqrt(plot, id, rounded);
     case 'hyperbola':
       return applyHyperbola(plot, id, rounded);
+    case 'circle':
+      return applyCircle(plot, id, rounded);
     default:
       return plot;
   }
@@ -235,14 +280,18 @@ export const applyFunctionParam = (plot: Plot, form: ParabolaForm, id: FunctionP
 
 // ---------------------------------------------------------------- формула
 
-const decimalSeparator = (locale: string): string => (locale.toLowerCase().startsWith('en') ? '.' : ',');
+/** Десятичный разделитель из таблицы переводов: точка или запятая; иное — запятая, как в школе. */
+const decimalSeparator = (separator: string): string => (separator === '.' ? '.' : ',');
 
-/** Число по локали: настоящий минус, без незначащих нулей, не больше трёх знаков. */
-export const formatNumber = (value: number, locale: string): string => {
-  const rounded = round(value);
-  const digits = String(Math.abs(rounded)).replace('.', decimalSeparator(locale));
+/**
+ * Число с разделителем `separator` (`,` или `.`): настоящий минус, без
+ * незначащих нулей, не больше `digits` знаков — по умолчанию двух, как в сцене.
+ */
+export const formatNumber = (value: number, separator: string, digits = DIGITS): string => {
+  const rounded = roundTo(value, digits);
+  const written = String(Math.abs(rounded)).replace('.', decimalSeparator(separator));
 
-  return rounded < 0 ? `${MINUS}${digits}` : digits;
+  return rounded < 0 ? `${MINUS}${written}` : written;
 };
 
 const text = (value: string): FormulaPart => ({ kind: 'text', text: value });
@@ -255,112 +304,115 @@ const SQUARE: FormulaPart = { kind: 'sup', text: '2' };
 const sign = (value: number): string => (value < 0 ? ` ${MINUS} ` : ' + ');
 
 /** `x − m`: нулевой сдвиг не пишется, `x − (−2)` → `x + 2`. */
-const shifted = (name: string, shift: number, locale: string): FormulaPart[] => {
+const shifted = (name: string, shift: number, separator: string): FormulaPart[] => {
   const value = round(shift);
 
-  return value === 0 ? [variable(name)] : [variable(name), text(`${sign(-value)}${formatNumber(Math.abs(value), locale)}`)];
+  return value === 0 ? [variable(name)] : [variable(name), text(`${sign(-value)}${formatNumber(Math.abs(value), separator)}`)];
 };
 
 /** Квадрат сдвинутой переменной: `x²` или `(x − 1)²`. */
-const shiftedSquare = (name: string, shift: number, locale: string): FormulaPart[] =>
-  round(shift) === 0 ? [variable(name), SQUARE] : [text('('), ...shifted(name, shift, locale), text(')'), SQUARE];
+const shiftedSquare = (name: string, shift: number, separator: string): FormulaPart[] =>
+  round(shift) === 0 ? [variable(name), SQUARE] : [text('('), ...shifted(name, shift, separator), text(')'), SQUARE];
 
 /** Множитель перед выражением: 1 не пишется, −1 — одним минусом. */
-const leading = (coefficient: number, locale: string): FormulaPart[] => {
+const leading = (coefficient: number, separator: string): FormulaPart[] => {
   const value = round(coefficient);
 
   if (value === 1) return [];
 
   if (value === -1) return [text(MINUS)];
 
-  return [text(formatNumber(value, locale))];
+  return [text(formatNumber(value, separator))];
 };
 
 /** Свободное слагаемое: ` + 3`, ` − 3`; ноль не пишется. */
-const constantTerm = (value: number, locale: string): FormulaPart[] => {
+const constantTerm = (value: number, separator: string): FormulaPart[] => {
   const rounded = round(value);
 
-  return rounded === 0 ? [] : [text(`${sign(rounded)}${formatNumber(Math.abs(rounded), locale)}`)];
+  return rounded === 0 ? [] : [text(`${sign(rounded)}${formatNumber(Math.abs(rounded), separator)}`)];
 };
 
 /** Слагаемое с переменной: ` + 3x`, ` − x`; ноль не пишется. */
-const variableTerm = (coefficient: number, name: string, locale: string): FormulaPart[] => {
+const variableTerm = (coefficient: number, name: string, separator: string): FormulaPart[] => {
   const value = round(coefficient);
   const magnitude = Math.abs(value);
 
   if (value === 0) return [];
 
-  return [text(`${sign(value)}${magnitude === 1 ? '' : formatNumber(magnitude, locale)}`), variable(name)];
+  return [text(`${sign(value)}${magnitude === 1 ? '' : formatNumber(magnitude, separator)}`), variable(name)];
 };
 
 /** Подкоренное выражение: `x − m`, а для ветви влево — `m − x`. */
-const sqrtBody = (plot: SqrtPlot, locale: string): FormulaPart[] => {
-  if (plot.directionX !== 'left') return shifted('x', plot.vertex[0], locale);
+const sqrtBody = (plot: SqrtPlot, separator: string): FormulaPart[] => {
+  if (plot.directionX !== 'left') return shifted('x', plot.vertex[0], separator);
 
   const m = round(plot.vertex[0]);
 
-  return m === 0 ? [text(MINUS), variable('x')] : [text(`${formatNumber(m, locale)} ${MINUS} `), variable('x')];
+  return m === 0 ? [text(MINUS), variable('x')] : [text(`${formatNumber(m, separator)} ${MINUS} `), variable('x')];
 };
 
 const Y_EQUALS: FormulaPart[] = [variable('y'), text(' = ')];
 
-const lineFormula = (plot: LinePlot, locale: string): FormulaPart[] => {
+const lineFormula = (plot: LinePlot, separator: string): FormulaPart[] => {
   const line = lineCoefficients(plot);
 
-  if (line.vertical) return [variable('x'), text(' = '), text(formatNumber(line.c, locale))];
+  if (line.vertical) return [variable('x'), text(' = '), text(formatNumber(line.c, separator))];
 
-  if (round(line.k) === 0) return [...Y_EQUALS, text(formatNumber(line.b, locale))];
+  if (round(line.k) === 0) return [...Y_EQUALS, text(formatNumber(line.b, separator))];
 
-  return [...Y_EQUALS, ...leading(line.k, locale), variable('x'), ...constantTerm(line.b, locale)];
+  return [...Y_EQUALS, ...leading(line.k, separator), variable('x'), ...constantTerm(line.b, separator)];
 };
 
-const parabolaFormula = (plot: ParabolaPlot, form: ParabolaForm, locale: string): FormulaPart[] => {
+const parabolaFormula = (plot: ParabolaPlot, form: ParabolaForm, separator: string): FormulaPart[] => {
   const a = parabolaA(plot);
 
   if (form === 'standard') {
     const { b, c } = standardCoefficients(a, plot.vertex);
 
-    return [...Y_EQUALS, ...leading(a, locale), variable('x'), SQUARE, ...variableTerm(b, 'x', locale), ...constantTerm(c, locale)];
+    return [...Y_EQUALS, ...leading(a, separator), variable('x'), SQUARE, ...variableTerm(b, 'x', separator), ...constantTerm(c, separator)];
   }
 
-  return [...Y_EQUALS, ...leading(a, locale), ...shiftedSquare('x', plot.vertex[0], locale), ...constantTerm(plot.vertex[1], locale)];
+  return [...Y_EQUALS, ...leading(a, separator), ...shiftedSquare('x', plot.vertex[0], separator), ...constantTerm(plot.vertex[1], separator)];
 };
 
-const hyperbolaFormula = (plot: HyperbolaPlot, locale: string): FormulaPart[] => {
+const hyperbolaFormula = (plot: HyperbolaPlot, separator: string): FormulaPart[] => {
   const k = round(plot.k);
-  const fraction: FormulaPart = { kind: 'frac', num: [text(formatNumber(Math.abs(k), locale))], den: shifted('x', plot.center[0], locale) };
+  const fraction: FormulaPart = { kind: 'frac', num: [text(formatNumber(Math.abs(k), separator))], den: shifted('x', plot.center[0], separator) };
 
-  return [...Y_EQUALS, ...(k < 0 ? [text(MINUS)] : []), fraction, ...constantTerm(plot.center[1], locale)];
+  return [...Y_EQUALS, ...(k < 0 ? [text(MINUS)] : []), fraction, ...constantTerm(plot.center[1], separator)];
 };
 
-const sqrtFormula = (plot: SqrtPlot, locale: string): FormulaPart[] => [
+const sqrtFormula = (plot: SqrtPlot, separator: string): FormulaPart[] => [
   ...Y_EQUALS,
-  ...leading(sqrtA(plot), locale),
-  { kind: 'sqrt', body: sqrtBody(plot, locale) },
-  ...constantTerm(plot.vertex[1], locale),
+  ...leading(sqrtA(plot), separator),
+  { kind: 'sqrt', body: sqrtBody(plot, separator) },
+  ...constantTerm(plot.vertex[1], separator),
 ];
 
-const circleFormula = (plot: CirclePlot, locale: string): FormulaPart[] => [
-  ...shiftedSquare('x', plot.center[0], locale),
+const circleFormula = (plot: CirclePlot, separator: string): FormulaPart[] => [
+  ...shiftedSquare('x', plot.center[0], separator),
   text(' + '),
-  ...shiftedSquare('y', plot.center[1], locale),
+  ...shiftedSquare('y', plot.center[1], separator),
   text(' = '),
-  text(formatNumber(plot.radius * plot.radius, locale)),
+  // Радиус с двумя знаками — квадрат точно с четырьмя: `1,5625`, а не `1,56`.
+  text(formatNumber(round(plot.radius) ** 2, separator, 2 * DIGITS)),
 ];
 
 /** Формула кривой для показа частями; у не-функций — `null`. */
-export const describeFunction = (plot: Plot, form: ParabolaForm, locale: string): FormulaPart[] | null => {
+export const describeFunction = (source: Plot, form: ParabolaForm, separator: string): FormulaPart[] | null => {
+  const plot = asStored(source);
+
   switch (plot.type) {
     case 'line':
-      return lineFormula(plot, locale);
+      return lineFormula(plot, separator);
     case 'parabola':
-      return parabolaFormula(plot, form, locale);
+      return parabolaFormula(plot, form, separator);
     case 'hyperbola':
-      return hyperbolaFormula(plot, locale);
+      return hyperbolaFormula(plot, separator);
     case 'sqrt':
-      return sqrtFormula(plot, locale);
+      return sqrtFormula(plot, separator);
     case 'circle':
-      return circleFormula(plot, locale);
+      return circleFormula(plot, separator);
     default:
       return null;
   }
@@ -392,24 +444,23 @@ const flattenPart = (part: FormulaPart, flavor: Flavor): string => {
 };
 
 /** Формула одной строкой — для `aria-label` и тестов; у не-функций — пустая строка. */
-export const functionText = (plot: Plot, form: ParabolaForm, locale: string): string => {
-  const parts = describeFunction(plot, form, locale);
+export const functionText = (plot: Plot, form: ParabolaForm, separator: string): string => {
+  const parts = describeFunction(plot, form, separator);
 
   return parts ? flatten(parts, 'plain') : '';
 };
 
-/** Можно ли подписать кривую формулой так, чтобы подпись верно нарисовали оба рендера. */
-export const canLabelWithFormula = (plot: Plot): boolean => LABEL_TYPES.has(plot.type);
+/** Можно ли подписать кривую формулой так, чтобы подпись верно нарисовали оба рендера: да у всех функций. */
+export const canLabelWithFormula = (plot: Plot): boolean => isFunctionPlot(plot);
 
 /**
- * Подпись-формула для поля `label`. Рендер SVG показывает подпись почти как
- * есть, TikZ кладёт её в `$…$` и переводит `√(…)` в `\sqrt{…}`; поэтому
- * минус — дефис, дробь — `3/(x - 1)`, корень — `√(x - 1)`. Степень так не
- * записать: SVG показал бы `^2` буквально, а `²` не компилируется в
- * математическом режиме TikZ, — у параболы и окружности подписи-формулы нет.
+ * Подпись-формула для поля `label`. TikZ кладёт подпись в `$…$` и переводит
+ * `√(…)` в `\sqrt{…}`, рендер SVG рисует `^2` верхним индексом; поэтому
+ * минус — дефис, степень — `^2`, дробь — `3/(x - 1)`, корень — `√(x - 1)`:
+ * `y = 2(x - 1)^2 - 3`, `(x - 1)^2 + (y + 2)^2 = 6,25`.
  */
-export const functionLabel = (plot: Plot, form: ParabolaForm, locale: string): string | null => {
-  const parts = canLabelWithFormula(plot) ? describeFunction(plot, form, locale) : null;
+export const functionLabel = (plot: Plot, form: ParabolaForm, separator: string): string | null => {
+  const parts = canLabelWithFormula(plot) ? describeFunction(plot, form, separator) : null;
 
   return parts ? flatten(parts, 'label') : null;
 };
@@ -417,8 +468,8 @@ export const functionLabel = (plot: Plot, form: ParabolaForm, locale: string): s
 const normalizeLabel = (label: string): string => label.replace(/\s+/g, '').split(MINUS).join('-').replace(/\./g, ',');
 
 /** Подпись кривой — её формула: такую подпись конструктор ведёт сам. Пробелы и разделитель не мешают. */
-export const isFunctionLabel = (label: string | undefined, plot: Plot, form: ParabolaForm, locale: string): boolean => {
-  const formula = functionLabel(plot, form, locale);
+export const isFunctionLabel = (label: string | undefined, plot: Plot, form: ParabolaForm, separator: string): boolean => {
+  const formula = functionLabel(plot, form, separator);
 
   return label !== undefined && formula !== null && normalizeLabel(label) === normalizeLabel(formula);
 };
