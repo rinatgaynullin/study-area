@@ -1161,10 +1161,19 @@ class PlotsEditor implements SceneEditor {
       return;
     }
 
+    this.finishDrag();
+  };
+
+  /**
+   * Конец перетаскивания, как при отпускании кнопки: объект остаётся там, куда
+   * дотащили, его шаг истории остаётся. Зовётся перед клавишей, пишущей свой шаг,
+   * чтобы последующий Escape не снял чужой.
+   */
+  private finishDrag(): void {
     if (this.drag?.moved) this.afterChange();
 
     this.drag = null;
-  };
+  }
 
   /** Отменённое перетаскивание: сцена — из снимка его начала, шаг истории снимается. */
   private cancelDrag(): void {
@@ -1229,6 +1238,7 @@ class PlotsEditor implements SceneEditor {
     if (ctrl && key === 'v') {
       if (this.clipboard) {
         event.preventDefault();
+        this.finishDrag();
         this.paste();
       }
 
@@ -1236,7 +1246,8 @@ class PlotsEditor implements SceneEditor {
     }
 
     // Стрелки без выделения двигают лист на шаг сетки.
-    if (this.selectedId === null && !ctrl && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
+    // Посреди штриха или перетаскивания вид не двигаем: штрих порвался бы скачком.
+    if (this.selectedId === null && !this.stroke && !this.drag && !ctrl && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
       event.preventDefault();
 
       return;
@@ -1245,6 +1256,7 @@ class PlotsEditor implements SceneEditor {
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selectedId !== null) {
         event.preventDefault();
+        this.finishDrag();
         this.deleteSelection();
       }
 

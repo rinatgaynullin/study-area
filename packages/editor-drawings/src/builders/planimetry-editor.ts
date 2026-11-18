@@ -696,10 +696,19 @@ class PlanimetryEditor implements SceneEditor {
       return;
     }
 
+    this.finishDrag();
+  };
+
+  /**
+   * Конец перетаскивания, как при отпускании кнопки: объект остаётся там, куда
+   * дотащили, его шаг истории остаётся. Зовётся перед клавишей, пишущей свой шаг,
+   * чтобы последующий Escape не снял чужой.
+   */
+  private finishDrag(): void {
     if (this.drag?.moved) this.afterChange();
 
     this.drag = null;
-  };
+  }
 
   /** Отменённое перетаскивание: сцена — из снимка его начала, шаг истории снимается. */
   private cancelDrag(): void {
@@ -744,7 +753,7 @@ class PlanimetryEditor implements SceneEditor {
     }
 
     // Стрелки без выделения двигают лист на шаг сетки.
-    if (!this.selection && !event.ctrlKey && !event.metaKey && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
+    if (!this.selection && !this.drag && !event.ctrlKey && !event.metaKey && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
       event.preventDefault();
 
       return;
@@ -753,6 +762,7 @@ class PlanimetryEditor implements SceneEditor {
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selection) {
         event.preventDefault();
+        this.finishDrag();
         this.deleteSelection();
       }
 

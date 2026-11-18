@@ -311,6 +311,22 @@ describe('перемещение листа в графиках', () => {
     expect(pointAt(plots, [1, 1])).toEqual([1, 1]);
   });
 
+  it('стрелка посреди штриха карандаша вид не двигает', () => {
+    const plots = create(plotsEditorFactory, 30);
+    const canvas = canvasOf(plots);
+
+    pickTool(plots, 'pencil');
+    pointer(canvas, 'pointerdown', clientOf([-3, -3]));
+    [-2, -1].forEach((x) => pointer(canvas, 'pointermove', clientOf([x, -3])));
+    key(canvas, 'ArrowRight');
+    [0, 1, 2, 3].forEach((x) => pointer(canvas, 'pointermove', clientOf([x, -3])));
+    pointer(canvas, 'pointerup', clientOf([3, -3]));
+
+    expect(plotsOf(plots)).toHaveLength(1);
+    expect(plotsOf(plots)[0]?.type).toBe('line');
+    expect(pointAt(plots, [1, 1])).toEqual([1, 1]);
+  });
+
   it('стрелки без выделения двигают вид, с выделенным графиком — нет', () => {
     const plots = create(plotsEditorFactory, 30);
     const canvas = canvasOf(plots);
@@ -655,5 +671,70 @@ describe('Escape и загрузка сцены обрывают жест пол
     pointer(canvas, 'pointermove', clientOf([-1, -3]));
     pointer(canvas, 'pointerup', clientOf([-1, -3]));
     expect(layer()).toBe(loaded);
+  });
+});
+
+describe('действие с клавиатуры во время перетаскивания завершает его', () => {
+  it('планиметрия: Delete посреди перетаскивания, затем Escape — объект удалён, отмены идут по шагам', () => {
+    const planimetry = create(planimetryEditorFactory, 40);
+    const canvas = canvasOf(planimetry);
+    const verticesOf = (): unknown => planimetry.getScene().vertices;
+
+    pickTool(planimetry, 'point');
+    click(canvas, clientOf([1, 1]));
+    pickTool(planimetry, 'select');
+    pointer(canvas, 'pointerdown', clientOf([1, 1]));
+    pointer(canvas, 'pointermove', clientOf([3, 2]));
+    key(canvas, 'Delete');
+    expect(verticesOf()).toEqual({});
+
+    key(canvas, 'Escape');
+    expect(verticesOf()).toEqual({});
+
+    // Удаление — один шаг, перетаскивание — другой: вершина возвращается туда, куда дотащили.
+    key(canvas, 'z', { ctrlKey: true });
+    expect(verticesOf()).toEqual({ A: [3, 2] });
+    key(canvas, 'z', { ctrlKey: true });
+    expect(verticesOf()).toEqual({ A: [1, 1] });
+  });
+
+  it('графики: Delete посреди перетаскивания, затем Escape — график удалён, отмены идут по шагам', () => {
+    const plots = create(plotsEditorFactory, 30);
+    const canvas = canvasOf(plots);
+    const plotsOf = (): Array<Record<string, unknown>> => plots.getScene().plots as Array<Record<string, unknown>>;
+
+    plots.element.querySelector<HTMLButtonElement>('button[data-plot-template="line"]')?.click();
+    pickTool(plots, 'select');
+    pointer(canvas, 'pointerdown', clientOf([1, 1]));
+    pointer(canvas, 'pointermove', clientOf([2, 1]));
+    key(canvas, 'Delete');
+    expect(plotsOf()).toEqual([]);
+
+    key(canvas, 'Escape');
+    expect(plotsOf()).toEqual([]);
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf()[0]).toMatchObject({ type: 'line', k: 1, b: -1 });
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf()[0]).toMatchObject({ type: 'line', k: 1, b: 0 });
+  });
+
+  it('физика: Delete посреди перетаскивания, затем Escape — элемент удалён, отмены идут по шагам', () => {
+    const physics = create(physicsEditorFactory, 30);
+    const canvas = canvasOf(physics);
+    const elementsOf = (): Array<Record<string, unknown>> => physics.getScene().elements as Array<Record<string, unknown>>;
+
+    physics.element.querySelector<HTMLButtonElement>('button[data-element="block_rect"]')?.click();
+    pickTool(physics, 'select');
+    pointer(canvas, 'pointerdown', clientOf([0.3, 0.2]));
+    pointer(canvas, 'pointermove', clientOf([2.3, 1.2]));
+    key(canvas, 'Delete');
+    expect(elementsOf()).toEqual([]);
+
+    key(canvas, 'Escape');
+    expect(elementsOf()).toEqual([]);
+    key(canvas, 'z', { ctrlKey: true });
+    expect(elementsOf()[0]?.center).toEqual([2, 1]);
+    key(canvas, 'z', { ctrlKey: true });
+    expect(elementsOf()[0]?.center).toEqual([0, 0]);
   });
 });

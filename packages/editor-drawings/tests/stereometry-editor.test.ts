@@ -824,6 +824,43 @@ describe('конструктор стереометрии', () => {
     expect(stereo.getScene().vertices).toEqual({});
   });
 
+  it('нажатие, придержанное до загрузки сцены, в новую сцену не попадает', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTool(stereo, 'point');
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
+    stereo.load({ type: '3d', vertices: { A: [0, 0, 0] }, edges: [] });
+    pointerAt(canvas, 'pointerup', EMPTY_CORNER);
+    expect(Object.keys(stereo.getScene().vertices as object)).toEqual(['A']);
+  });
+
+  it('стрелка посреди поворота завершает его, а Escape после неё ничего не откатывает', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    const angles = (): number[] => [stereo.getScene().angleY as number, stereo.getScene().angleZ as number];
+
+    pickTemplate(stereo, 'pyramid');
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER, { button: 2 });
+    pointerAt(canvas, 'pointermove', { x: 16, y: 6 }, { button: 2 });
+
+    const rotated = angles();
+
+    press(canvas, 'ArrowRight');
+
+    const turned = angles();
+
+    expect(turned).not.toEqual(rotated);
+    press(canvas, 'Escape');
+    expect(angles()).toEqual(turned);
+
+    // Шаг стрелки и шаг поворота — раздельные: первая отмена — до стрелки, вторая — до поворота.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(angles()).toEqual(rotated);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(angles()[1]).toBe(-30);
+  });
+
   it('Escape посреди жеста ползунка возвращает угол без шага истории', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);

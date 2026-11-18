@@ -763,6 +763,7 @@ class StereometryEditor implements SceneEditor {
     this.selection = null;
     this.draft = [];
     this.gesture = null;
+    this.canvas.resetGestures();
     this.slideFrom = null;
     this.pointHeight = 0;
     this.element.classList.remove(ROTATING_CLASS);
@@ -1589,6 +1590,7 @@ class StereometryEditor implements SceneEditor {
     // Стрелки крутят вид, пока ничего не выбрано: шаг истории на каждое нажатие.
     if (turn && !this.selection && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
+      this.finishGesture();
 
       const step = (event.shiftKey ? KEY_TURN_STEP_LARGE : KEY_TURN_STEP) * turn.sign;
 
@@ -1602,6 +1604,7 @@ class StereometryEditor implements SceneEditor {
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selection) {
         event.preventDefault();
+        this.finishGesture();
         this.deleteSelection();
       }
 
