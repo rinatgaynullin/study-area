@@ -29,7 +29,14 @@ const ARROW_HALF_WIDTH = 4;
 const TICK_HALF = 3;
 /** Минимальный шаг тиков в пикселях: ближе подписи чисел слипаются. */
 const MIN_TICK_PIXELS = 16;
-const TICK_STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+/** Не больше стольких тиков на оси: при далёком или мелком виде шаг растёт, а не число тиков. */
+const MAX_TICKS = 40;
+/** Ближе этого к краю листа, за которым они продолжались бы, тики не ставятся. */
+const TICK_EDGE = 20;
+/** Шаги тиков и сетки — ряд 1, 2, 5, 10, 20, 50, 100… */
+const STEP_MANTISSAS = [1, 2, 5];
+/** Предел перебора ряда: 10^308 — последний конечный шаг. */
+const MAX_STEP_INDEX = 3 * 308;
 /** Сетка не чаще шести пикселей, иначе она превращается в заливку. */
 const MIN_GRID_PIXELS = 6;
 
@@ -99,25 +106,67 @@ const drawCurve = (builder: SvgBuilder, d: string, color: string, dashed: boolea
 /** Подпись графика: дроби и греческие буквы в юникод, остальные команды — без слеша. */
 const plotLabelText = (label: string): string => prettifyMathText(label).replace(/\\/g, '');
 
-/** Степень в подписи: `^2`, `^{…}` или один знак после `^`. */
-const POWER_PATTERN = /\^(?:\{([^{}]*)\}|([^\s{}]))/g;
-
 interface LabelPiece {
   text: string;
   power: boolean;
 }
 
+/** Закрывающая фигурная скобка к открытой в `text[open]` с учётом вложенных; пары нет — `-1`. */
+const closingBrace = (text: string, open: number): number => {
+  let depth = 0;
+  let index = open;
+  let found = -1;
+
+  while (index < text.length && found < 0) {
+    const char = text.charAt(index);
+
+    if (char === '{') depth += 1;
+
+    if (char === '}') depth -= 1;
+
+    if (char === '}' && depth === 0) found = index;
+
+    index += 1;
+  }
+
+  return found;
+};
+
+/**
+ * Степень в подписи с позиции `at` (там `^`): `^2`, один знак или `^{…}` с
+ * вложенными скобками. Вложенная степень поднята вместе с внешней, внутри —
+ * строкой со знаком `^` и обычными скобками: `^{x^{x + 1}}` → `x^(x + 1)`.
+ * Не степень (`^` в конце, перед пробелом, без пары к `{`) — `null`.
+ */
+const powerAt = (label: string, at: number): { text: string; end: number } | null => {
+  const next = label.charAt(at + 1);
+
+  if (next === '{') {
+    const close = closingBrace(label, at + 1);
+
+    return close < 0 ? null : { text: label.slice(at + 2, close).replace(/\{/g, '(').replace(/\}/g, ')'), end: close + 1 };
+  }
+
+  return next === '' || /[\s{}]/.test(next) ? null : { text: next, end: at + 2 };
+};
+
 /** Подпись графика кусками: обычный текст и показатели степени по порядку; пустые куски выброшены. */
 const labelPieces = (label: string): LabelPiece[] => {
   const pieces: LabelPiece[] = [];
   let from = 0;
+  let at = label.indexOf('^');
 
-  [...label.matchAll(POWER_PATTERN)].forEach((match) => {
-    const at = match.index;
+  while (at >= 0) {
+    const power = powerAt(label, at);
 
-    pieces.push({ text: label.slice(from, at), power: false }, { text: match[1] ?? match[2] ?? '', power: true });
-    from = at + match[0].length;
-  });
+    if (power) {
+      pieces.push({ text: label.slice(from, at), power: false }, { text: power.text, power: true });
+      from = power.end;
+    }
+
+    at = label.indexOf('^', power ? power.end : at + 1);
+  }
+
   pieces.push({ text: label.slice(from), power: false });
 
   return pieces.filter((piece) => piece.text !== '');
@@ -156,18 +205,48 @@ const drawPlotLabel = (builder: SvgBuilder, at: SvgPoint, label: string, options
   builder.text(at, markup ?? plotLabelText(label), { ...options, markup: markup !== null });
 };
 
-// Мелкие шаги не подошли — берётся крупнейший, он же последний: шаги идут по возрастанию.
-const tickStep = (scale: number): number =>
-  TICK_STEPS.find((step) => step * scale >= MIN_TICK_PIXELS) ?? Math.max(...TICK_STEPS);
+/** Шаг ряда 1, 2, 5, 10, 20, 50… по его номеру, начиная с нуля. */
+const seriesStep = (index: number): number => (STEP_MANTISSAS[index % STEP_MANTISSAS.length] ?? 1) * 10 ** Math.floor(index / STEP_MANTISSAS.length);
 
-const gridStep = (scale: number): number => (scale < MIN_GRID_PIXELS ? scale * Math.ceil(MIN_GRID_PIXELS / scale) : scale);
+/**
+ * Наименьший шаг ряда (в единицах мира), для которого `fits`; `fits`
+ * монотонно: подошёл шаг — подойдёт и крупнее. Перебор начинается на порядок
+ * ниже оценки `least`, поэтому идёт несколько шагов при любом масштабе.
+ */
+const niceStep = (least: number, fits: (step: number) => boolean): number => {
+  const from = Number.isFinite(least) && least > 1 ? 3 * Math.floor(Math.log10(least)) - 3 : 0;
+  let index = Math.max(0, from);
+
+  while (index < MAX_STEP_INDEX && !fits(seriesStep(index))) index += 1;
+
+  return seriesStep(index);
+};
+
+/** Шаг тиков в единицах мира: числа не слипаются и на длинной стороне листа их не больше `MAX_TICKS`. */
+const tickStep = (scale: number, size: PlotSize): number => {
+  const length = Math.max(size.width, size.height) - 2 * TICK_EDGE;
+
+  return niceStep(
+    Math.max(MIN_TICK_PIXELS, length / MAX_TICKS) / scale,
+    (step) => step * scale >= MIN_TICK_PIXELS && length <= MAX_TICKS * step * scale,
+  );
+};
+
+/** Шаг сетки в единицах мира: не чаще `MIN_GRID_PIXELS` и делит шаг тиков, чтобы тики ложились на линии. */
+const gridStep = (scale: number, unit: number): number =>
+  niceStep(MIN_GRID_PIXELS / scale, (step) => step * scale >= MIN_GRID_PIXELS && unit % step === 0);
+
+/** Шаг в пикселях годится для обхода листа: конечный и положительный. */
+const isUsableStep = (step: number): boolean => Number.isFinite(step) && step > 0;
 
 /** Первая линия сетки от левого/верхнего края, кратная шагу относительно начала координат. */
 const firstGridLine = (origin: number, step: number): number => ((origin % step) + step) % step;
 
 const renderGrid = (builder: SvgBuilder, viewport: Viewport, size: PlotSize): void => {
-  const step = gridStep(viewport.scale);
+  const step = gridStep(viewport.scale, tickStep(viewport.scale, size)) * viewport.scale;
   const stroke: StrokeOptions = { color: GRID_COLOR, width: 0.5, className: 'rte-drawing__grid' };
+
+  if (!isUsableStep(step)) return;
 
   for (let x = firstGridLine(viewport.cx, step); x < size.width; x += step) {
     if (Math.abs(x - viewport.cx) >= 1) builder.line({ x, y: 0 }, { x, y: size.height }, stroke);
@@ -211,12 +290,23 @@ const renderAxes = (builder: SvgBuilder, viewport: Viewport, size: PlotSize, lab
   if (labels.yLabel) builder.text({ x: cx - 15, y: 18 }, plotLabelText(labels.yLabel), text);
 };
 
+/**
+ * Номер первого тика (от начала координат, с единицы), который уже на листе:
+ * `beyond` — на сколько пикселей начало координат вышло за край листа с той
+ * стороны, откуда тики идут. Начало координат на листе — тики с первого.
+ */
+const firstTick = (beyond: number, step: number): number => Math.max(1, Math.ceil(beyond / step));
+
 const renderTicks = (builder: SvgBuilder, viewport: Viewport, size: PlotSize): void => {
   const { scale, cx, cy } = viewport;
-  const unit = tickStep(scale);
+  const unit = tickStep(scale, size);
   const step = unit * scale;
   const stroke: StrokeOptions = { color: AXIS_COLOR, width: 1, className: 'rte-drawing__axis' };
   const number = { size: 9, weight: 400, className: 'rte-drawing__axis-label' };
+  const xAxisShown = cy >= 0 && cy <= size.height;
+  const yAxisShown = cx >= 0 && cx <= size.width;
+
+  if (!isUsableStep(step)) return;
 
   const tickX = (x: number): void => {
     builder.line({ x, y: cy - TICK_HALF }, { x, y: cy + TICK_HALF }, stroke);
@@ -228,15 +318,20 @@ const renderTicks = (builder: SvgBuilder, viewport: Viewport, size: PlotSize): v
     builder.text({ x: cx - 12, y: y + 3 }, String(Math.round((cy - y) / scale)), { ...number, anchor: 'end' });
   };
 
-  for (let x = cx + step; x < size.width - 20; x += step) tickX(x);
+  // Ось за листом — без тиков и чисел; на листе — только видимые тики, сколько бы ни было до начала координат.
+  if (xAxisShown) {
+    for (let x = cx + firstTick(-cx, step) * step; x < size.width - TICK_EDGE; x += step) tickX(x);
 
-  for (let x = cx - step; x > 20; x -= step) tickX(x);
+    for (let x = cx - firstTick(cx - size.width, step) * step; x > TICK_EDGE; x -= step) tickX(x);
+  }
 
-  for (let y = cy - step; y > 20; y -= step) tickY(y);
+  if (yAxisShown) {
+    for (let y = cy - firstTick(cy - size.height, step) * step; y > TICK_EDGE; y -= step) tickY(y);
 
-  for (let y = cy + step; y < size.height - 20; y += step) tickY(y);
+    for (let y = cy + firstTick(-cy, step) * step; y < size.height - TICK_EDGE; y += step) tickY(y);
+  }
 
-  builder.text({ x: cx - 4, y: cy + 12 }, '0', { ...number, anchor: 'end' });
+  if (xAxisShown && yAxisShown) builder.text({ x: cx - 4, y: cy + 12 }, '0', { ...number, anchor: 'end' });
 };
 
 /** Видимый диапазон мира по x с запасом в единицу — им ограничиваются прямые и гиперболы без `domain`. */
@@ -490,7 +585,90 @@ const renderPlot = (context: PlotContext, plot: Plot, highlighted: boolean): voi
   }
 };
 
-/** Подпись кривой у характерной точки: вершина параболы, центр гиперболы, середина прямой. */
+/** Отступ места подписи ломаной от краёв рисунка. */
+const FREEHAND_LABEL_INSET = 12;
+
+/** Где по видимой ширине ломаной стоит её подпись: ближе к правому концу, но с местом для текста. */
+const FREEHAND_LABEL_AT = 0.75;
+
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+const lerp = (a: SvgPoint, b: SvgPoint, t: number): SvgPoint => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+
+/** Часть отрезка `a–b` внутри прямоугольника (отсечение Лянга — Барски): доли `[t0, t1]` или `null`. */
+const clipSegment = (a: SvgPoint, b: SvgPoint, box: Box): [number, number] | null => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const sides: Array<[number, number]> = [
+    [-dx, a.x - box.left],
+    [dx, box.right - a.x],
+    [-dy, a.y - box.top],
+    [dy, box.bottom - a.y],
+  ];
+  let from = 0;
+  let to = 1;
+  let outside = false;
+
+  sides.forEach(([p, q]) => {
+    if (p === 0) {
+      // Отрезок параллелен стороне: снаружи от неё — целиком снаружи.
+      if (q < 0) outside = true;
+
+      return;
+    }
+
+    if (p < 0) from = Math.max(from, q / p);
+    else to = Math.min(to, q / p);
+  });
+
+  return outside || from > to ? null : [from, to];
+};
+
+/**
+ * Место подписи ломаной: точка её видимой части на `FREEHAND_LABEL_AT`
+ * видимой ширины — ближе к правому концу, внутри рисунка. Ломаная целиком
+ * за краем — `null`.
+ */
+const freehandLabelPoint = (points: SvgPoint[], size: PlotSize): SvgPoint | null => {
+  const box: Box = {
+    left: FREEHAND_LABEL_INSET,
+    top: FREEHAND_LABEL_INSET,
+    right: size.width - FREEHAND_LABEL_INSET,
+    bottom: size.height - FREEHAND_LABEL_INSET,
+  };
+  const pieces: Array<[SvgPoint, SvgPoint]> = [];
+
+  points.forEach((point, index) => {
+    const next = points[index + 1];
+    const part = next ? clipSegment(point, next, box) : null;
+
+    if (next && part) pieces.push([lerp(point, next, part[0]), lerp(point, next, part[1])]);
+  });
+
+  const ends = pieces.flat();
+  const first = ends[0];
+
+  if (!first) return null;
+
+  const left = ends.reduce((min, point) => Math.min(min, point.x), first.x);
+  const right = ends.reduce((max, point) => Math.max(max, point.x), first.x);
+  const target = left + (right - left) * FREEHAND_LABEL_AT;
+  // Последний по ходу кусок над нужным x; если там разрыв — ближайший к нему конец куска.
+  const piece = [...pieces].reverse().find(([a, b]) => Math.min(a.x, b.x) <= target && target <= Math.max(a.x, b.x));
+
+  if (!piece) return ends.reduce((best, point) => (Math.abs(point.x - target) < Math.abs(best.x - target) ? point : best), first);
+
+  const [a, b] = piece;
+
+  return lerp(a, b, b.x === a.x ? 0 : (target - a.x) / (b.x - a.x));
+};
+
+/** Подпись кривой у характерной точки: вершина параболы, центр гиперболы, середина прямой, правый край ломаной. */
 const renderPlotLabel = (context: PlotContext, plot: Plot): void => {
   if (!plot.label || plot.type === 'point' || plot.type === 'circle') return;
 
@@ -507,6 +685,10 @@ const renderPlotLabel = (context: PlotContext, plot: Plot): void => {
     if (ends) at = { x: (ends[0].x + ends[1].x) / 2 + 10, y: (ends[0].y + ends[1].y) / 2 - 10 };
   } else if (plot.type === 'sqrt') {
     at = context.toSvg([plot.vertex[0] + (plot.directionX === 'left' ? -2 : 2), plot.vertex[1] + (plot.directionY === 'down' ? -1.5 : 1.5)]);
+  } else if (plot.type === 'freehand') {
+    const on = freehandLabelPoint(plot.points.map(context.toSvg), context.size);
+
+    if (on) at = { x: on.x + 10, y: on.y - 10 };
   }
 
   if (at) drawPlotLabel(context.builder, at, plot.label, { size: LABEL_SIZE, color, anchor: 'start', halo: 3.5 });

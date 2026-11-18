@@ -80,6 +80,21 @@ const pickTool = (editor: SceneEditor, tool: string): void => {
   editor.element.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.click();
 };
 
+/**
+ * Готовая прямая для графиков: карандашом по диагонали — отрезок от (−2; −2) до (2; 2).
+ * Шаблон «Прямая» теперь — набранная функция, а её не перетаскивают.
+ */
+const drawPlotLine = (plots: SceneEditor): void => {
+  const canvas = canvasOf(plots);
+  const points: Vec[] = Array.from({ length: 9 }, (_, index) => [-2 + index / 2, -2 + index / 2]);
+
+  pickTool(plots, 'pencil');
+  pointer(canvas, 'pointerdown', clientOf([-2, -2]));
+  points.slice(1).forEach((point) => pointer(canvas, 'pointermove', clientOf(point)));
+  pointer(canvas, 'pointerup', clientOf([2, 2]));
+  pickTool(plots, 'select');
+};
+
 const canvasOf = (editor: SceneEditor): HTMLElement => {
   const canvas = editor.element.querySelector<HTMLElement>('.rte-sketch');
 
@@ -257,9 +272,7 @@ describe('перемещение листа в планиметрии', () => {
 
 describe('перемещение листа в графиках', () => {
   const plotsOf = (plots: SceneEditor): Array<Record<string, unknown>> => plots.getScene().plots as Array<Record<string, unknown>>;
-  const addLine = (plots: SceneEditor): void => {
-    plots.element.querySelector<HTMLButtonElement>('button[data-plot-template="line"]')?.click();
-  };
+  const addLine = drawPlotLine;
   /** Точка инструментом «Точка»: по её координатам видно, куда смотрит полотно. */
   const pointAt = (plots: SceneEditor, at: Vec): unknown => {
     pickTool(plots, 'point');
@@ -290,11 +303,26 @@ describe('перемещение листа в графиках', () => {
     addLine(plots);
     pickTool(plots, 'select');
 
-    // Шаблон — прямая y = x: сдвиг на клетку вправо даёт y = x − 1.
-    expect(plotsOf(plots)[0]).toMatchObject({ type: 'line', k: 1, b: 0 });
+    // Отрезок y = x: сдвиг на клетку вправо двигает обе точки.
+    expect(plotsOf(plots)[0]).toMatchObject({ type: 'line', p1: [-2, -2], p2: [2, 2] });
     drag(canvas, clientOf([1, 1]), clientOf([2, 1]));
-    expect(plotsOf(plots)[0]).toMatchObject({ type: 'line', k: 1, b: -1 });
+    expect(plotsOf(plots)[0]).toMatchObject({ type: 'line', p1: [-1, -2], p2: [3, 2] });
     expect(pointAt(plots, [-3, -3])).toEqual([-3, -3]);
+  });
+
+  it('протяжка с ветви набранной функции выделяет её, но не двигает ни функцию, ни вид', () => {
+    const plots = create(plotsEditorFactory, 30);
+    const canvas = canvasOf(plots);
+
+    plots.element.querySelector<HTMLButtonElement>('button[data-plot-template="line"]')?.click();
+    plots.cancel();
+
+    const before = plots.getScene();
+
+    drag(canvas, clientOf([1, 1]), clientOf([3, 0]));
+    expect(plots.element.querySelector('.rte-builder__props-title')?.textContent).toBe('Функция');
+    expect(plots.getScene()).toEqual(before);
+    expect(pointAt(plots, [2, 2])).toEqual([2, 2]);
   });
 
   it('в «Карандаше» протяжка с пустого места рисует штрих, вид не двигается', () => {
@@ -490,7 +518,7 @@ describe('отменённый жест не оставляет результа
     const plotsOf = (): Array<Record<string, unknown>> => plots.getScene().plots as Array<Record<string, unknown>>;
     let changes = 0;
 
-    plots.element.querySelector<HTMLButtonElement>('button[data-plot-template="line"]')?.click();
+    drawPlotLine(plots);
     plots.onChange(() => {
       changes += 1;
     });
@@ -500,13 +528,13 @@ describe('отменённый жест не оставляет результа
       pickTool(plots, 'select');
       pointer(canvas, 'pointerdown', clientOf([1, 1]));
       pointer(canvas, 'pointermove', clientOf([2, 1]));
-      expect(plotsOf()[0], name).toMatchObject({ type: 'line', k: 1, b: -1 });
+      expect(plotsOf()[0], name).toMatchObject({ type: 'line', p1: [-1, -2], p2: [3, 2] });
 
       cancel(canvas, clientOf([2, 1]));
-      expect(plotsOf()[0], name).toMatchObject({ type: 'line', k: 1, b: 0 });
+      expect(plotsOf()[0], name).toMatchObject({ type: 'line', p1: [-2, -2], p2: [2, 2] });
       expect(changes, name).toBeLessThanOrEqual(1);
       releaseAll(canvas, clientOf([2, 1]));
-      expect(plotsOf()[0], name).toMatchObject({ type: 'line', k: 1, b: 0 });
+      expect(plotsOf()[0], name).toMatchObject({ type: 'line', p1: [-2, -2], p2: [2, 2] });
     });
 
     key(canvas, 'z', { ctrlKey: true });
@@ -703,8 +731,7 @@ describe('действие с клавиатуры во время перета�
     const canvas = canvasOf(plots);
     const plotsOf = (): Array<Record<string, unknown>> => plots.getScene().plots as Array<Record<string, unknown>>;
 
-    plots.element.querySelector<HTMLButtonElement>('button[data-plot-template="line"]')?.click();
-    pickTool(plots, 'select');
+    drawPlotLine(plots);
     pointer(canvas, 'pointerdown', clientOf([1, 1]));
     pointer(canvas, 'pointermove', clientOf([2, 1]));
     key(canvas, 'Delete');
@@ -713,9 +740,9 @@ describe('действие с клавиатуры во время перета�
     key(canvas, 'Escape');
     expect(plotsOf()).toEqual([]);
     key(canvas, 'z', { ctrlKey: true });
-    expect(plotsOf()[0]).toMatchObject({ type: 'line', k: 1, b: -1 });
+    expect(plotsOf()[0]).toMatchObject({ type: 'line', p1: [-1, -2], p2: [3, 2] });
     key(canvas, 'z', { ctrlKey: true });
-    expect(plotsOf()[0]).toMatchObject({ type: 'line', k: 1, b: 0 });
+    expect(plotsOf()[0]).toMatchObject({ type: 'line', p1: [-2, -2], p2: [2, 2] });
   });
 
   it('физика: Delete посреди перетаскивания, затем Escape — элемент удалён, отмены идут по шагам', () => {

@@ -58,6 +58,8 @@ export type BuilderIconId =
   | 'hyperbola'
   | 'lineFn'
   | 'root'
+  | 'sine'
+  | 'modulus'
   | 'plotCircle'
   | 'pointHollow'
   // Вкладки
@@ -307,6 +309,15 @@ export const BUILDER_ICONS: Record<BuilderIconId, BuilderIconSpec> = {
   },
   root: {
     shapes: [PLOT_BASELINE, ['path', { d: 'M4.5 20 Q4.5 8.5 20.5 5.5' }]],
+    thin: [0],
+  },
+  // Синусоида — на тонкой оси посередине, модуль — галочка с вершиной на оси.
+  sine: {
+    shapes: [['line', { x1: 3, y1: 12, x2: 21, y2: 12 }], ['path', { d: 'M3 12 C5.5 2.5 9 2.5 12 12 C15 21.5 18.5 21.5 21 12' }]],
+    thin: [0],
+  },
+  modulus: {
+    shapes: [PLOT_BASELINE, ['polyline', { points: '4,5 12,19 20,5' }]],
     thin: [0],
   },
   plotCircle: {

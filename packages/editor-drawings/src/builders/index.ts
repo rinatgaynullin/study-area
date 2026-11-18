@@ -50,18 +50,20 @@ export { stereometryEditorFactory, projectVertex, unprojectToGround, parseAngleV
 export { STEREOMETRY_MESSAGES } from './stereometry-messages';
 export { plotsEditorFactory } from './plots-editor';
 export {
-  applyFunctionParam,
-  describeFunction,
-  functionLabel,
-  functionParams,
+  evaluateFunction,
+  functionLabelText,
+  functionParts,
   functionText,
-  isFunctionLabel,
+  parseFunction,
   type FormulaPart,
-  type FunctionParam,
-  type FunctionParamId,
-  type FunctionPlot,
-  type ParabolaForm,
-} from './plot-functions';
+  type FunctionError,
+  type FunctionErrorKey,
+  type FunctionName,
+  type FunctionNode,
+  type ParsedFunction,
+} from './function-expr';
+export { sampleFunction, type SampleOptions } from './function-sampler';
+export { isReadyFunction, plotExpression, type ReadyFunctionPlot } from './plot-functions';
 export { PLOTS_MESSAGES } from './plots-messages';
 export { physicsEditorFactory } from './physics-editor';
 export { PHYSICS_BUILDER_MESSAGES } from './physics-messages';
