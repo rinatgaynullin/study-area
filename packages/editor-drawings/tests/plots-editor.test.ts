@@ -172,6 +172,16 @@ const noticeOf = (editor: SceneEditor): string | null => {
   return notice && !notice.hidden ? notice.textContent : null;
 };
 
+/** Сколько точек пути кривой данного цвета внутри полотна 560×420. */
+const visiblePointsOf = (editor: SceneEditor, color: string): number => {
+  const layer = canvasOf(editor).querySelector('.rte-sketch__layer');
+  const d = layer?.querySelector(`path[stroke="${color}"]`)?.getAttribute('d') ?? layer?.querySelector(`polyline[stroke="${color}"]`)?.getAttribute('points') ?? '';
+  const numbers = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  const pairs = numbers.flatMap((value, index) => (index % 2 === 0 ? [[value, numbers[index + 1] ?? NaN]] : []));
+
+  return pairs.filter(([x, y]) => x >= 0 && x <= 560 && y >= 0 && y <= 420).length;
+};
+
 /** Движение ползунка: событие `input`, а `change` — когда отпустили. */
 const slide = (input: HTMLInputElement, value: string): void => {
   input.value = value;
@@ -1221,7 +1231,7 @@ describe('набранная функция', () => {
     const scene = plots.getScene();
     const branches = scene.plots as Array<Record<string, unknown>>;
 
-    // Ветви — из запасного окна: тот же отрезок по x без обрезки по высоте.
+    // Ветви — запасные: ближайший к листу кусок графика, точки — на кривой.
     expect(branches).toHaveLength(1);
     expect(branches[0]).toMatchObject({ type: 'freehand', expr: 'x^2 + 100', fn: 'plot_1' });
     expect((branches[0]?.points as Point[]).every(([x, y]) => Math.abs(y - (x * x + 100)) < 0.01)).toBe(true);
@@ -1234,7 +1244,7 @@ describe('набранная функция', () => {
     expect(propsTitle(plots)).toBe('Функция');
     expect(exprOf(plots).value).toBe('x^2 + 100');
 
-    // Корень правее видимого отрезка — из окна x от −100 до 100.
+    // Корень правее видимого отрезка — с отрезка, расширенного в 10 раз.
     addFunction(plots);
     typeExpr(plots, 'sqrt(x - 50)');
     commitExpr(plots);
@@ -1242,6 +1252,71 @@ describe('набранная функция', () => {
     const root = plotsOf(plots).find((plot) => plot.expr === 'sqrt(x - 50)');
 
     expect((root?.points as Point[])[0]?.[0]).toBeCloseTo(50, 2);
+  });
+
+  it('запасные ветви — ближайший к листу кусок высотой не больше трёх высот окна', () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'x^4 + 10');
+    commitExpr(plots);
+    expect(noticeOf(plots)).toBe('График сейчас за краем листа. Нажми «Показать целиком»');
+
+    const ys = plotsOf(plots).flatMap((plot) => (plot.points as Point[]).map(([, y]) => y));
+
+    // Окно полотна по умолчанию — 14 единиц в высоту.
+    expect(ys.length).toBeGreaterThan(1);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(3 * 14);
+    expect(Math.min(...ys)).toBeCloseTo(10, 1);
+  });
+
+  it.each(['20000', 'x^2 + 100000', 'sqrt(x - 1000)'])('%s далеко за краем листа: статус «за краем», в сцене — кусок у листа', (expr) => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, expr);
+    commitExpr(plots);
+    expect(noticeOf(plots)).toBe('График сейчас за краем листа. Нажми «Показать целиком»');
+
+    const scene = plots.getScene();
+    const branches = plotsOf(plots);
+
+    expect(branches.length).toBeGreaterThan(0);
+    expect(branches[0]).toMatchObject({ type: 'freehand', expr });
+
+    const ys = branches.flatMap((plot) => (plot.points as Point[]).map(([, y]) => y));
+
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(3 * 14);
+    // Сцена — та же при повторной выдаче (загрузку и вписывание далёких значений проверяет тест ниже).
+    expect(plots.getScene()).toEqual(scene);
+  });
+
+  it.each(['x^4 + 10', 'sqrt(x - 1000)'])('%s: загрузка отдаёт ту же запись, «Показать целиком» вписывает запасные ветви', async (expr) => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, expr);
+    commitExpr(plots);
+
+    const color = String(plotsOf(plots)[0]?.color);
+
+    expect(visiblePointsOf(plots, color)).toBe(0);
+
+    const saved = JSON.parse(JSON.stringify(plots.getScene())) as Record<string, unknown>;
+
+    actionButton(plots, 'Показать целиком').click();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(visiblePointsOf(plots, color)).toBeGreaterThan(1);
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)[0]).toMatchObject({ expr });
+
+    // Сохранённая сцена с запасными ветвями загружается обратно той же записью.
+    plots.load(saved);
+    expect(plots.getScene()).toEqual(saved);
+    clickCurve(plots, color);
+    expect(exprOf(plots).value).toBe(expr);
   });
 
   it('функция без точек: сообщение под полем, в сцену не пишется', () => {
@@ -1268,14 +1343,7 @@ describe('набранная функция', () => {
     commitExpr(plots);
 
     const color = String(plotsOf(plots)[0]?.color);
-    const visiblePoints = (): number => {
-      const layer = canvasOf(plots).querySelector('.rte-sketch__layer');
-      const d = layer?.querySelector(`path[stroke="${color}"]`)?.getAttribute('d') ?? layer?.querySelector(`polyline[stroke="${color}"]`)?.getAttribute('points') ?? '';
-      const numbers = (d.match(/-?[\d.]+/g) ?? []).map(Number);
-      const pairs = numbers.flatMap((value, index) => (index % 2 === 0 ? [[value, numbers[index + 1] ?? NaN]] : []));
-
-      return pairs.filter(([x, y]) => x >= 0 && x <= 560 && y >= 0 && y <= 420).length;
-    };
+    const visiblePoints = (): number => visiblePointsOf(plots, color);
 
     expect(visiblePoints()).toBe(0);
     actionButton(plots, 'Показать целиком').click();

@@ -8,7 +8,7 @@ import { DRAWING_COLORS, DRAWING_COLOR_HEX } from './color-picker';
 import { checkField, colorField, numberField, pairField, propsEmpty, propsTitle, textField, type NumberPair } from './fields';
 import { functionLabelText, parseFunction, sameLabel } from './function-expr';
 import { FunctionPanel, type FunctionNotice, type FunctionView } from './function-panel';
-import { sampleFunction } from './function-sampler';
+import { sampleFunction, sampleNearest } from './function-sampler';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
 import { FINE_DIGITS, MIN_RADIUS, MIN_STRETCH, isReadyFunction, plotExpression } from './plot-functions';
@@ -155,11 +155,6 @@ interface FunctionItem {
  * краем листа, но в сцену пишется; нигде — точек у функции нет.
  */
 type Reach = 'visible' | 'outside' | 'none';
-
-/** Значения запасного окна не выше этого по модулю: обрезки по высоте как бы нет, но ветви конечны. */
-const FALLBACK_HEIGHT = 1e4;
-/** Отрезок по x запасного окна, если на видимом отрезке точек нет. */
-const FALLBACK_WIDTH: [number, number] = [-100, 100];
 
 /** Элемент конструктора: график сцены или набранная функция. */
 type Item = PlotItem | FunctionItem;
@@ -952,26 +947,23 @@ class PlotsEditor implements SceneEditor {
 
   /**
    * Ветви функции под текущий вид полотна; запись не разбирается — ветвей нет.
-   * Если в видимом окне графика нет, ветви для сцены — из запасного окна: тот
-   * же отрезок по x без обрезки по высоте, затем x от −100 до 100 — иначе
+   * Если в видимом окне графика нет, ветви для сцены — запасные: ближайший к
+   * листу кусок графика высотой в три высоты окна (`sampleNearest`), иначе
    * правильная функция за краем листа (`x^2 + 100`) пропала бы из сцены.
+   * Ветвей нет и там — у функции нет точек.
    */
   private sample(item: FunctionItem): { branches: Vec2[][]; reach: Reach } {
     const parsed = parseFunction(item.expr);
 
     if (!parsed.ok) return { branches: [], reach: 'none' };
 
-    const visible = this.visibleWindow();
     // Точность упрощения — полпикселя полотна.
-    const common = { domain: item.domain, tolerance: 0.5 / this.canvas.viewport.scale };
-    const branches = sampleFunction(parsed.ast, item.params, { ...visible, ...common });
+    const options = { ...this.visibleWindow(), domain: item.domain, tolerance: 0.5 / this.canvas.viewport.scale };
+    const branches = sampleFunction(parsed.ast, item.params, options);
 
     if (branches.length > 0) return { branches, reach: 'visible' };
 
-    const tall = { yFrom: -FALLBACK_HEIGHT, yTo: FALLBACK_HEIGHT };
-    const [from, to] = FALLBACK_WIDTH;
-    const nearby = sampleFunction(parsed.ast, item.params, { from: visible.from, to: visible.to, ...tall, ...common });
-    const outside = nearby.length > 0 ? nearby : sampleFunction(parsed.ast, item.params, { from, to, ...tall, ...common });
+    const outside = sampleNearest(parsed.ast, item.params, options);
 
     return { branches: outside, reach: outside.length > 0 ? 'outside' : 'none' };
   }
