@@ -298,7 +298,8 @@ describe('возможность целиком: кнопка, диалог, п�
     press(dialog, '[data-atom="2"]');
     press(dialog, '[data-plus][data-angle="90"]');
     dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
-    expect(editor.core.getHTML()).toContain('data-chemistry-code="CH_3-CH_2-OH-[:90]CH_3"');
+    // Параметры связи, которые модель хранит не целиком, остаются дословно.
+    expect(editor.core.getHTML()).toContain('data-chemistry-code="CH_3-[::30,1.5]CH_2-OH-[:90]CH_3"');
   });
 
   it('с полем кода сохранение без правок тоже оставляет исходный код', () => {
@@ -312,6 +313,69 @@ describe('возможность целиком: кнопка, диалог, п�
 
     openDialog().querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
     expect(editor.core.getHTML()).toContain(`data-chemistry-code="${original}"`);
+  });
+
+  it('формула, которую модель не повторит без потерь, открывается только для просмотра', () => {
+    const editor = mountEditor();
+
+    editor.core.setHTML('<p><span data-chemistry-code="A*6(B-----)"></span></p>');
+    editor.element
+      .querySelector<HTMLElement>('.rte-content .rte-chemistry')
+      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+    const dialog = openDialog();
+
+    expect(dialog.querySelector('.rte-chemistry-dialog__status')?.textContent).toBe('Эту формулу здесь изменить нельзя');
+    expect(dialog.querySelector('.rte-chem-builder__canvas svg')).not.toBeNull();
+    expect(dialog.querySelector('.rte-chem-builder')?.hasAttribute('inert')).toBe(true);
+    expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+
+    dialog.querySelector('[data-atom="0"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    dialog.querySelector('[data-action="clear"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+    expect(editor.core.getHTML()).toContain('data-chemistry-code="A*6(B-----)"');
+  });
+
+  it('с code: true формула только для просмотра отпирается, когда код в поле разбирается без потерь', () => {
+    const editor = mountEditor({ features: [createChemistryFeature({ code: true })] });
+
+    editor.core.setHTML('<p><span data-chemistry-code="CH_3(-OH)-*6(------)"></span></p>');
+    editor.element
+      .querySelector<HTMLElement>('.rte-content .rte-chemistry')
+      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+    const dialog = openDialog();
+
+    expect(dialog.querySelector<HTMLDetailsElement>('details')?.open).toBe(true);
+    expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+
+    typeCode(dialog, '*6((-CH_3)------)');
+    expect(dialog.querySelector('.rte-chem-builder')?.hasAttribute('inert')).toBe(false);
+    expect(dialog.querySelector('.rte-chemistry-dialog__status')?.textContent).toBe('');
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+    expect(editor.core.getHTML()).toContain('data-chemistry-code="*6((-CH_3)------)"');
+  });
+
+  it('с code: true нерабочий код раскрывает блок кода и ставит фокус в поле', async () => {
+    const editor = mountEditor({ features: [createChemistryFeature({ code: true })] });
+
+    editor.core.setHTML('<p><span data-chemistry-code="A-(B"></span></p>');
+    editor.element
+      .querySelector<HTMLElement>('.rte-content .rte-chemistry')
+      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+    const dialog = openDialog();
+    const details = dialog.querySelector<HTMLDetailsElement>('details');
+
+    expect(details?.open).toBe(true);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(document.activeElement).toBe(dialog.querySelector('textarea'));
+
+    typeCode(dialog, 'CH_3');
+    if (details) details.open = false;
+    typeCode(dialog, 'CH_3-(');
+    expect(details?.open).toBe(true);
   });
 
   it('клик по узлу открывает диалог на правку; сохранение меняет код, удаление убирает узел', () => {
@@ -380,6 +444,62 @@ describe('возможность целиком: кнопка, диалог, п�
 
     editor.core.setHTML(PINQUEEN_HTML);
     expect(editor.core.getHTML().match(/data-chemistry-code=/g)).toHaveLength(2);
+  });
+});
+
+describe('Escape в окне структуры', () => {
+  const escape = (target: Element): void => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  };
+
+  const isOpen = (dialog: HTMLElement): boolean => !dialog.hidden;
+
+  it('снимает выделение, без выделения окно остаётся открытым; закрывают «Отмена» и крестик', () => {
+    mountEditor();
+    toolbarButton('Структурная формула').click();
+
+    let dialog = openDialog();
+    const stage = dialog.querySelector<HTMLElement>('.rte-chem-builder__stage')!;
+
+    dialog.querySelector('[data-action="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(dialog.querySelector('[data-plus]')).not.toBeNull();
+
+    escape(stage);
+    expect(dialog.querySelector('[data-plus]')).toBeNull();
+    expect(isOpen(dialog)).toBe(true);
+
+    escape(stage);
+    escape(dialog.querySelector('.rte-modal__panel')!);
+    expect(isOpen(dialog)).toBe(true);
+    // Собранное не пропало.
+    expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(false);
+
+    [...dialog.querySelectorAll<HTMLButtonElement>('.rte-modal__footer .rte-button')]
+      .find((button) => button.textContent === 'Отмена')
+      ?.click();
+    expect(isOpen(dialog)).toBe(false);
+
+    toolbarButton('Структурная формула').click();
+    dialog = openDialog();
+    dialog.querySelector<HTMLButtonElement>('.rte-modal__close')?.click();
+    expect(isOpen(dialog)).toBe(false);
+  });
+
+  it('в поле кода Escape ничего не делает', () => {
+    mountEditor({ features: [createChemistryFeature({ code: true })] });
+    toolbarButton('Структурная формула').click();
+
+    const dialog = openDialog();
+
+    typeCode(dialog, 'CH_3-CH_2');
+
+    const input = dialog.querySelector<HTMLTextAreaElement>('textarea')!;
+
+    input.focus();
+    escape(input);
+    expect(isOpen(dialog)).toBe(true);
+    expect(input.value).toBe('CH_3-CH_2');
+    expect(document.activeElement).toBe(input);
   });
 });
 

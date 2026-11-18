@@ -114,7 +114,9 @@ test.describe('десктоп', () => {
     await expect(page.locator(`${OPEN_MODAL} [role="tab"]`)).toHaveText(['Планиметрия', 'Стереометрия', 'Графики', 'Физика']);
     await expect(page.locator(`${OPEN_MODAL} [data-tab="json"]`)).toHaveCount(0);
     await expect(page.locator(`${OPEN_MODAL} button[data-template]`)).toHaveCount(0);
-    await page.keyboard.press('Escape');
+    // Escape окно чертежа не закрывает — только «Отмена» и крестик.
+    await page.locator(`${OPEN_MODAL} .rte-modal__footer button`, { hasText: 'Отмена' }).click();
+    await expect(page.locator(OPEN_MODAL)).toHaveCount(0);
 
     await page.getByRole('checkbox', { name: 'JSON в диалоге чертежа' }).check();
     await openDrawingDialog(page, 'Планиметрия');

@@ -58,6 +58,17 @@ const parseAngleSpec = (spec: string): number | null => {
 };
 
 /**
+ * Хранит ли модель параметры в скобках целиком. Нет — если там несколько
+ * полей (`[:30,1.5]`) или первое поле не стало углом (`[::30]`): тогда связь
+ * запоминает исходный текст и пишет его дословно.
+ */
+const isLossySpec = (spec: string, angle: number | null): boolean => {
+  const fields = spec.split(',');
+
+  return fields.length > 1 || ((fields[0]?.trim() ?? '') !== '' && angle === null);
+};
+
+/**
  * Курсор по коду. Разбор рекурсивный — атом читает свои ветви и продолжение,
  * продолжение читает следующий атом, — поэтому позиция живёт в поле, а шаги
  * разбора ссылаются друг на друга через `this`.
@@ -186,13 +197,22 @@ class ChemfigReader {
   readBond(branch: boolean): ChemBond {
     const type = this.next() as ChemBondType;
     let angle: number | null = null;
+    let spec: string | null = null;
 
     if (this.peek() === '[') {
       this.next();
-      angle = parseAngleSpec(this.readBalanced('[', ']'));
+
+      const text = this.readBalanced('[', ']');
+
+      angle = parseAngleSpec(text);
+      spec = isLossySpec(text, angle) ? text : null;
     }
 
-    return { type, angle, branch, target: this.readAtom() };
+    const bond: ChemBond = { type, angle, branch, target: this.readAtom() };
+
+    if (spec !== null) bond.spec = spec;
+
+    return bond;
   }
 
   /** Весь остаток должен быть прочитан: иначе в коде есть то, чего мы не понимаем. */
@@ -209,10 +229,16 @@ const parseChain = (code: string): ChemChain => {
   reader.skipSpaces();
 
   let startAngle = 0;
+  let startSpec: string | null = null;
 
   if (reader.peek() === '[') {
     reader.next();
-    startAngle = parseAngleSpec(reader.readBalanced('[', ']')) ?? 0;
+
+    const text = reader.readBalanced('[', ']');
+    const angle = parseAngleSpec(text);
+
+    startAngle = angle ?? 0;
+    startSpec = isLossySpec(text, angle) ? text : null;
   }
 
   const root = reader.readAtom();
@@ -221,7 +247,11 @@ const parseChain = (code: string): ChemChain => {
 
   if (!root.label && root.bonds.length === 0) throw new ChemfigSyntaxError('Empty structure', 0);
 
-  return { kind: 'chain', root, startAngle };
+  const chain: ChemChain = { kind: 'chain', root, startAngle };
+
+  if (startSpec !== null) chain.startSpec = startSpec;
+
+  return chain;
 };
 
 /** Фрагмент у вершины кольца — атом с заместителями: `N`, `(-OH)`, `N(-CH_3)`. */
@@ -235,6 +265,46 @@ const parseFragment = (text: string): ChemAtom => {
 };
 
 const RING_START = /(\*\*?)(\d+)\(/;
+
+/**
+ * Атомы простой цепочки (одна связь продолжения у каждого, без углов и
+ * параметров) и типы связей между ними; `false` — цепочка не простая.
+ */
+const collectSimpleChain = (atom: ChemAtom, atoms: ChemAtom[], types: ChemBondType[]): boolean => {
+  atoms.push(atom);
+
+  const [bond] = atom.bonds;
+
+  if (!bond) return true;
+
+  if (atom.bonds.length > 1 || bond.branch || bond.angle !== null || bond.spec !== undefined) return false;
+
+  types.push(bond.type);
+
+  return collectSimpleChain(bond.target, atoms, types);
+};
+
+/**
+ * Цепочка префикса `A-B-*6(…)` в обратном порядке: к кольцу примыкает её
+ * последний атом, остальные уходят от него наружу. `null` — префикс не
+ * простая цепочка, перевернуть без потерь нельзя.
+ */
+const reversePrefixChain = (head: ChemAtom): ChemAtom | null => {
+  const atoms: ChemAtom[] = [];
+  const types: ChemBondType[] = [];
+
+  if (!collectSimpleChain(head, atoms, types)) return null;
+
+  const copies = atoms.map((atom): ChemAtom => ({ label: atom.label, bonds: [] }));
+
+  types.forEach((type, index) => {
+    const target = copies[index];
+
+    if (target) copies[index + 1]?.bonds.push({ type, angle: null, branch: false, target });
+  });
+
+  return copies[copies.length - 1] ?? null;
+};
 
 /**
  * Кольцо `*n(…)`. Знаки связи на верхнем уровне скобок — стороны кольца;
@@ -263,13 +333,18 @@ const parseRing = (code: string): ChemRing | null => {
   const fragments: string[] = Array.from({ length: size }, () => '');
   let current = '';
   let depth = 0;
+  // Разбор что-то отбросил: модель не повторит код без потерь.
+  let lossy = false;
 
   const flush = (): void => {
     const text = current.trim();
 
     current = '';
 
-    if (text && bonds.length < size) fragments[bonds.length] += text;
+    if (!text) return;
+
+    if (bonds.length < size) fragments[bonds.length] += text;
+    else lossy = true;
   };
 
   [...content].forEach((char) => {
@@ -291,35 +366,56 @@ const parseRing = (code: string): ChemRing | null => {
 
   flush();
 
+  // Сторон не столько, сколько вершин: chemfig нарисует незамкнутое кольцо
+  // или лишние связи, модель — замкнутое.
+  if (bonds.length !== size) lossy = true;
+
   const vertices: Array<ChemAtom | null> = fragments.map((fragment) =>
     fragment ? parseFragment(fragment) : null,
   );
 
-  // Префикс перед кольцом: снимаем угол `[:30]` — кольцо он не вращает.
-  const prefix = code.slice(0, match.index).trim().replace(/^\[[^\]]*\]/, '').trim();
+  // Параметры перед кольцом (`[:30]**6`) запоминаем дословно: рендер кольцо
+  // ими не вращает, но в коде они должны остаться.
+  const before = code.slice(0, match.index).trim();
+  const spec = /^\[([^\]]*)\]/.exec(before);
+  const prefix = before.slice(spec?.[0].length ?? 0).trim();
 
   if (prefix) {
     const last = prefix[prefix.length - 1];
     const first = vertices[0] ?? { label: '', bonds: [] };
 
     if (isBondType(last)) {
-      const substituent = parseFragment(prefix.slice(0, -1));
+      const head = parseFragment(prefix.slice(0, -1));
+      const nearest = reversePrefixChain(head);
 
-      first.bonds.unshift({ type: last, angle: null, branch: true, target: substituent });
-    } else if (!first.label) {
+      if (!nearest) lossy = true;
+
+      first.bonds.unshift({ type: last, angle: null, branch: true, target: nearest ?? head });
+    } else if (first.label || /[-=~[\]]/.test(prefix)) {
+      // Подпись перед кольцом при подписанной вершине или со связями внутри:
+      // одной подписью вершины её не выразить.
+      lossy = true;
+      first.label ||= prefix;
+    } else {
       first.label = prefix;
     }
 
     vertices[0] = first;
   }
 
-  return {
+  const ring: ChemRing = {
     kind: 'ring',
     size,
     aromatic,
     bonds: Array.from({ length: size }, (_, index) => bonds[index] ?? '-'),
     vertices,
   };
+
+  if (spec) ring.startSpec = spec[1] ?? '';
+
+  if (lossy) ring.lossy = true;
+
+  return ring;
 };
 
 /**

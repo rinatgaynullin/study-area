@@ -55,8 +55,39 @@ const JSON_TAB = 'json';
 /** Ни одна вкладка не выбрана: диалог только открывается или чертёж здесь не изменить. */
 const NO_TAB = '';
 
+/** Поля, в которые печатают: их значение применяется по `change`, то есть при потере фокуса. */
+const TYPED_INPUT_TYPES = new Set(['text', 'number', 'search', 'url', 'email', 'tel']);
+
+/**
+ * Недописанное значение поля возвращается к отрисованному: Escape уводит
+ * фокус на полотно, и `change` при потере фокуса не должен применить
+ * случайный ввод. Программная запись значения снимает с поля признак правки.
+ */
+const discardTypedValue = (target: EventTarget | null): void => {
+  if (target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && TYPED_INPUT_TYPES.has(target.type))) {
+    target.value = target.defaultValue;
+  }
+};
+
 /** Сцена из текста; `null` — текст не разобран. */
 const readRawScene = (text: string): RawScene | null => parseSceneJson(text) as RawScene | null;
+
+/**
+ * Вид сцены по её содержимому: у физической схемы — `type: 'physics'` или
+ * список `elements`, у геометрии — свой `type` либо вершины, рёбра, графики.
+ * `null` — по тексту не понять: пусто, не разобралось, незнакомые поля.
+ */
+const kindOfScene = (raw: RawScene | null): DrawingKind | null => {
+  if (raw === null) return null;
+
+  if (raw.type === 'physics' || Array.isArray(raw.elements)) return 'physics';
+
+  if (raw.type === '2d' || raw.type === '3d' || raw.type === 'plot_2d') return 'geometry';
+
+  if ('vertices' in raw || 'edges' in raw || 'plots' in raw) return 'geometry';
+
+  return null;
+};
 
 /**
  * Черновики вкладок за одно открытие диалога: какие конструкторы уже показаны
@@ -247,7 +278,14 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
       ],
     });
 
-    this.modal = createModal({ title: t('drawings_title_insert_geometry'), closeLabel: t('common_close'), fill: true });
+    // Escape окно не закрывает: в конструкторе он отменяет начатое (`onEscape`),
+    // а нарисованное школьником не должно пропасть от одного нажатия.
+    this.modal = createModal({
+      title: t('drawings_title_insert_geometry'),
+      closeLabel: t('common_close'),
+      fill: true,
+      closeOnEscape: false,
+    });
 
     // Служебное — образцы, предпросмотр, TikZ — под одной свёрнутой строкой,
     // чтобы полотно занимало окно; статус остаётся снаружи, ошибку видно всегда.
@@ -311,6 +349,7 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
     this.element = this.modal.element;
 
+    this.disposer.add(on(this.modal.element, 'keydown', this.onEscape));
     this.disposer.add(on(this.tabList, 'click', this.onTabClick));
     this.disposer.add(on(this.tabList, 'keydown', this.onTabKeydown));
     this.disposer.add(on(this.codeInput, 'input', this.onCodeInput));
@@ -560,6 +599,23 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   }
 
   /** Сцена из текста JSON для конструктора — только если текст правили и он подходит. */
+  /**
+   * Вид нового чертежа на вкладке JSON задаёт сам текст: физическую схему
+   * могли вставить после вкладки геометрии, и наоборот. У существующего узла
+   * вид не меняется никогда.
+   */
+  private adoptCodeKind(): void {
+    if (this.isEditing) return;
+
+    const kind = kindOfScene(readRawScene(this.codeInput.value));
+
+    if (kind === null || kind === this.drafts.codeKind) return;
+
+    this.drafts.codeKind = kind;
+
+    if (this.activeTab === JSON_TAB) this.setKind(kind);
+  }
+
   private editedCodeFor(factory: SceneEditorFactory): RawScene | null {
     if (!this.options.json || !this.drafts.codeEdited || this.drafts.codeKind !== factory.kind) return null;
 
@@ -709,6 +765,7 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
   private readonly onCodeInput = (): void => {
     this.drafts.codeEdited = true;
+    this.adoptCodeKind();
     this.renderPreview();
   };
 
@@ -749,6 +806,32 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     this.drafts.markSynced(factory.id);
     this.selectTab(target ? target.id : JSON_TAB);
     this.editors.get(this.activeTab)?.focus();
+  };
+
+  /**
+   * Escape где угодно в окне — отмена начатого в конструкторе активной
+   * вкладки и фокус обратно на полотно; окно остаётся открытым. На вкладке
+   * JSON и у чертежа, который здесь не изменить, Escape ничего не делает.
+   * Нажатие на самом полотне конструктор уже обработал (`defaultPrevented`).
+   */
+  private readonly onEscape = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+
+    const editor = this.unavailable || this.activeTab === JSON_TAB ? undefined : this.editors.get(this.activeTab);
+
+    if (!editor) return;
+
+    const handled = event.defaultPrevented;
+
+    event.preventDefault();
+
+    if (!handled) {
+      if (event.target instanceof Node && editor.element.contains(event.target)) discardTypedValue(event.target);
+
+      editor.cancel?.();
+    }
+
+    editor.focus();
   };
 
   private readonly onCancelClick = (): void => {

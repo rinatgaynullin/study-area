@@ -824,6 +824,18 @@ class StereometryEditor implements SceneEditor {
     this.canvas.focus();
   }
 
+  /** Escape: контур, стороны угла и выделение — прочь, инструмент — «Выбрать». */
+  cancel(): void {
+    // Жест указателя закрывается без клика: вращение и перетаскивание вершины,
+    // уже начатые, доводятся, как при отпускании; жест ползунка — так же.
+    this.finishGesture(false);
+
+    if (this.closeSlide()) this.changes.emit();
+
+    this.selection = null;
+    this.setTool('select');
+  }
+
   destroy(): void {
     this.disposer.dispose();
     this.changes.clear();
@@ -1624,10 +1636,9 @@ class StereometryEditor implements SceneEditor {
     }
 
     if (event.key === 'Escape') {
-      this.draft = [];
-      this.selection = null;
-      this.render();
-      this.renderProperties();
+      // Отмена сделана здесь: диалог по `defaultPrevented` её не повторяет.
+      event.preventDefault();
+      this.cancel();
     }
   };
 

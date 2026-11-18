@@ -359,8 +359,10 @@ describe('конструктор стереометрии', () => {
     clickVertex(canvas, [3, -3, 0]);
     expect(stereo.getScene().angles).toEqual([{ points: ['A1', 'A', 'B'], style: 'right' }]);
 
-    // Поле ввода показывается, когда ничего не выбрано.
+    // Поле ввода показывается, когда ничего не выбрано. Escape возвращает
+    // «Выбрать» — инструмент «Угол» берём снова.
     press(canvas, 'Escape');
+    pickTool(stereo, 'angle');
 
     const input = propsOf(stereo).querySelector<HTMLInputElement>('input[placeholder="SOH"]');
 
@@ -370,6 +372,7 @@ describe('конструктор стереометрии', () => {
     expect(stereo.getScene().angles).toHaveLength(1);
 
     press(canvas, 'Escape');
+    pickTool(stereo, 'angle');
     setValue(propsOf(stereo).querySelector<HTMLInputElement>('input[placeholder="SOH"]')!, 'b1bc');
     expect(stereo.getScene().angles).toEqual([
       { points: ['A1', 'A', 'B'], style: 'right' },
@@ -378,6 +381,7 @@ describe('конструктор стереометрии', () => {
 
     // Наклонный угол — одной дугой; метка и вид дуги правятся в свойствах.
     press(canvas, 'Escape');
+    pickTool(stereo, 'angle');
     setValue(propsOf(stereo).querySelector<HTMLInputElement>('input[placeholder="SOH"]')!, 'C1 A C');
 
     const angles = stereo.getScene().angles as Array<Record<string, unknown>>;
@@ -788,8 +792,11 @@ describe('конструктор стереометрии', () => {
     clickVertex(canvas, [-2, 1, 2]);
     expect(stereo.getScene().vertices).toEqual({ A: [1, 2, 2], B: [-2, 1, 2] });
 
-    // Высота живёт в инструменте: после снятия выделения поле помнит её.
+    // Высота живёт в инструменте: Escape снимает выделение и возвращает
+    // «Выбрать», а снова взятая «Точка» помнит высоту.
     press(canvas, 'Escape');
+    expect(propsOf(stereo).querySelector('input[data-prop="pointHeight"]')).toBeNull();
+    pickTool(stereo, 'point');
     expect(viewField(stereo, 'pointHeight').value).toBe('2');
 
     // «Сечение» в пустоте точек не ставит — поля у него нет; у «Отрезка» есть.
@@ -1641,6 +1648,7 @@ describe('конструктор стереометрии', () => {
     expect(firstControl(stereo, 'input[placeholder="30°"]').disabled).toBe(true);
 
     press(canvasOf(stereo), 'Escape');
+    pickTool(stereo, 'angle');
     setValue(firstControl(stereo, 'input[placeholder="SOH"]'), 'BAD');
     expect(anglesOf(stereo)[1]).toEqual({ points: ['B', 'A', 'D'], style: 'right' });
     expect(viewField(stereo, 'angleMeasure').checked).toBe(false);

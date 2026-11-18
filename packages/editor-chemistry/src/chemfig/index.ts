@@ -18,12 +18,14 @@ export {
 export {
   chemfigToSvg,
   layoutChemistry,
+  renderChemistry,
   renderChemistrySvg,
   ringVertexAngle,
   type ChemistrySvgOptions,
   type ChemLayout,
   type ChemLayoutAtom,
   type ChemLayoutBond,
+  type RenderedChemistry,
   type RingBondRef,
 } from './render-svg';
 export { serializeChemfig } from './serialize-chemfig';

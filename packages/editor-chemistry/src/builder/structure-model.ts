@@ -51,8 +51,8 @@ export const structureCode = (structure: ChemStructure | null): string =>
   structure ? serializeChemfig(structure) : '';
 
 /**
- * Своя группа: `C2H5` → `C_2H_5`. Цифры после буквы или скобки становятся
- * индексами; пробелы выбрасываются. Подпись принимается, только если сама по
+ * Своя группа: `C2H5` → `C_2H_5`, `C6H12O6` → `C_6H_{12}O_6`. Цифры после
+ * буквы или скобки становятся индексами; пробелы выбрасываются. Подпись принимается, только если сама по
  * себе разбирается как одиночный атом — иначе код структуры сломался бы.
  */
 export const normalizeGroupLabel = (input: string): string | null => {
@@ -60,7 +60,11 @@ export const normalizeGroupLabel = (input: string): string | null => {
 
   if (!/[A-Za-z]/.test(compact) || !/^[A-Za-z0-9_^{}()+]+$/.test(compact)) return null;
 
-  const label = compact.replace(/(?<=[A-Za-z)])(\d+)/g, '_$1');
+  // Многозначный индекс — в фигурных скобках: chemfig опускает в индекс
+  // только первую цифру после `_`, `C_12` дал бы C₁2.
+  const label = compact.replace(/(?<=[A-Za-z)])(\d+)/g, (digits: string) =>
+    digits.length > 1 ? `_{${digits}}` : `_${digits}`,
+  );
   const parsed = tryParseChemfig(label);
 
   return parsed?.kind === 'chain' && parsed.root.label === label && parsed.root.bonds.length === 0

@@ -410,6 +410,49 @@ describe('раскладка диалога', () => {
     expect(html).not.toContain('data-geometry-data=');
   });
 
+  it('вид нового чертежа на вкладке JSON задаёт сам текст: физика после геометрии и наоборот', () => {
+    const editor = mountEditor({}, { json: true });
+
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+
+    // Диалог открылся на геометрии; физическую схему вставляют прямо в JSON.
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Чертёж');
+    typeJson(dialog, BLOCK);
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Физическая схема');
+
+    // Передумали: текст заменили геометрией — вид вернулся.
+    typeJson(dialog, TRIANGLE);
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Чертёж');
+
+    typeJson(dialog, BLOCK);
+    dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.click();
+
+    const html = editor.core.getHTML();
+
+    expect(html).toContain('data-physics-data=');
+    expect(html).not.toContain('data-geometry-data=');
+  });
+
+  it('вид существующего чертежа текст JSON не меняет', () => {
+    const editor = mountEditor({}, { json: true });
+
+    editor.core.setHTML(`<div data-geometry-data='${TRIANGLE}'></div>`);
+    editor.element
+      .querySelector<HTMLElement>('.rte-content .rte-drawing')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    const dialog = openDialog();
+    const title = dialog.querySelector('.rte-modal__title')?.textContent;
+
+    dialog.querySelector<HTMLButtonElement>('[data-tab="json"]')?.click();
+    typeJson(dialog, BLOCK);
+
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe(title);
+  });
+
   it('непустой текст JSON хранит свой вид: вкладка «Физика» без рисунка его не меняет', () => {
     const editor = mountEditor({}, { json: true });
 

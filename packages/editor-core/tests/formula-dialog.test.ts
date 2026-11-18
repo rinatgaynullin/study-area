@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRichEditor, type RichEditorUi } from '../src/index';
 import { MATHLIVE_STRINGS } from '../src/i18n/mathlive';
+import * as mathml from '../src/formula/mathml';
 
 /**
  * Диалог формул целиком, но с поддельным MathLive: настоящий в jsdom не
@@ -82,6 +83,8 @@ afterEach(() => {
   host?.remove();
   host = undefined;
   vi.unstubAllGlobals();
+  // Шпионы за конвертерами не должны переходить в следующий тест.
+  vi.restoreAllMocks();
 });
 
 const mountEditor = (content = '<p>текст</p>'): RichEditorUi => {
@@ -124,6 +127,50 @@ const waitForField = async (): Promise<FakeField> =>
     },
     { timeout: 10_000 },
   );
+
+const statusLine = (): string =>
+  document.querySelector<HTMLElement>('.rte-formula-editor__status:not([hidden])')?.textContent ?? '';
+
+const saveButton = (): HTMLButtonElement => {
+  const button = openDialog()?.querySelector<HTMLButtonElement>('.rte-button--primary');
+
+  if (!button) throw new Error('Нет кнопки сохранения');
+
+  return button;
+};
+
+const pressEscape = (): void => {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+};
+
+const pause = (ms = 20): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/** Обещание, которое тест выполняет сам: так изображается медленная сеть. */
+const deferred = <T,>(): { promise: Promise<T>; resolve(value: T): void } => {
+  let release: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((resolve) => {
+    release = resolve;
+  });
+
+  return { promise, resolve: (value) => release(value) };
+};
+
+const FOREIGN_MATHML = '<math xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math>';
+
+const LOAD_FAILED = 'Не получилось открыть редактор формул. Проверь интернет и попробуй ещё раз';
+const UNREADABLE = 'Эту формулу не получилось открыть. Напиши её заново';
+
+/** Открывает на правку формулу документа с этим номером. */
+const openFormulaNode = (editor: RichEditorUi, index = 0): void => {
+  const node = editor.element.querySelectorAll<HTMLElement>('.rte-content .rte-formula')[index];
+
+  if (!node) throw new Error(`В документе нет формулы №${index}`);
+
+  node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+};
 
 const typeIntoField = (field: FakeField, latex: string): void => {
   field.value = latex;
@@ -264,6 +311,276 @@ describe('диалог формул', () => {
       expect(field.value).toContain('\\frac');
     });
     expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(false);
+  });
+
+  it('шаблон, нажатый до загрузки поля, не попадает в формулу, открытую после закрытия', async () => {
+    mountEditor();
+    openMathDialog();
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!.click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(openDialog()).toBeNull();
+
+    openMathDialog();
+
+    const field = await waitForField();
+
+    // Даём отложенной вставке шанс сработать, если бы она осталась.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+
+    expect(field.value).toBe('');
+    expect(openDialog()!.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+  });
+
+  it('повторное открытие во время загрузки не создаёт второе поле', async () => {
+    const created = vi.spyOn(FakeMathfield.prototype, 'insert');
+
+    mountEditor();
+    openMathDialog();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    openMathDialog();
+
+    const field = await waitForField();
+
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!.click();
+
+    // Шаблон попал в то самое поле, что стоит в диалоге, и ровно один раз.
+    expect(created).toHaveBeenCalledTimes(1);
+    expect(field.value).toContain('\\frac');
+    expect(document.querySelectorAll('fake-math-field')).toHaveLength(1);
+  });
+
+  it('при сбое конвертера в поле не остаётся прошлая формула', async () => {
+    const editor = mountEditor('<p>x</p>');
+
+    // Первая формула — с TeX-аннотацией: открывается без конвертера.
+    openMathDialog();
+
+    const field = await waitForField();
+
+    typeIntoField(field, 'a+b');
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-button--primary')!.click();
+    await vi.waitFor(() => {
+      expect(openDialog()).toBeNull();
+    });
+
+    // Вторая — чужая, без аннотации: конвертер (подделка) её не переводит.
+    editor.core.insertFormula(
+      '<math xmlns="http://www.w3.org/1998/Math/MathML"><mi>y</mi></math>',
+      'math',
+    );
+
+    const nodes = editor.element.querySelectorAll<HTMLElement>('.rte-content .rte-formula');
+
+    nodes[0]!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(field.value).toBe('a+b');
+    });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    nodes[1]!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('.rte-formula-editor__status')?.textContent).toBe(
+        'Эту формулу не получилось открыть. Напиши её заново',
+      );
+    });
+    expect(field.value).toBe('');
+    expect(openDialog()!.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(true);
+  });
+
+  it('нажатие на категорию оставляет фокус в поле только на сенсорном устройстве', async () => {
+    const pressCategory = (): boolean => {
+      const event = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+
+      openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__category')!.dispatchEvent(event);
+
+      return event.defaultPrevented;
+    };
+
+    mountEditor();
+    openMathDialog();
+    await waitForField();
+    expect(pressCategory()).toBe(false);
+
+    ui?.destroy();
+    host?.remove();
+
+    stubCoarsePointer();
+    mountEditor();
+    openMathDialog();
+    await waitForField();
+    expect(pressCategory()).toBe(true);
+  });
+
+  it('формула не открылась — шаблон, нажатый заранее, не вставляется и объяснение остаётся', async () => {
+    const editor = mountEditor('<p>x</p>');
+
+    editor.core.insertFormula(FOREIGN_MATHML, 'math');
+    openFormulaNode(editor);
+    // Пока MathLive ещё грузится.
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!.click();
+
+    const field = await waitForField();
+
+    await vi.waitFor(() => {
+      expect(statusLine()).toBe(UNREADABLE);
+    });
+    await pause();
+
+    expect(field.value).toBe('');
+    expect(statusLine()).toBe(UNREADABLE);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('не доехал конвертер при открытии — сообщение про сеть, сохранить поверх формулы нельзя', async () => {
+    const editor = mountEditor('<p>x</p>');
+
+    editor.core.insertFormula(FOREIGN_MATHML, 'math');
+
+    const before = editor.core.getHTML();
+
+    vi.spyOn(mathml, 'mathmlToLatex').mockRejectedValueOnce(new Error('чанк не загрузился'));
+    openFormulaNode(editor);
+
+    const field = await waitForField();
+
+    await vi.waitFor(() => {
+      expect(statusLine()).toBe(LOAD_FAILED);
+    });
+
+    typeIntoField(field, 'y');
+    expect(saveButton().disabled).toBe(true);
+    saveButton().click();
+    await pause();
+    expect(editor.core.getHTML()).toBe(before);
+
+    // Следующее открытие — обычное: запрет не переживает закрытие.
+    pressEscape();
+    openFormulaNode(editor);
+    await vi.waitFor(() => {
+      expect(statusLine()).toBe(UNREADABLE);
+    });
+    typeIntoField(field, 'y');
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('не доехал конвертер при сохранении — сообщение про сеть, повтор сохраняет', async () => {
+    const editor = mountEditor();
+
+    openMathDialog();
+
+    const field = await waitForField();
+
+    typeIntoField(field, 'a+b');
+    vi.spyOn(mathml, 'latexToMathML').mockRejectedValueOnce(new Error('чанк не загрузился'));
+    saveButton().click();
+
+    await vi.waitFor(() => {
+      expect(statusLine()).toBe(LOAD_FAILED);
+    });
+    expect(openDialog()).not.toBeNull();
+    expect(saveButton().disabled).toBe(false);
+
+    saveButton().click();
+    await vi.waitFor(() => {
+      expect(openDialog()).toBeNull();
+    });
+    expect(editor.core.getHTML()).toContain('a+b');
+  });
+
+  it('двойное нажатие «Вставить» вставляет одну формулу', async () => {
+    const editor = mountEditor();
+    const ready = await mathml.latexToMathML('a+b', 'math');
+    const slow = deferred<string>();
+    const convert = vi.spyOn(mathml, 'latexToMathML').mockImplementationOnce(() => slow.promise);
+
+    openMathDialog();
+    typeIntoField(await waitForField(), 'a+b');
+
+    saveButton().click();
+    expect(saveButton().disabled).toBe(true);
+    saveButton().click();
+    slow.resolve(ready);
+
+    await vi.waitFor(() => {
+      expect(openDialog()).toBeNull();
+    });
+    expect(convert).toHaveBeenCalledTimes(1);
+    expect(editor.element.querySelectorAll('.rte-content .rte-formula')).toHaveLength(1);
+  });
+
+  it('сохранение, которого не дождались, не пишет в формулу, открытую после', async () => {
+    const editor = mountEditor('<p>x</p>');
+
+    editor.core.insertFormula(await mathml.latexToMathML('c', 'math'), 'math');
+
+    const ready = await mathml.latexToMathML('a+b', 'math');
+    const slow = deferred<string>();
+    /** LaTeX формул документа по порядку: запись живёт в аннотации MathML. */
+    const formulas = (): string[] =>
+      [...editor.element.querySelectorAll<HTMLElement>('.rte-content .rte-formula')].map(
+        (node) => /encoding="application\/x-tex">([^<]*)</.exec(node.dataset.mathml ?? '')?.[1] ?? '',
+      );
+
+    expect(formulas()).toEqual(['c']);
+
+    // Новая формула: нажали «Вставить», конвертер ещё едет.
+    openMathDialog();
+
+    const field = await waitForField();
+
+    typeIntoField(field, 'a+b');
+    vi.spyOn(mathml, 'latexToMathML').mockImplementationOnce(() => slow.promise);
+    saveButton().click();
+
+    // Не дождались: закрыли и открыли существующую формулу.
+    pressEscape();
+    openFormulaNode(editor);
+    await vi.waitFor(() => {
+      expect(field.value).toBe('c');
+    });
+
+    slow.resolve(ready);
+    await pause();
+
+    expect(openDialog()).not.toBeNull();
+    expect(formulas()).toEqual(['c']);
+    expect(statusLine()).toBe('');
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('шаблон, нажатый пока открывается сохранённая формула, встаёт после неё', async () => {
+    const editor = mountEditor('<p>x</p>');
+
+    editor.core.insertFormula(await mathml.latexToMathML('c', 'math'), 'math');
+
+    // Первое открытие — чтобы MathLive уже был загружен.
+    openFormulaNode(editor);
+
+    const field = await waitForField();
+
+    await vi.waitFor(() => {
+      expect(field.value).toBe('c');
+    });
+    pressEscape();
+
+    const slow = deferred<string>();
+
+    vi.spyOn(mathml, 'mathmlToLatex').mockImplementationOnce(() => slow.promise);
+    openFormulaNode(editor);
+    await pause();
+    openDialog()!.querySelector<HTMLButtonElement>('.rte-formula-editor__template')!.click();
+
+    // Формула ещё едет: шаблон ждёт, поле пустое.
+    expect(field.value).toBe('');
+
+    slow.resolve('c');
+    await vi.waitFor(() => {
+      expect(field.value).toContain('\\frac');
+    });
+    expect(field.value.startsWith('c')).toBe(true);
   });
 
   it('у химии «Частых» нет: первой остаётся прежняя категория', async () => {
