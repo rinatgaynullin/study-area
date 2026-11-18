@@ -80,6 +80,7 @@ export const BUILDER_MESSAGES: Record<string, Messages> = {
     drawings_template_square: 'Квадрат',
     drawings_template_trapezoid: 'Трапеция',
     drawings_template_circle_inscribed: 'Окружность с хордой',
+    drawings_decimal_separator: ',',
   },
   en: {
     drawings_tab_planimetry: 'Plane geometry',
@@ -159,5 +160,6 @@ export const BUILDER_MESSAGES: Record<string, Messages> = {
     drawings_template_square: 'Square',
     drawings_template_trapezoid: 'Trapezoid',
     drawings_template_circle_inscribed: 'Circle with a chord',
+    drawings_decimal_separator: '.',
   },
 };

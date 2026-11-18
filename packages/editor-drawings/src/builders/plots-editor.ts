@@ -7,7 +7,7 @@ import type { BuilderIconId } from './builder-icons';
 import { FunctionPanel } from './function-panel';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
-import { MIN_RADIUS, MIN_STRETCH, functionLabel, isFunctionLabel, isFunctionPlot } from './plot-functions';
+import { FINE_DIGITS, MIN_RADIUS, MIN_STRETCH, functionLabel, isFunctionLabel, isFunctionPlot, type ParabolaForm } from './plot-functions';
 import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
@@ -121,6 +121,12 @@ type PlotItem = WithId<Plot>;
 type CurvePlot = Extract<PlotItem, { type: 'parabola' | 'sqrt' | 'hyperbola' }>;
 type DomainPlot = Extract<PlotItem, { type: 'parabola' | 'sqrt' | 'hyperbola' | 'line' }>;
 
+/** Подпись-формула кривой и вид записи, в котором она написана (у параболы их два). */
+interface FormulaLabel {
+  id: string;
+  form: ParabolaForm;
+}
+
 interface PlotsState {
   plots: PlotItem[];
   xLabel: string;
@@ -130,7 +136,7 @@ interface PlotsState {
   /** Поля сцены, которых конструктор не знает: уходят обратно нетронутыми. */
   extra: RawScene;
   /** Кривые, чья подпись — их формула и следует за ней. Не в сцене: только в конструкторе и истории. */
-  formulaLabels: string[];
+  formulaLabels: FormulaLabel[];
 }
 
 const isRecord = (value: unknown): value is RawScene => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -168,10 +174,11 @@ const serializePlot = (plot: PlotItem): RawScene => {
       if (plot.fill) out.fill = true;
       break;
     case 'parabola':
-      out.vertex = roundPoint(plot.vertex);
+      // Вершина и растяжения — с запасом знаков: из них выводятся `b` и `c` общего вида.
+      out.vertex = roundPoint(plot.vertex, FINE_DIGITS);
       out.direction = plot.direction;
-      out.stretchX = roundTo(plot.stretchX);
-      out.stretchY = roundTo(plot.stretchY);
+      out.stretchX = roundTo(plot.stretchX, FINE_DIGITS);
+      out.stretchY = roundTo(plot.stretchY, FINE_DIGITS);
       break;
     case 'sqrt':
       out.vertex = roundPoint(plot.vertex);
@@ -185,8 +192,9 @@ const serializePlot = (plot: PlotItem): RawScene => {
       break;
     case 'line':
       if (plot.p1 && plot.p2) {
-        out.p1 = roundPoint(plot.p1);
-        out.p2 = roundPoint(plot.p2);
+        // Точки — с запасом знаков: из них выводятся `k` и `b`.
+        out.p1 = roundPoint(plot.p1, FINE_DIGITS);
+        out.p2 = roundPoint(plot.p2, FINE_DIGITS);
       } else {
         out.k = roundTo(plot.k ?? 0);
         out.b = roundTo(plot.b ?? 0);
@@ -218,6 +226,7 @@ const shiftDomain = (domain: [number, number] | undefined, dx: number): [number,
 /** Копия графика, сдвинутая целиком: так двигает перетаскивание и вставка. */
 const translatePlot = (plot: PlotItem, [dx, dy]: Vec2): PlotItem => {
   const shift = (point: Vec2): Vec2 => roundPoint([point[0] + dx, point[1] + dy]);
+  const shiftFine = (point: Vec2): Vec2 => roundPoint([point[0] + dx, point[1] + dy], FINE_DIGITS);
 
   switch (plot.type) {
     case 'point':
@@ -227,11 +236,11 @@ const translatePlot = (plot: PlotItem, [dx, dy]: Vec2): PlotItem => {
     case 'hyperbola':
       return { ...plot, center: shift(plot.center), domain: shiftDomain(plot.domain, dx) };
     case 'parabola':
-      return { ...plot, vertex: shift(plot.vertex), domain: shiftDomain(plot.domain, dx) };
+      return { ...plot, vertex: shiftFine(plot.vertex), domain: shiftDomain(plot.domain, dx) };
     case 'sqrt':
       return { ...plot, vertex: shift(plot.vertex), domain: shiftDomain(plot.domain, dx) };
     case 'line':
-      if (plot.p1 && plot.p2) return { ...plot, p1: shift(plot.p1), p2: shift(plot.p2) };
+      if (plot.p1 && plot.p2) return { ...plot, p1: shiftFine(plot.p1), p2: shiftFine(plot.p2) };
 
       // Сдвиг прямой `y = kx + b` на (dx, dy) — это новый `b`: b + dy − k·dx.
       return { ...plot, b: roundTo((plot.b ?? 0) + dy - (plot.k ?? 0) * dx), domain: shiftDomain(plot.domain, dx) };
@@ -447,9 +456,6 @@ const plotDistance = (plot: PlotItem, p: Vec2): number => {
 /** Точки важнее кривых, кривые важнее областей: точка на параболе выбирается первой. */
 const hitRank = (plot: PlotItem): number => (plot.type === 'point' ? 0 : plot.type === 'shading' ? 2 : 1);
 
-/** Набор полей панели свойств: меняется с типом и у прямой — с точек на `y = kx + b`. */
-const propertiesShape = (plot: Plot): string => (plot.type === 'line' && plot.p1 && plot.p2 ? 'line:points' : plot.type);
-
 /** Шаблоны кнопок палитры: единичные кривые в начале координат. */
 const TEMPLATE_PLOTS: Record<TemplateId, (id: string, color: string) => PlotItem> = {
   parabola: (id, color) => ({ id, type: 'parabola', vertex: [0, 0], direction: 'up', stretchX: 1, stretchY: 1, color }),
@@ -524,6 +530,9 @@ class PlotsEditor implements SceneEditor {
   /** Поле «Метка» выделенного графика: подпись-формула обновляется в нём на месте. */
   private labelInput: HTMLInputElement | null = null;
 
+  /** Поля точек выделенной прямой-отрезка: правка `k` или `b` двигает точки — поля обновляются на месте. */
+  private pointFields: Array<[HTMLInputElement, HTMLInputElement]> = [];
+
   constructor(context: SceneEditorContext) {
     this.t = context.t;
     this.separator = this.t('drawings_decimal_separator');
@@ -533,6 +542,7 @@ class PlotsEditor implements SceneEditor {
       onPreview: (plot, first) => this.previewFunction(plot, first),
       onCommit: (plot, gesture) => this.commitFunction(plot, gesture),
       onFormulaLabel: (checked) => this.setFormulaLabel(checked),
+      onForm: (form) => this.setLabelForm(form),
     });
 
     this.canvas = new SketchCanvas({
@@ -631,8 +641,12 @@ class PlotsEditor implements SceneEditor {
       showGrid: scene.showGrid,
       showAxesTicks: scene.showAxesTicks,
       extra: extraOf(raw, KNOWN_SCENE_KEYS),
-      // Подпись, уже равная формуле, — признак подписи-формулы (как у величины угла).
-      formulaLabels: plots.filter((plot) => isFunctionLabel(plot.label, plot, this.functionPanel.form, this.separator)).map((plot) => plot.id),
+      // Подпись, уже равная формуле, — признак подписи-формулы (как у величины угла). Сама подпись не меняется.
+      formulaLabels: plots.flatMap((plot) => {
+        const form = this.labelFormOf(plot);
+
+        return form === null ? [] : [{ id: plot.id, form }];
+      }),
     };
     this.history.clear();
     this.selectedId = null;
@@ -758,27 +772,45 @@ class PlotsEditor implements SceneEditor {
   private commit(mutate: (state: PlotsState) => void): void {
     this.history.record(this.state);
     mutate(this.state);
-    this.state.plots = this.state.plots.map((plot) => this.withFormulaLabel(plot));
     this.afterChange();
   }
 
-  /** Подпись-формула следует за кривой, пока у неё стоит флажок. */
-  private withFormulaLabel(plot: PlotItem): PlotItem {
-    if (!this.state.formulaLabels.includes(plot.id)) return plot;
+  /** Вид записи, в котором подпись кривой совпадает с её формулой; сначала — выбранный в блоке. */
+  private labelFormOf(plot: Plot): ParabolaForm | null {
+    const current = this.functionPanel.form;
+    const forms: ParabolaForm[] = plot.type === 'parabola' ? [current, current === 'vertex' ? 'standard' : 'vertex'] : [current];
 
-    const label = functionLabel(plot, this.functionPanel.form, this.separator);
-
-    return label === null ? plot : { ...plot, label };
+    return forms.find((form) => isFunctionLabel(plot.label, plot, form, this.separator)) ?? null;
   }
 
-  /** Кривая из блока «Функция» вместо выделенной: id и чужие поля — прежние. */
+  private formulaLabelOf(id: string): FormulaLabel | undefined {
+    return this.state.formulaLabels.find((entry) => entry.id === id);
+  }
+
+  /**
+   * Подпись-формула следует за изменённой кривой, пока у неё стоит флажок:
+   * переписывается, только если формула стала другой, — иначе остаётся
+   * дословно такой, как была (например, загруженная `y=x^2`).
+   */
+  private followFormula(before: Plot, after: PlotItem): PlotItem {
+    const entry = this.formulaLabelOf(after.id);
+
+    if (!entry) return after;
+
+    const label = functionLabel(after, entry.form, this.separator);
+
+    return label === null || label === functionLabel(before, entry.form, this.separator) ? after : { ...after, label };
+  }
+
+  /** Кривая из блока «Функция» вместо выделенной: id, подпись и чужие поля — прежние. */
   private replaceSelected(next: Plot): PlotItem | null {
     const index = this.state.plots.findIndex((plot) => plot.id === this.selectedId);
     const current = this.state.plots[index];
 
     if (!current) return null;
 
-    const item = this.withFormulaLabel({ ...next, id: current.id, ...(current.extra ? { extra: current.extra } : {}) });
+    // Кривая жеста посчитана от снимка на его начало: подпись берётся у текущей.
+    const item = this.followFormula(current, { ...next, label: current.label, id: current.id, ...(current.extra ? { extra: current.extra } : {}) });
 
     this.state.plots[index] = item;
 
@@ -798,9 +830,7 @@ class PlotsEditor implements SceneEditor {
 
   /** Окончательное значение параметра: шаг истории (если жест его ещё не записал) и сцена наружу. */
   private commitFunction(next: Plot, gesture: boolean): void {
-    const before = this.selectedPlot();
-
-    if (!before) return;
+    if (!this.selectedPlot()) return;
 
     if (!gesture) this.history.record(this.state);
 
@@ -809,34 +839,71 @@ class PlotsEditor implements SceneEditor {
     this.render();
     this.changes.emit();
 
-    // Прямая по точкам стала `y = kx + b`: поля ниже блока другие — панель собирается заново.
-    if (item && propertiesShape(item) === propertiesShape(before)) this.refreshFunction(item);
-    else this.renderProperties();
+    if (item) this.refreshFunction(item);
   }
 
   private setFormulaLabel(checked: boolean): void {
     const { selectedId } = this;
+    const { form } = this.functionPanel;
 
     if (selectedId === null) return;
 
     this.commit((state) => {
-      state.formulaLabels = state.formulaLabels.filter((id) => id !== selectedId);
+      state.formulaLabels = state.formulaLabels.filter((entry) => entry.id !== selectedId);
 
-      if (checked) {
-        state.formulaLabels.push(selectedId);
-      } else {
-        state.plots = state.plots.map((plot) => (plot.id === selectedId ? { ...plot, label: undefined } : plot));
-      }
+      if (checked) state.formulaLabels.push({ id: selectedId, form });
+
+      state.plots = state.plots.map((plot) => {
+        if (plot.id !== selectedId) return plot;
+
+        return checked ? { ...plot, label: functionLabel(plot, form, this.separator) ?? plot.label } : { ...plot, label: undefined };
+      });
     });
   }
 
-  /** Формула, параметры и подпись выделенной кривой — на месте, без пересоздания панели. */
+  /** Новый вид записи параболы: подпись-формула выделенной кривой переписывается в нём; чужие подписи не трогаются. */
+  private setLabelForm(form: ParabolaForm): void {
+    const plot = this.selectedPlot();
+    const entry = plot ? this.formulaLabelOf(plot.id) : undefined;
+
+    if (!plot || plot.type !== 'parabola' || !entry || entry.form === form) return;
+
+    const label = functionLabel(plot, form, this.separator) ?? plot.label;
+    const withForm = (entries: FormulaLabel[]): FormulaLabel[] => entries.map((item) => (item.id === plot.id ? { id: item.id, form } : item));
+
+    // Подпись в обоих видах одна (`y = x^2`): сцена не меняется, шаг истории не нужен.
+    if (label === plot.label) {
+      this.state.formulaLabels = withForm(this.state.formulaLabels);
+
+      return;
+    }
+
+    this.commit((state) => {
+      state.formulaLabels = withForm(state.formulaLabels);
+      state.plots = state.plots.map((item) => (item.id === plot.id ? { ...item, label } : item));
+    });
+  }
+
+  /** Формула, параметры, подпись и точки выделенной кривой — на месте, без пересоздания панели. */
   private refreshFunction(plot: PlotItem): void {
     if (!isFunctionPlot(plot)) return;
 
-    this.functionPanel.update(plot, this.state.formulaLabels.includes(plot.id));
+    this.functionPanel.update(plot, this.formulaLabelOf(plot.id) !== undefined);
 
     if (this.labelInput) this.labelInput.value = plot.label ?? '';
+
+    if (plot.type === 'line' && plot.p1 && plot.p2) {
+      const points = [plot.p1, plot.p2];
+
+      this.pointFields.forEach(([x, y], index) => {
+        const point = points[index];
+
+        if (!point) return;
+
+        x.value = String(point[0]);
+        y.value = String(point[1]);
+      });
+    }
   }
 
   private afterChange(): void {
@@ -1009,7 +1076,7 @@ class PlotsEditor implements SceneEditor {
         this.drag.moved = true;
       }
 
-      const moved = this.withFormulaLabel(translatePlot(this.drag.snapshot, delta));
+      const moved = this.followFormula(this.drag.snapshot, translatePlot(this.drag.snapshot, delta));
 
       this.state.plots[index] = moved;
       this.render();
@@ -1238,9 +1305,15 @@ class PlotsEditor implements SceneEditor {
 
   private updatePlot<T extends PlotItem>(target: T, mutate: (draft: T) => void): void {
     this.commit((state) => {
-      const draft = state.plots.find((plot) => plot.id === target.id);
+      const index = state.plots.findIndex((plot) => plot.id === target.id);
+      const draft = state.plots[index];
 
-      if (draft && draft.type === target.type) mutate(draft as T);
+      if (!draft || draft.type !== target.type) return;
+
+      const before = cloneScene(draft);
+
+      mutate(draft as T);
+      state.plots[index] = this.followFormula(before, draft);
     });
   }
 
@@ -1249,6 +1322,7 @@ class PlotsEditor implements SceneEditor {
 
     this.properties.replaceChildren();
     this.labelInput = null;
+    this.pointFields = [];
 
     const plot = this.selectedPlot();
 
@@ -1263,7 +1337,7 @@ class PlotsEditor implements SceneEditor {
     this.properties.appendChild(el('h4', { class: 'rte-builder__props-title', text: t(`drawings_plots_selected_${plot.type}`) }));
 
     // Блок «Функция» — первым: формула и параметры вместо направлений и растяжений.
-    if (isFunction) this.properties.appendChild(this.functionPanel.show(plot, this.state.formulaLabels.includes(plot.id)));
+    if (isFunction) this.properties.appendChild(this.functionPanel.show(plot, this.formulaLabelOf(plot.id) !== undefined));
 
     this.appendColorFields(plot);
 
@@ -1281,7 +1355,7 @@ class PlotsEditor implements SceneEditor {
       (value) =>
         // Подпись, набранная руками, — уже не формула: признак снимается.
         this.commit((state) => {
-          state.formulaLabels = state.formulaLabels.filter((id) => id !== plot.id);
+          state.formulaLabels = state.formulaLabels.filter((entry) => entry.id !== plot.id);
           state.plots = state.plots.map((item) => (item.id === plot.id ? { ...item, label: value || undefined } : item));
         }),
       true,
@@ -1310,16 +1384,18 @@ class PlotsEditor implements SceneEditor {
         break;
       case 'line':
         if (plot.p1 && plot.p2) {
-          this.appendPoint(t('drawings_plots_prop_p1'), plot.p1, (point) =>
-            this.updatePlot(plot, (draft) => {
-              draft.p1 = point;
-            }),
-          );
-          this.appendPoint(t('drawings_plots_prop_p2'), plot.p2, (point) =>
-            this.updatePlot(plot, (draft) => {
-              draft.p2 = point;
-            }),
-          );
+          this.pointFields = [
+            this.appendPoint(t('drawings_plots_prop_p1'), plot.p1, (point) =>
+              this.updatePlot(plot, (draft) => {
+                draft.p1 = point;
+              }),
+            ),
+            this.appendPoint(t('drawings_plots_prop_p2'), plot.p2, (point) =>
+              this.updatePlot(plot, (draft) => {
+                draft.p2 = point;
+              }),
+            ),
+          ];
         } else {
           this.appendDomain(plot);
         }
@@ -1416,21 +1492,19 @@ class PlotsEditor implements SceneEditor {
   }
 
   /** Два числовых поля в строку: координаты точки или границы области. */
-  private appendPair(label: string, values: [string, string], apply: (values: [string, string]) => void): void {
-    const inputs = values.map((value) => el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value } }));
+  private appendPair(label: string, values: [string, string], apply: (values: [string, string]) => void): [HTMLInputElement, HTMLInputElement] {
+    const input = (value: string): HTMLInputElement => el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value } });
+    const inputs: [HTMLInputElement, HTMLInputElement] = [input(values[0]), input(values[1])];
     const [first, second] = inputs;
-    const pair = el('div', { class: 'rte-plots__pair', children: inputs });
 
-    inputs.forEach((input) =>
-      input.addEventListener('change', () => {
-        if (first && second) apply([first.value, second.value]);
-      }),
-    );
-    this.properties.appendChild(propertyField(label, pair));
+    inputs.forEach((field) => field.addEventListener('change', () => apply([first.value, second.value])));
+    this.properties.appendChild(propertyField(label, el('div', { class: 'rte-plots__pair', children: inputs })));
+
+    return inputs;
   }
 
-  private appendPoint(label: string, point: Vec2, apply: (point: Vec2) => void): void {
-    this.appendPair(label, [String(point[0]), String(point[1])], ([x, y]) => {
+  private appendPoint(label: string, point: Vec2, apply: (point: Vec2) => void): [HTMLInputElement, HTMLInputElement] {
+    return this.appendPair(label, [String(point[0]), String(point[1])], ([x, y]) => {
       const next: Vec2 = [Number(x), Number(y)];
 
       if (x.trim() === '' || y.trim() === '' || !next.every(Number.isFinite)) {

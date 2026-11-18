@@ -118,9 +118,9 @@ describe('параметры функции из полей сцены', () => {
   });
 
   it('параметры и формула считаются от чисел, которые сохранит сцена: после сохранения — те же', () => {
-    // Растяжение 0,333 сцена запишет как 0,33: a = 0,33, а не 0,333 → 0,33 после загрузки.
-    const loaded = parabola({ vertex: [1.006, -2.994], stretchX: 1, stretchY: 0.333 });
-    const stored = parabola({ vertex: [1.01, -2.99], stretchX: 1, stretchY: 0.33 });
+    // Вершину и растяжения параболы сцена пишет с четырьмя знаками: 1,00006 → 1,0001.
+    const loaded = parabola({ vertex: [1.00006, -2.99994], stretchX: 1, stretchY: 0.33333 });
+    const stored = parabola({ vertex: [1.0001, -2.9999], stretchX: 1, stretchY: 0.3333 });
 
     expect(values(loaded)).toEqual(values(stored));
     expect(values(loaded, 'standard')).toEqual(values(stored, 'standard'));
@@ -168,25 +168,62 @@ describe('правка параметра', () => {
     expect(applyFunctionParam(plot, 'vertex', 'm', 4)).toMatchObject({ vertex: [4, -3], stretchX: 2, stretchY: 1 });
   });
 
-  it('правка k или b прямой по точкам переводит её в запись k/b; вертикальная двигается через c', () => {
-    const next = applyFunctionParam({ type: 'line', p1: [0, 1], p2: [2, 5] }, 'vertex', 'b', 3);
+  it('отрезок по двум точкам остаётся отрезком: k и b пересчитывают y точек при прежних x; вертикальная двигается через c', () => {
+    const segment: LinePlot = { type: 'line', p1: [0, 0], p2: [2, 2], color: '#2563eb' };
 
-    expect(next).toEqual({ type: 'line', k: 2, b: 3 });
+    expect(applyFunctionParam(segment, 'vertex', 'b', 1)).toEqual({ type: 'line', p1: [0, 1], p2: [2, 3], color: '#2563eb' });
+    expect(applyFunctionParam(segment, 'vertex', 'k', -0.5)).toEqual({ type: 'line', p1: [0, 0], p2: [2, -1], color: '#2563eb' });
+    expect(applyFunctionParam({ type: 'line', p1: [0, 1], p2: [2, 5] }, 'vertex', 'b', 3)).toEqual({ type: 'line', p1: [0, 3], p2: [2, 7] });
     expect(applyFunctionParam({ type: 'line', p1: [2, -1], p2: [2, 3] }, 'vertex', 'c', -1.5)).toEqual({ type: 'line', p1: [-1.5, -1], p2: [-1.5, 3] });
   });
 
-  it('общий вид ↔ вершина: туда и обратно', () => {
-    // c = am² + n = 0,875 — в блоке два знака, как в сцене.
+  it('отрезок: k, которое не укладывается в шаг точек, после правки показывается тем же', () => {
+    // y = 0,33 · 0,5 = 0,165: с двумя знаками у точки k стало бы 0,34.
+    const next = applyFunctionParam({ type: 'line', p1: [0, 0], p2: [0.5, 0.5] }, 'vertex', 'k', 0.33);
+
+    expect(next).toEqual({ type: 'line', p1: [0, 0], p2: [0.5, 0.165] });
+    expect(values(next)).toEqual({ k: 0.33, b: 0 });
+    // Нетронутый коэффициент — такой, как в блоке: повторный ввод не меняет кривую.
+    expect(applyFunctionParam(next, 'vertex', 'b', 0)).toEqual(next);
+  });
+
+  it('общий вид ↔ вершина: туда и обратно, когда вершина не укладывается в два знака', () => {
+    // c = am² + n = 0,875 — в блоке два знака.
     expect(values(parabola({ vertex: [-1.5, 2], stretchY: 0.5, direction: 'down' }), 'standard')).toEqual({ a: -0.5, b: -1.5, c: 0.88 });
 
-    const plot = parabola({ vertex: [-1, 2], stretchY: 0.5, direction: 'down' });
+    // y = 3x² + x + 2: m = −1/6, n = 23/12 — в два знака не укладываются.
+    const plot = applyFunctionParam(applyFunctionParam(parabola({ stretchY: 3 }), 'standard', 'b', 1), 'standard', 'c', 2);
     const standard = values(plot, 'standard');
 
-    expect(standard).toEqual({ a: -0.5, b: -1, c: 1.5 });
+    expect(standard).toEqual({ a: 3, b: 1, c: 2 });
+    expect(values(plot)).toEqual({ a: 3, m: -0.17, n: 1.92 });
 
     const back = applyFunctionParam(applyFunctionParam(plot, 'standard', 'b', standard.b ?? 0), 'standard', 'c', standard.c ?? 0);
 
-    expect(values(back)).toEqual({ a: -0.5, m: -1, n: 2 });
+    expect(back).toEqual(plot);
+    expect(values(back, 'standard')).toEqual({ a: 3, b: 1, c: 2 });
+  });
+
+  it('общий вид при a = 3: ввод b = 1 даёт b = 1 и c = 0; повторный ввод того же значения ничего не меняет', () => {
+    const plot = applyFunctionParam(parabola({ stretchY: 3 }), 'standard', 'b', 1);
+
+    expect(values(plot, 'standard')).toEqual({ a: 3, b: 1, c: 0 });
+    expect(functionText(plot, 'standard', ',')).toBe('y = 3x² + x');
+    expect(applyFunctionParam(plot, 'standard', 'b', 1)).toEqual(plot);
+    expect(applyFunctionParam(plot, 'standard', 'c', 0)).toEqual(plot);
+    expect(applyFunctionParam(plot, 'standard', 'a', 3)).toEqual(plot);
+  });
+
+  it('множитель a, который при двух знаках стал бы нулём, показывается двумя значащими цифрами', () => {
+    const flat = parabola({ stretchX: 5, stretchY: 0.05 });
+
+    expect(values(flat).a).toBe(0.002);
+    expect(values(flat, 'standard').a).toBe(0.002);
+    expect(functionText(flat, 'vertex', ',')).toBe('y = 0,002x²');
+    expect(values(parabola({ stretchX: 5, stretchY: 0.05, direction: 'down' })).a).toBe(-0.002);
+    expect(functionText(parabola({ stretchX: 4, stretchY: 0.05, direction: 'down' }), 'vertex', ',')).toBe('y = −0,0031x²');
+    // То, что округляется не в ноль, — по-прежнему два знака.
+    expect(values(parabola({ stretchX: 4, stretchY: 0.1 })).a).toBe(0.01);
   });
 
   it('ноль для a и k гиперболы заменяется наименьшим допустимым со знаком прежнего значения', () => {
@@ -303,9 +340,9 @@ describe('подпись формулой', () => {
     expect(tikz(parabola({ vertex: [1, 3], stretchY: 2 }), 'standard')).toBe('$y = 2x^2 - 4x + 5$');
     expect(tikz(hyperbola({ center: [1, -2], k: 3 }))).toBe('$y = 3/(x - 1) - 2$');
     expect(tikz(hyperbola({ k: -1 }))).toBe('$y = -1/x$');
-    expect(tikz(sqrt({ vertex: [1, 0], stretch: 0.5 }))).toBe('$y = 0,5\\sqrt{x - 1}$');
+    expect(tikz(sqrt({ vertex: [1, 0], stretch: 0.5 }))).toBe('$y = 0{,}5\\sqrt{x - 1}$');
     expect(tikz(sqrt({ vertex: [3, 0], directionX: 'left', directionY: 'down' }))).toBe('$y = -\\sqrt{3 - x}$');
-    expect(tikz({ type: 'circle', center: [1, -2], radius: 2.5 })).toBe('$(x - 1)^2 + (y + 2)^2 = 6,25$');
+    expect(tikz({ type: 'circle', center: [1, -2], radius: 2.5 })).toBe('$(x - 1)^2 + (y + 2)^2 = 6{,}25$');
     expect(tikz({ type: 'line', k: -2, b: 1 })).toBe('$y = -2x + 1$');
   });
 
@@ -323,7 +360,17 @@ describe('подпись формулой', () => {
     );
 
     expect(tikz).toContain('{$y = 2(x - 1)^2 - 3$}');
-    expect(tikz).toContain('{$(x - 1)^2 + (y + 2)^2 = 6,25$}');
+    expect(tikz).toContain('{$(x - 1)^2 + (y + 2)^2 = 6{,}25$}');
+  });
+
+  it('десятичная запятая между цифрами уходит в TikZ как {,}; запятая-разделитель с пробелом — как есть', () => {
+    expect(mathLabel('y = 0,5x^2')).toBe('$y = 0{,}5x^2$');
+    expect(mathLabel('(x - 1)^2 + (y + 2)^2 = 6,25')).toBe('$(x - 1)^2 + (y + 2)^2 = 6{,}25$');
+    expect(mathLabel('37,5°')).toBe('$37{,}5^{\\circ}$');
+    expect(mathLabel('A, B')).toBe('$A, B$');
+    expect(mathLabel('1,2,3')).toBe('$1{,}2{,}3$');
+    // В самой подписи и в SVG запятая остаётся запятой.
+    expect(functionLabel({ type: 'circle', center: [1, -2], radius: 2.5 }, 'vertex', ',')).toBe('(x - 1)^2 + (y + 2)^2 = 6,25');
   });
 
   it('подпись, равная формуле, узнаётся без учёта пробелов, минуса и разделителя', () => {

@@ -1,5 +1,6 @@
 import type { Translate } from '@rich-editor/core';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { BUILDER_MESSAGES } from '../src/builders/messages';
 import { plotsEditorFactory } from '../src/builders/plots-editor';
 import { PLOTS_MESSAGES } from '../src/builders/plots-messages';
 import type { SceneEditor } from '../src/builders/types';
@@ -896,32 +897,143 @@ describe('блок «Функция»', () => {
     expect(formulaOf(plots)).toBe('(x + 1,5)² + (y − 0,25)² = 5,5225');
   });
 
-  it('прямая по двум точкам: k и b вычислены; правка переводит её в запись k/b, точки из панели уходят', () => {
+  it('прямая по двум точкам остаётся отрезком: правка k и b пересчитывает y точек, поля точек обновляются на месте', () => {
     const plots = create();
 
     pickTool(plots, 'pencil');
     stroke(
       canvasOf(plots),
-      Array.from({ length: 9 }, (_, i) => [-2 + i / 2, -2 + i / 2] as Point),
+      Array.from({ length: 5 }, (_, i) => [i / 2, i / 2] as Point),
     );
+    expect(plotsOf(plots)[0]).toMatchObject({ type: 'line', p1: [0, 0], p2: [2, 2] });
     expect(formulaOf(plots)).toBe('y = x');
-    expect(controlsOf<HTMLInputElement>(plots, 'Первая точка (x, y)')).toHaveLength(2);
+
+    const number = paramControl(plots, 'b', 'number');
+
+    number.focus();
+    change(number, '1');
+    expect(plotsOf(plots)[0]).toEqual({ id: 'plot_1', type: 'line', p1: [0, 1], p2: [2, 3], style: 'solid' });
+    expect(formulaOf(plots)).toBe('y = x + 1');
+    expect(controlsOf<HTMLInputElement>(plots, 'Первая точка (x, y)').map((input) => input.value)).toEqual(['0', '1']);
+    expect(controlsOf<HTMLInputElement>(plots, 'Вторая точка (x, y)').map((input) => input.value)).toEqual(['2', '3']);
+    expect(() => controlsOf(plots, 'Область по x (от, до)')).toThrow();
+    // Панель не пересобиралась: фокус остался в поле.
+    expect(document.activeElement).toBe(number);
+
+    const k = paramControl(plots, 'k', 'range');
+
+    slide(k, '0.5');
+    slide(k, '-1');
+    release(k);
+    expect(plotsOf(plots)[0]).toMatchObject({ p1: [0, 1], p2: [2, -1] });
+    expect(plotsOf(plots)[0]).not.toHaveProperty('k');
+    expect(plotsOf(plots)[0]).not.toHaveProperty('b');
+    expect(formulaOf(plots)).toBe('y = −x + 1');
+  });
+
+  it('общий вид параболы без дрейфа: b = 1 при a = 3 остаётся 1, ползунок a туда и обратно ничего не сдвигает', () => {
+    const plots = create();
+    const shown = (): Record<string, string> =>
+      Object.fromEntries(paramIds(plots).map((id) => [id, paramControl(plots, id, 'number').value]));
+
+    pickTemplate(plots, 'parabola');
+    option(plots, 'standard').click();
+    change(paramControl(plots, 'a', 'number'), '3');
+    change(paramControl(plots, 'b', 'number'), '1');
+    expect(shown()).toEqual({ a: '3', b: '1', c: '0' });
+    expect(formulaOf(plots)).toBe('y = 3x² + x');
+
+    // Повторный ввод того же значения сцену не меняет.
+    const scene = JSON.stringify(plots.getScene());
 
     change(paramControl(plots, 'b', 'number'), '1');
-    expect(plotsOf(plots)[0]).toEqual({ id: 'plot_1', type: 'line', k: 1, b: 1, style: 'solid' });
-    expect(() => controlsOf(plots, 'Первая точка (x, y)')).toThrow();
-    expect(controlsOf(plots, 'Область по x (от, до)')).toHaveLength(2);
+    change(paramControl(plots, 'c', 'number'), '0');
+    expect(JSON.stringify(plots.getScene())).toBe(scene);
+
+    change(paramControl(plots, 'c', 'number'), '2');
+
+    const start = shown();
+    const vertex = plotsOf(plots)[0].vertex;
+
+    expect(start).toEqual({ a: '3', b: '1', c: '2' });
+
+    // Три жеста: от 3 до 0,1 и обратно — шагом ползунка.
+    const down = Array.from({ length: 30 }, (_, i) => String(roundTenth(2.9 - i / 10))).filter((value) => Number(value) >= 0.1);
+    const path = [...down, ...[...down].reverse().slice(1), '3'];
+
+    Array.from({ length: 3 }).forEach(() => {
+      const slider = paramControl(plots, 'a', 'range');
+
+      path.forEach((value) => slide(slider, value));
+      release(slider);
+    });
+    expect(shown()).toEqual(start);
+    expect(plotsOf(plots)[0].vertex).toEqual(vertex);
+
+    // Сохранение и загрузка значений в блоке не меняют.
+    plots.load(plots.getScene());
+    clickCurve(plots, String(plotsOf(plots)[0].color));
+    expect(shown()).toEqual(start);
+    expect(formulaOf(plots)).toBe('y = 3x² + x + 2');
+  });
+
+  it('подписи-формулы чужих кривых не переписываются; каждая следует за своей кривой в своём виде записи', () => {
+    const plots = create();
+    const labels = (): unknown[] => plotsOf(plots).map((plot) => plot.label);
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'p', type: 'parabola', vertex: [1, 3], direction: 'up', stretchX: 1, stretchY: 2, color: '#3b82f6', label: 'y = 2x^2 - 4x + 5' },
+        { id: 'q', type: 'parabola', vertex: [0, -1], direction: 'up', stretchX: 1, stretchY: 0.5, color: '#10b981', label: 'y=0.5x^2-1' },
+      ],
+    });
+    expect(labels()).toEqual(['y = 2x^2 - 4x + 5', 'y=0.5x^2-1']);
+
+    // Правка подписи оси подписи кривых не трогает.
+    change(controlOf<HTMLInputElement>(plots, 'Подпись оси x'), 't');
+    expect(labels()).toEqual(['y = 2x^2 - 4x + 5', 'y=0.5x^2-1']);
+
+    // Подпись в общем виде узнаётся при загрузке и следует за параболой в общем виде, хотя блок — в виде «через вершину».
+    clickCurve(plots, '#3b82f6');
+    expect(option(plots, 'vertex').getAttribute('aria-checked')).toBe('true');
+    expect(formulaLabelToggle(plots)?.checked).toBe(true);
+    change(paramControl(plots, 'm', 'number'), '2');
+    expect(labels()).toEqual(['y = 2x^2 - 8x + 11', 'y=0.5x^2-1']);
+
+    // Правка, которая не меняет формулу, подпись не трогает.
+    change(controlOf<HTMLSelectElement>(plots, 'Цвет'), '#ef4444');
+    expect(labels()).toEqual(['y = 2x^2 - 8x + 11', 'y=0.5x^2-1']);
+
+    // Переключатель вида записи меняет подпись только у выделенной кривой.
+    option(plots, 'standard').click();
+    option(plots, 'vertex').click();
+    expect(labels()).toEqual(['y = 2(x - 2)^2 + 3', 'y=0.5x^2-1']);
+
+    clickCurve(plots, '#10b981');
+    expect(formulaLabelToggle(plots)?.checked).toBe(true);
+    change(paramControl(plots, 'n', 'number'), '-2');
+    expect(labels()).toEqual(['y = 2(x - 2)^2 + 3', 'y = 0,5x^2 - 2']);
+    // В SVG подписи — запятая, не запись TikZ.
+    expect(canvasOf(plots).innerHTML).not.toContain('{,}');
+
+    // Отмена возвращает и подпись, и её вид записи.
+    key(canvasOf(plots), 'z', { ctrlKey: true });
+    key(canvasOf(plots), 'z', { ctrlKey: true });
+    expect(labels()).toEqual(['y = 2x^2 - 8x + 11', 'y=0.5x^2-1']);
   });
 });
+
+const roundTenth = (value: number): number => Math.round(value * 10) / 10;
 
 describe('подписи конструктора графиков', () => {
   it('английская таблица повторяет набор ключей русской, все ключи с префиксом конструктора', () => {
     const ru = Object.keys(PLOTS_MESSAGES.ru);
 
     expect(Object.keys(PLOTS_MESSAGES.en).sort()).toEqual([...ru].sort());
-    // Кроме десятичного разделителя: он общий для чертежей, конструктор графиков — первый, кому он нужен.
-    expect(ru.filter((key) => !key.startsWith('drawings_plots_'))).toEqual(['drawings_decimal_separator']);
-    expect([PLOTS_MESSAGES.ru.drawings_decimal_separator, PLOTS_MESSAGES.en.drawings_decimal_separator]).toEqual([',', '.']);
+    expect(ru.filter((key) => !key.startsWith('drawings_plots_'))).toEqual([]);
+    // Десятичный разделитель — общий для чертежей.
+    expect([BUILDER_MESSAGES.ru?.drawings_decimal_separator, BUILDER_MESSAGES.en?.drawings_decimal_separator]).toEqual([',', '.']);
     // Таблица вкладки влита в таблицы возможности: диалог переводит её ключи.
     expect(ru.every((key) => key in DRAWINGS_MESSAGES.ru)).toBe(true);
   });

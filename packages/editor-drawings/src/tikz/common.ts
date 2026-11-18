@@ -197,6 +197,8 @@ export const toLatexMath = (text: string): string => {
     .replace(/√(\d+(?:[.,]\d+)?|[A-Za-z])/g, '\\sqrt{$1}')
     .replace(/√/g, '\\sqrt')
     .replace(/°/g, '^{\\circ}')
+    // Десятичная запятая между цифрами — в фигурных скобках: иначе LaTeX ставит после неё пробел.
+    .replace(/(\d),(?=\d)/g, '$1{,}')
     // После команды нужен пробел только перед буквой: `\alpha x`, но `\alpha_1`.
     .replace(SYMBOL_PATTERN, (char, offset: number, source: string) =>
       `\\${SYMBOL_COMMANDS[char]}${/[A-Za-z]/.test(source[offset + 1] ?? '') ? ' ' : ''}`,

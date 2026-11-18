@@ -22,6 +22,8 @@ export interface FunctionPanelOptions {
   onCommit(plot: Plot, gesture: boolean): void;
   /** Флажок «Подписать график формулой». */
   onFormulaLabel(checked: boolean): void;
+  /** Выбран вид записи параболы: подпись-формула выделенной кривой переходит в него. */
+  onForm(form: ParabolaForm): void;
 }
 
 /** Строка параметра: ползунок и число — обновляются на месте, без пересоздания. */
@@ -104,6 +106,9 @@ export class FunctionPanel {
   /** Ползунок, который сейчас тянут: `input` уже был, `change` ещё нет. */
   private gesture: HTMLInputElement | null = null;
 
+  /** Кривая на начало жеста: параметр применяется к ней, а не к уже изменённой, — сдвиг не копится. */
+  private gestureBase: Plot | null = null;
+
   private formulaLabel = false;
 
   private readonly card: HTMLElement;
@@ -129,6 +134,7 @@ export class FunctionPanel {
     this.plot = plot;
     this.formulaLabel = formulaLabel;
     this.gesture = null;
+    this.gestureBase = null;
     this.rows.clear();
     this.labelCheckbox = null;
     this.element.replaceChildren(el('h5', { class: 'rte-plots-fn__title', text: t('drawings_plots_fn_title') }), this.card);
@@ -229,6 +235,7 @@ export class FunctionPanel {
       forms.map((form) => ({ value: form, text: t(`drawings_plots_fn_form_${form}`), checked: form === this.parabolaForm })),
       (value) => {
         this.parabolaForm = value === 'standard' ? 'standard' : 'vertex';
+        this.options.onForm(this.parabolaForm);
 
         if (!this.plot) return;
 
@@ -266,6 +273,8 @@ export class FunctionPanel {
     range.addEventListener('input', () => {
       const first = this.gesture === null;
 
+      if (first) this.gestureBase = this.plot;
+
       this.gesture = range;
       this.preview(param.id, Number(range.value), first);
     });
@@ -274,6 +283,7 @@ export class FunctionPanel {
 
       this.gesture = null;
       this.commit(param.id, Number(range.value), inGesture);
+      this.gestureBase = null;
     });
     number.addEventListener('change', () => {
       const value = Number(number.value);
@@ -313,11 +323,20 @@ export class FunctionPanel {
     });
   }
 
+  /** Кривая, к которой применяется параметр: снимок на начало жеста или текущая. */
+  private get base(): Plot | null {
+    return this.gestureBase ?? this.plot;
+  }
+
   private preview(id: FunctionParamId, value: number, first: boolean): void {
-    if (this.plot) this.options.onPreview(applyFunctionParam(this.plot, this.parabolaForm, id, value), first);
+    const { base } = this;
+
+    if (base) this.options.onPreview(applyFunctionParam(base, this.parabolaForm, id, value), first);
   }
 
   private commit(id: FunctionParamId, value: number, gesture: boolean): void {
-    if (this.plot) this.options.onCommit(applyFunctionParam(this.plot, this.parabolaForm, id, value), gesture);
+    const { base } = this;
+
+    if (base) this.options.onCommit(applyFunctionParam(base, this.parabolaForm, id, value), gesture);
   }
 }
