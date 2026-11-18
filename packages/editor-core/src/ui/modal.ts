@@ -180,6 +180,10 @@ class ModalController implements Modal {
     this.focusFrame = requestAnimationFrame(() => {
       if (!this.isOpen) return;
 
+      // Фокус уже внутри окна: за этот кадр его поставил сам диалог (например,
+      // на полотно конструктора) или пользователь. Автофокус его не уводит.
+      if (this.panel.contains(document.activeElement)) return;
+
       const preferred = this.panel.querySelector<HTMLElement>('[data-autofocus]');
 
       (preferred ?? this.getFocusableItems()[0] ?? this.panel).focus();

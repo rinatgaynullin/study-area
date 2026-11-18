@@ -136,6 +136,34 @@ describe('модалка и видимая область окна', () => {
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined });
   });
 
+  it('автофокус не уводит фокус, который диалог уже поставил внутрь окна', async () => {
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+    const preferred = document.createElement('button');
+    const chosen = document.createElement('button');
+
+    preferred.setAttribute('data-autofocus', '');
+    modal.body.append(preferred, chosen);
+    document.body.appendChild(modal.element);
+
+    // Обычное открытие: фокус получает помеченный элемент.
+    modal.open();
+    await nextFrame();
+    expect(document.activeElement).toBe(preferred);
+    modal.close();
+
+    // Диалог сам поставил фокус сразу после открытия — автофокус его не трогает.
+    modal.open();
+    chosen.focus();
+    await nextFrame();
+    expect(document.activeElement).toBe(chosen);
+
+    modal.destroy();
+  });
+
   it('с опцией fill панель получает класс окна на весь экран, без неё — нет', () => {
     const filled = createModal({ title: 'Чертёж', closeLabel: 'Закрыть', fill: true });
     const plain = createModal({ title: 'Ссылка', closeLabel: 'Закрыть' });
