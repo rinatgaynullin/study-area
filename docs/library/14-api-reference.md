@@ -159,7 +159,7 @@ interface FeatureBuildOptions {
 
 ```ts
 const createModal: (options: ModalOptions) => Modal;
-interface ModalOptions { title: string; closeLabel: string; wide?: boolean; fill?: boolean; onClose?(): void }   // fill — почти весь экран (1280px), на телефоне весь
+interface ModalOptions { title: string; closeLabel: string; wide?: boolean; fill?: boolean; closeOnEscape?: boolean; onClose?(): void }   // fill — почти весь экран (1280px), на телефоне весь; closeOnEscape: false — Escape не обрабатывается (по умолчанию true)
 interface Modal extends DialogComponent { readonly body: HTMLElement; readonly footer: HTMLElement; setTitle(title: string): void }
 const MODAL_CLOSE_EVENT = 'rte:modal-close';
 
@@ -395,15 +395,17 @@ const chemfigToSvg: (code: string, options?: ChemistrySvgOptions) => string | nu
 interface ChemistrySvgOptions { scale?: number }
 const serializeChemfig: (structure: ChemStructure) => string;               // пустая модель → ''
 const layoutChemistry: (structure: ChemStructure, options?: ChemistrySvgOptions) => ChemLayout;
+const renderChemistry: (structure: ChemStructure, options?: ChemistrySvgOptions) => RenderedChemistry;   // SVG и раскладка за один проход
+interface RenderedChemistry { svg: string; layout: ChemLayout }
 interface ChemLayout { width: number; height: number; atoms: ChemLayoutAtom[]; bonds: ChemLayoutBond[] }
 const formatChemLabel: (label: string) => string;
 const layoutChemTree: (root: ChemAtom, x: number, y: number, options: TreeLayoutOptions) => ChemTreeLayout;
 
 type ChemBondType = '-' | '=' | '~';
 interface ChemAtom { label: string; bonds: ChemBond[] }
-interface ChemBond { type: ChemBondType; angle: number | null; branch: boolean; target: ChemAtom }
-interface ChemChain { kind: 'chain'; root: ChemAtom; startAngle: number }
-interface ChemRing { kind: 'ring'; size: number; aromatic: boolean; bonds: ChemBondType[]; vertices: Array<ChemAtom | null> }
+interface ChemBond { type: ChemBondType; angle: number | null; branch: boolean; target: ChemAtom; spec?: string }   // spec — параметры в скобках, которых модель не хранит, дословно
+interface ChemChain { kind: 'chain'; root: ChemAtom; startAngle: number; startSpec?: string; lossy?: boolean }
+interface ChemRing { kind: 'ring'; size: number; aromatic: boolean; bonds: ChemBondType[]; vertices: Array<ChemAtom | null>; startSpec?: string; lossy?: boolean }
 type ChemStructure = ChemChain | ChemRing;
 ```
 
@@ -424,7 +426,7 @@ interface DrawingDialogOptions {
 }
 const DEFAULT_SCENE_EDITORS: SceneEditorFactory[];                       // встроенные вкладки конструкторов
 // Конструкторы (17-drawings.md, «Конструкторы»)
-interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScene(): RawScene; onChange(listener: () => void): Unsubscribe; focus(): void }
+interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScene(): RawScene; onChange(listener: () => void): Unsubscribe; focus(): void; cancel?(): void }   // cancel — Escape: бросает незаконченное построение, инструмент «Выбрать», снимает выделение; сцену не меняет
 interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; icon?: BuilderIconId; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
 interface SceneEditorContext { t: Translate; scans?: string[] }
 type RawScene = Record<string, unknown>;

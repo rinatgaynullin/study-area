@@ -282,6 +282,17 @@ The packages are not published yet; everything below lands in the first release.
   empty so screen readers announce what appears in it.
 - The toolbar measures itself above `collapseBelow` and folds groups one by
   one into the `⋯` menu instead of wrapping.
+- `closeOnEscape?: boolean` in `ModalOptions` (default `true`): with `false` the
+  modal does not handle Escape, neither closing nor stopping the event.
+- `@rich-editor/drawings`: the optional `SceneEditor.cancel()`; the four
+  built-in constructors drop an unfinished construction, return to the Select
+  tool and clear the selection without changing the scene.
+- `@rich-editor/chemistry`: `renderChemistry` (SVG and layout in one pass),
+  `ChemBond.spec`, `ChemChain.startSpec`, `ChemRing.startSpec`, `lossy`; the
+  `chemistry_readonly` message key.
+- `@rich-editor/chemistry`: read-only mode for structures the model cannot
+  rewrite without loss; the builder is locked and the code is not changed (with
+  `code: true` the fixed code unlocks it).
 
 ### Changed
 
@@ -352,6 +363,30 @@ The packages are not published yet; everything below lands in the first release.
 - Dropdown panels are `position: fixed` popovers (`.rte-popover.rte-dropdown__panel`).
 - The size-limit error of the recorder uses `error_audio_too_large` with the
   byte limit instead of the duration message.
+- The drawing and structure dialogs no longer close on Escape (they open with
+  `closeOnEscape: false`); the cross and «Отмена» close them. In the drawing
+  dialog Escape calls `SceneEditor.cancel()` of the active tab, in the structure
+  dialog it clears the selection.
+- `@rich-editor/chemistry`: bond options the model does not store (`[::30]`,
+  `[:30,1.5]`) are kept verbatim and written back unchanged after an edit.
+- `@rich-editor/chemistry`: a chain before a ring (`CH_3-CH_2-*6(…)`) is parsed
+  in the right order, the last prefix atom touches the ring; it is written as
+  `*6((-CH_2-CH_3)------)`.
+- `@rich-editor/chemistry`: in the «Своя группа» field a number of two or more
+  digits is written in braces (`C6H12O6` → `C_6H_{12}O_6`); with `code: true`
+  and a broken code the «Код chemfig» block is open and the field is focused.
+- `@rich-editor/drawings`: with `json: true` the kind of a new drawing on the
+  JSON tab comes from the text (`physics` or `elements` vs `2d`, `3d`, `plot_2d`,
+  vertices, edges, plots), so a physics scene pasted after the geometry tab stays
+  physics; an existing node keeps its kind; empty text takes the kind of the last
+  constructor.
+- `@rich-editor/core`: formula dialog — a template pressed before MathLive loads
+  or while a saved formula is opening is queued and inserted when the field is
+  ready (not for an unreadable formula); saving remembers the formula and
+  position before awaiting the converter and drops a stale result, the button is
+  disabled while saving; if the converter module fails to load the dialog shows
+  `formula_load_failed` (read-only field on open, instead of `formula_invalid` on
+  save); a second open during the MathLive load does not create a second field.
 
 ### Removed
 
@@ -377,6 +412,10 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Fixed
 
+- `@rich-editor/core`: the modal autofocus no longer steals focus that was
+  already placed inside the dialog during the frame.
+- `@rich-editor/core`: the formula dialog no longer keeps the previous formula
+  in the field while a new one is converted to LaTeX.
 - `@rich-editor/drawings`: in the pyramid sample (the JSON tab and the demo) the
   dashes were on the wrong edges.
 - `@rich-editor/ocr`: scene JSON from recognition text keeps its LaTeX.
