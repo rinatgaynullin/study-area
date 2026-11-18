@@ -91,20 +91,5 @@ export const actionButton = (label: string, icon: BuilderIconId, onClick: () => 
   return button;
 };
 
-/** Поле панели свойств: подпись и элемент управления. */
-export const propertyField = (label: string, control: HTMLElement): HTMLElement =>
-  el('label', { class: 'rte-builder__prop', children: [el('span', { class: 'rte-builder__prop-label', text: label }), control] });
-
-export const selectControl = (options: Array<{ value: string; label: string }>, value: string): HTMLSelectElement => {
-  const select = el('select', { class: 'rte-input rte-builder__select' });
-
-  options.forEach((option) => {
-    const item = el('option', { text: option.label, attrs: { value: option.value } });
-
-    if (option.value === value) item.selected = true;
-
-    select.appendChild(item);
-  });
-
-  return select;
-};
+/** Поля панели свойств переехали в `fields.ts`; отсюда — для прежних импортов. */
+export { propertyField, selectControl } from './fields';

@@ -2,6 +2,27 @@ export type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } fr
 export { HistoryStack, cloneScene } from './history';
 export { ChangeEmitter, HIT_RADIUS_PX, SketchCanvas, type PointerInfo, type SketchCanvasOptions } from './sketch-canvas';
 export { ToolBar, actionButton, propertyField, selectControl, type ToolButton, type ToolBarOptions } from './tool-bar';
+export {
+  checkField,
+  colorField,
+  numberField,
+  pairField,
+  propsEmpty,
+  propsTitle,
+  selectField,
+  sliderField,
+  textField,
+  type CheckFieldOptions,
+  type FieldOption,
+  type NumberFieldOptions,
+  type NumberPair,
+  type PairFieldOptions,
+  type SelectFieldOptions,
+  type SliderField,
+  type SliderFieldOptions,
+  type TextFieldOptions,
+} from './fields';
+export { ColorPicker, DRAWING_COLORS, findDrawingColor, type ColorPickerOptions, type DrawingColor, type DrawingColorId } from './color-picker';
 export { BUILDER_ICONS, createBuilderIcon, type BuilderIconId, type BuilderIconShape, type BuilderIconSpec } from './builder-icons';
 export {
   angleBetween,
@@ -28,6 +49,19 @@ export { planimetryEditorFactory } from './planimetry-editor';
 export { stereometryEditorFactory, projectVertex, unprojectToGround, parseAngleVertices } from './stereometry-editor';
 export { STEREOMETRY_MESSAGES } from './stereometry-messages';
 export { plotsEditorFactory } from './plots-editor';
+export {
+  applyFunctionParam,
+  describeFunction,
+  functionLabel,
+  functionParams,
+  functionText,
+  isFunctionLabel,
+  type FormulaPart,
+  type FunctionParam,
+  type FunctionParamId,
+  type FunctionPlot,
+  type ParabolaForm,
+} from './plot-functions';
 export { PLOTS_MESSAGES } from './plots-messages';
 export { physicsEditorFactory } from './physics-editor';
 export { PHYSICS_BUILDER_MESSAGES } from './physics-messages';

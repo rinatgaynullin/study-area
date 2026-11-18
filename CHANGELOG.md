@@ -294,6 +294,22 @@ The packages are not published yet; everything below lands in the first release.
   rewrite without loss; the builder is locked and the code is not changed (with
   `code: true` the fixed code unlocks it).
 
+- `@rich-editor/drawings`: the «Функция» block of the plots constructor. A
+  selected line, parabola, hyperbola, root or circle gets a formula card in
+  school notation with the numbers filled in, and a slider, a number field and
+  a hint for every parameter; the parabola is written in vertex or general
+  form. The `plot_2d` scene format is unchanged. The «Подписать график
+  формулой» checkbox keeps the curve `label` equal to its formula. Exported:
+  `functionParams`, `applyFunctionParam`, `describeFunction`, `functionText`,
+  `functionLabel`, `isFunctionLabel` and the related types.
+- `@rich-editor/drawings`: a shared colour palette (`DRAWING_COLORS`,
+  `findDrawingColor`, `ColorPicker`, `colorField`) and the `drawings_color_*`
+  message keys.
+- `@rich-editor/drawings`: the shared property fields module
+  `builders/fields.ts` (`propsTitle`, `propsEmpty`, `textField`, `numberField`,
+  `checkField`, `selectField`, `pairField`, `sliderField`, `colorField`) used
+  by all four constructors.
+
 ### Changed
 
 - `@rich-editor/chemistry`: the dialog no longer asks for chemfig code by
@@ -388,6 +404,19 @@ The packages are not published yet; everything below lands in the first release.
   `formula_load_failed` (read-only field on open, instead of `formula_invalid` on
   save); a second open during the MathLive load does not create a second field.
 
+- `@rich-editor/drawings`: a plot label draws a power (`^2`, `^{…}`) as a
+  superscript in SVG; in TikZ a decimal comma between digits in math mode is
+  wrapped as `{,}` (`toLatexMath`), for every label.
+- `@rich-editor/drawings`: the parabola vertex and stretches and the points of
+  a line segment are stored with 4 decimal places instead of 2.
+- `@rich-editor/drawings`: in the plots and physics constructors the colour is
+  chosen from ten swatches (an unknown scene colour is kept as an extra swatch);
+  the hex input and the named list are removed.
+- `@rich-editor/drawings`: the template palette of the plots constructor
+  collapses to one row of icon buttons while a function is selected.
+- `@rich-editor/drawings`: a label text is trimmed; an empty number field input
+  is ignored.
+
 ### Removed
 
 - `@rich-editor/chemistry`: the `chemistry_preview` and `chemistry_empty`
@@ -409,6 +438,10 @@ The packages are not published yet; everything below lands in the first release.
   `error_formula_render_failed`, `common_delete`, `common_ok`.
   Added: `toolbar_label`, `upload_image`, `upload_audio`, `upload_file`,
   `error_audio_too_large`.
+- `@rich-editor/drawings`: the `drawings_plots_color_*`,
+  `drawings_physics_color_*`, `drawings_plots_prop_hex` and
+  `drawings_physics_prop_color_custom` message keys; the «Направление» and
+  «Растяжение…» fields of plot curves (replaced by the «Функция» block).
 
 ### Fixed
 

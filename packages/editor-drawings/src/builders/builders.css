@@ -197,6 +197,111 @@
   height: 40px;
 }
 
+/* Общие поля (fields.ts): флажок в строку с подписью, а не подпись над ним. */
+.rte-builder__prop--check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.rte-builder__prop--check .rte-builder__prop-label {
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: inherit;
+}
+
+.rte-builder__check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--rte-color-primary, #ff892e);
+}
+
+.rte-builder__check:disabled + .rte-builder__prop-label {
+  color: var(--rte-color-muted, #898794);
+}
+
+/* Пара чисел: точка (x, y), область (от, до). */
+.rte-builder__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+}
+
+/* Строка-ползунок: ползунок и число рядом, пояснение под ними. */
+.rte-builder__slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 8px;
+}
+
+.rte-builder__range {
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  accent-color: var(--rte-color-primary, #ff892e);
+}
+
+.rte-builder__prop-hint {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  color: var(--rte-color-muted, #898794);
+}
+
+/*
+ * Палитра цвета (color-picker.ts): пять плиток в ряд. Фон плитки задаёт код
+ * из константы палитры; выбранная отмечена кольцом и галочкой, не только цветом.
+ */
+.rte-builder__colors {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 40px));
+  gap: 8px;
+  padding: 2px;
+}
+
+.rte-builder__color {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-sm, 6px);
+  cursor: pointer;
+}
+
+.rte-builder__color[aria-checked='true'] {
+  box-shadow:
+    inset 0 0 0 2px var(--rte-color-bg, #fff),
+    0 0 0 2px var(--rte-color-text, #221f2e);
+}
+
+.rte-builder__color:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 3px;
+}
+
+.rte-builder__color-check {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.5;
+  pointer-events: none;
+}
+
+.rte-builder__color-default {
+  justify-self: start;
+}
+
+.rte-builder__color-default[aria-pressed='true'] {
+  border-color: var(--rte-color-primary, #ff892e);
+  background: var(--rte-color-primary-soft, #fff1e0);
+  box-shadow: inset 0 0 0 1px var(--rte-color-primary, #ff892e);
+}
+
 .rte-builder__remove {
   justify-self: start;
   height: auto;
@@ -366,6 +471,15 @@
       white-space: normal;
       text-align: center;
       line-height: 1.2;
+    }
+
+    /* Графики с выделенной функцией: шаблоны одной строкой значков — место блоку «Функция». */
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-builder__palette.rte-plots__palette--compact {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-plots__palette--compact .rte-builder__tool {
+      padding: 0;
     }
   }
 }

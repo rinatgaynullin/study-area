@@ -27,13 +27,6 @@
   font-size: 13px;
 }
 
-.rte-builder__check {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--rte-color-primary, #ff892e);
-}
-
 .rte-builder__ticks {
   display: grid;
   gap: 4px;

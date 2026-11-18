@@ -6,7 +6,8 @@ import { BUILDER_MESSAGES } from '../src/builders/messages';
 import { physicsEditorFactory } from '../src/builders/physics-editor';
 import { PHYSICS_BUILDER_MESSAGES } from '../src/builders/physics-messages';
 import type { SceneEditor } from '../src/builders/types';
-import { renderPhysicsSvg } from '../src/render/physics-svg';
+import { worldToSvg } from '../src/render/coords';
+import { renderPhysicsSvg, resolvePhysicsViewport } from '../src/render/physics-svg';
 import { normalizePhysicsScene } from '../src/scene/normalize';
 import type { PhysicsElementType } from '../src/scene/types';
 
@@ -93,6 +94,15 @@ const propInput = <T extends HTMLElement = HTMLInputElement>(editor: SceneEditor
   if (!input) throw new Error(`Нет поля «${prop}»`);
 
   return input;
+};
+
+/** Плитка палитры цвета (`data-color` — id цвета, `other` или `default`). */
+const colorTile = (editor: SceneEditor, color: string): HTMLButtonElement => {
+  const tile = editor.element.querySelector<HTMLButtonElement>(`.rte-builder__props [data-color="${color}"]`);
+
+  if (!tile) throw new Error(`Нет плитки «${color}»`);
+
+  return tile;
 };
 
 const change = (input: HTMLInputElement | HTMLSelectElement, value: string): void => {
@@ -337,14 +347,19 @@ describe('конструктор физических схем', () => {
     change(propInput<HTMLSelectElement>(physics, 'vectorType'), 'acc');
     expect(elementsOf(physics)[0].vectorType).toBe('acc');
 
-    change(propInput<HTMLSelectElement>(physics, 'color'), '#dc2626');
+    colorTile(physics, 'red').click();
     expect(elementsOf(physics)[0].color).toBe('#dc2626');
+    expect(colorTile(physics, 'red').getAttribute('aria-checked')).toBe('true');
+    // Фокус остаётся на выбранной плитке, хотя панель собрана заново.
+    expect(document.activeElement).toBe(colorTile(physics, 'red'));
 
-    change(propInput(physics, 'color-hex'), '#ABCDEF');
-    expect(elementsOf(physics)[0].color).toBe('#abcdef');
-
-    change(propInput(physics, 'color-hex'), 'не цвет');
-    expect(elementsOf(physics)[0].color).toBe('#abcdef');
+    // «Обычный цвет» убирает поле: элемент рисуется цветом своего вида.
+    colorTile(physics, 'default').click();
+    expect(elementsOf(physics)[0]).not.toHaveProperty('color');
+    expect(colorTile(physics, 'default').getAttribute('aria-pressed')).toBe('true');
+    expect(physics.element.querySelector('.rte-builder__props [role="radio"][aria-checked="true"]')).toBeNull();
+    // Поля hex больше нет.
+    expect(physics.element.querySelector('.rte-builder__props input[type="text"][placeholder^="#"]')).toBeNull();
 
     const dashed = propInput(physics, 'dashed');
 
@@ -367,6 +382,49 @@ describe('конструктор физических схем', () => {
     pickTool(physics, 'select');
     click(canvas, [0, -1]);
     expect(physics.element.querySelector('.rte-builder__props-title')?.textContent).toBe('Шар');
+  });
+
+  it('цвет из сцены: прежний синий — плитка «Синий», чужой — плитка «Цвет из чертежа»; без нажатия сцена прежняя', () => {
+    const physics = create();
+    const canvas = canvasOf(physics);
+    const scene = {
+      type: 'physics',
+      elements: [
+        { id: 'F', type: 'vector', vectorType: 'force', points: [[0, 0], [3, 0]], color: '#3B82F6' },
+        { id: 'G', type: 'vector', vectorType: 'force', points: [[0, 2], [3, 2]], color: '#ABCDEF' },
+      ],
+    };
+
+    physics.load(scene);
+
+    const before = JSON.stringify(physics.getScene());
+    // Загрузка вписывает сцену в полотно: щелчок — по тому же окну просмотра.
+    const view = resolvePhysicsViewport(normalizePhysicsScene(scene), { width: 560, height: 420, autoFit: true });
+    const clickFitted = (world: Vec2): void => {
+      const at = worldToSvg(world, view.scale, view.cx, view.cy);
+
+      ['pointerdown', 'pointerup'].forEach((type) => {
+        canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: at.x, clientY: at.y, pointerId: 1 }));
+      });
+    };
+
+    pickTool(physics, 'select');
+    clickFitted([1.5, 0]);
+    expect(colorTile(physics, 'blue').getAttribute('aria-checked')).toBe('true');
+    expect(physics.element.querySelector('.rte-builder__props [data-color="other"]')).toBeNull();
+
+    clickFitted([1.5, 2]);
+
+    const other = colorTile(physics, 'other');
+
+    expect(other.getAttribute('aria-checked')).toBe('true');
+    expect(other.getAttribute('aria-label')).toBe('Цвет из чертежа');
+    expect(physics.element.querySelectorAll('.rte-builder__props [role="radio"]')).toHaveLength(11);
+    expect(JSON.stringify(physics.getScene())).toBe(before);
+
+    colorTile(physics, 'green').click();
+    expect(elementsOf(physics)[1].color).toBe('#16a34a');
+    expect(physics.element.querySelector('.rte-builder__props [data-color="other"]')).toBeNull();
   });
 
   it('деления осей добавляются, правятся и удаляются', () => {
