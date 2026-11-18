@@ -167,6 +167,16 @@ describe('разбор и вычисление записи', () => {
     expect(valuesOf('log₂(0,5)', [0])).toEqual([-1]);
   });
 
+  it('log(…): с точкой с запятой запятые десятичные, без неё запятая верхнего уровня разделяет аргументы', () => {
+    expect(valuesOf('log(2; 0,5)', [0])).toEqual([-1]);
+    expect(valuesOf('log(0,5; x)', [4])).toEqual([-2]);
+    expect(valuesOf('log(2; sin(0,5x))', [Math.PI])).toEqual([0]);
+    expect(valuesOf('log(2,8)', [0])).toEqual([3]);
+    expect(valuesOf('log(2, x)', [8])).toEqual([3]);
+    // Вложенная скобка без `;` — запятая в ней десятичная.
+    expect(valuesOf('log(2, sin(0,5x))', [Math.PI])).toEqual([0]);
+  });
+
   it('длинные и глубокие записи: разбор отклоняет без исключения, принятые считаются и записываются', () => {
     const huge = [
       `${'('.repeat(2000)}x${')'.repeat(2000)}`,
@@ -253,6 +263,20 @@ const show = (parts: FormulaPart[]): string =>
     })
     .join('');
 
+/** Запись `text` разбирается в функцию с теми же значениями, что у `ast`, в нескольких точках. */
+const expectSame = (ast: FunctionNode, text: string): void => {
+  const back = astOf(text);
+  const params = { a: 2, b: 3, k: -1, p: 5, i: 7, l: 3, n: 2, s: 2, c: 3 };
+
+  [-1.5, 0.5, 2, 4].forEach((x) => {
+    const want = evaluateFunction(ast, x, params);
+    const got = evaluateFunction(back, x, params);
+
+    if (Number.isNaN(want)) expect(got).toBeNaN();
+    else expect(got).toBeCloseTo(want, 9);
+  });
+};
+
 describe('запись для карточки и для подписи', () => {
   /** Запись → части карточки, строка для чтения, подпись на чертеже. */
   const TABLE: Array<[string, string, string, string]> = [
@@ -261,13 +285,13 @@ describe('запись для карточки и для подписи', () => 
     ['|x - 2|', '|[<x> − 2]|', 'y = |x − 2|', 'y = |x - 2|'],
     ['1/x', '[1 / <x>]', 'y = 1/x', 'y = 1/x'],
     ['2/(x-1)+1', '[2 / <x> − 1] + 1', 'y = 2/(x − 1) + 1', 'y = 2/(x - 1) + 1'],
-    ['1/2x', '[1 / 2]<x>', 'y = 1/2x', 'y = (1/2)x'],
+    ['1/2x', '[1 / 2]<x>', 'y = (1/2)x', 'y = (1/2)x'],
     ['1/(2x)', '[1 / 2<x>]', 'y = 1/(2x)', 'y = 1/(2x)'],
     ['sqrt(x+1)', '√[<x> + 1]', 'y = √(x + 1)', 'y = √(x + 1)'],
     ['√x', '√[<x>]', 'y = √x', 'y = √x'],
     ['cbrt(x)', '√3[<x>]', 'y = ∛x', 'y = ∛x'],
-    ['2^x', '2^[<x>]', 'y = 2ˣ', 'y = 2^x'],
-    ['2^(-x)', '2^[−<x>]', 'y = 2⁻ˣ', 'y = 2^{-x}'],
+    ['2^x', '2^[<x>]', 'y = 2^x', 'y = 2^x'],
+    ['2^(-x)', '2^[−<x>]', 'y = 2^(−x)', 'y = 2^{-x}'],
     ['x^(1/3)', '<x>^[[1 / 3]]', 'y = x^(1/3)', 'y = x^{1/3}'],
     ['x^10', '<x>^[10]', 'y = x¹⁰', 'y = x^{10}'],
     ['(x+1)^2', '(<x> + 1)^[2]', 'y = (x + 1)²', 'y = (x + 1)^2'],
@@ -296,16 +320,42 @@ describe('запись для карточки и для подписи', () => 
     expect(show(functionParts(ast, ','))).toBe(parts);
     expect(functionText(ast, ',')).toBe(plain);
     expect(functionLabelText(ast, ',')).toBe(label);
-    // Подпись разбирается обратно в ту же функцию.
-    const back = astOf(functionLabelText(ast, '.'));
+    // Подпись и запись для aria-label разбираются обратно в ту же функцию.
+    expectSame(ast, functionLabelText(ast, '.'));
+    expectSame(ast, functionText(ast, ','));
+  });
 
-    [-1.5, 0.5, 2].forEach((x) => {
-      const want = evaluateFunction(ast, x, { a: 2, b: 3, k: -1 });
-      const got = evaluateFunction(back, x, { a: 2, b: 3, k: -1 });
+  /** Произведения и вложенные записи: подпись и aria-label разбираются обратно в ту же функцию. */
+  const ROUND_TRIP: Array<[string, string, string]> = [
+    ['p*i*x', 'y = p·ix', 'y = p·ix'],
+    ['l*n*x', 'y = l·nx', 'y = l·nx'],
+    ['a*b*x', 'y = a·bx', 'y = a·bx'],
+    ['a*sin(x)', 'y = a·sin(x)', 'y = a·sin(x)'],
+    ['x*|x|', 'y = x·|x|', 'y = x·|x|'],
+    ['|x*|x||', 'y = |x·|x||', 'y = |x·|x||'],
+    ['2*a*x', 'y = 2ax', 'y = 2ax'],
+    ['a*e*x', 'y = a·ex', 'y = a·ex'],
+    ['s*e*c', 'y = s·e·c', 'y = s·e·c'],
+    ['e*x*p', 'y = ex·p', 'y = ex·p'],
+    ['x^a*b', 'y = x^a·b', 'y = x^a·b'],
+    ['sqrt(a)*b', 'y = √a·b', 'y = √a·b'],
+    ['2|x|+|x-1|', 'y = 2·|x| + |x - 1|', 'y = 2·|x| + |x − 1|'],
+    ['(1/2)x', 'y = (1/2)x', 'y = (1/2)x'],
+    ['sqrt(x)^2', 'y = √x^2', 'y = √x^2'],
+    ['sqrt(x+1)^2', 'y = √(x + 1)^2', 'y = √(x + 1)^2'],
+    ['2^(x^(x+1))', 'y = 2^{x^{x + 1}}', 'y = 2^(x^(x + 1))'],
+    ['log(a; x)', 'y = log(a; x)', 'y = log(a; x)'],
+    ['log(0.5; x) + log(2; a)', 'y = log(0,5; x) + log₂(a)', 'y = log(0,5; x) + log₂(a)'],
+  ];
 
-      if (Number.isNaN(want)) expect(got).toBeNaN();
-      else expect(got).toBeCloseTo(want, 9);
-    });
+  it.each(ROUND_TRIP)('%s: подпись %s, aria-label %s', (text, label, plain) => {
+    const ast = astOf(text);
+
+    expect(functionLabelText(ast, ',')).toBe(label);
+    expect(functionText(ast, ',')).toBe(plain);
+    expectSame(ast, label);
+    expectSame(ast, plain);
+    expectSame(ast, functionLabelText(ast, '.'));
   });
 
   it('десятичный разделитель — по ключу перевода', () => {
@@ -335,6 +385,10 @@ describe('запись для карточки и для подписи', () => 
     ['sqrt((x+1)/2)', 'y = \\sqrt{(x + 1)/2}'],
     ['cbrt(x - 1)', 'y = \\sqrt[3]{x - 1}'],
     ['log(2; x)', 'y = \\log_{2}(x)'],
+    ['log(a; x)', 'y = \\log(a; x)'],
+    ['log(0,5; x)', 'y = \\log(0{,}5; x)'],
+    ['2^(x^(x+1))', 'y = 2^{x^{x + 1}}'],
+    ['a*sin(x)', 'y = a\\cdot\\sin(x)'],
     ['0,5x^(1/3)', 'y = 0{,}5x^{1/3}'],
     ['e^x', 'y = e^x'],
   ];

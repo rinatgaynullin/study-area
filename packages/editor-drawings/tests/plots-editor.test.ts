@@ -165,6 +165,13 @@ const errorOf = (editor: SceneEditor): string | null => {
   return error && !error.hidden ? error.textContent : null;
 };
 
+/** Сообщение под полем записи о графике: точек нет или график за краем листа. */
+const noticeOf = (editor: SceneEditor): string | null => {
+  const notice = editor.element.querySelector<HTMLElement>('.rte-plots-fn__notice');
+
+  return notice && !notice.hidden ? notice.textContent : null;
+};
+
 /** Движение ползунка: событие `input`, а `change` — когда отпустили. */
 const slide = (input: HTMLInputElement, value: string): void => {
   input.value = value;
@@ -1201,6 +1208,115 @@ describe('набранная функция', () => {
     plots.cancel();
     expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
     expect(hint()).toContain('«+ Функция»');
+  });
+
+  it('функция за краем листа сохраняется и загружается обратно; под полем — подсказка о «Показать целиком»', () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'x^2 + 100');
+    commitExpr(plots);
+    expect(noticeOf(plots)).toBe('График сейчас за краем листа. Нажми «Показать целиком»');
+
+    const scene = plots.getScene();
+    const branches = scene.plots as Array<Record<string, unknown>>;
+
+    // Ветви — из запасного окна: тот же отрезок по x без обрезки по высоте.
+    expect(branches).toHaveLength(1);
+    expect(branches[0]).toMatchObject({ type: 'freehand', expr: 'x^2 + 100', fn: 'plot_1' });
+    expect((branches[0]?.points as Point[]).every(([x, y]) => Math.abs(y - (x * x + 100)) < 0.01)).toBe(true);
+
+    const saved = JSON.parse(JSON.stringify(scene)) as Record<string, unknown>;
+
+    plots.load(saved);
+    expect(plots.getScene()).toEqual(saved);
+    clickCurve(plots, String(branches[0]?.color));
+    expect(propsTitle(plots)).toBe('Функция');
+    expect(exprOf(plots).value).toBe('x^2 + 100');
+
+    // Корень правее видимого отрезка — из окна x от −100 до 100.
+    addFunction(plots);
+    typeExpr(plots, 'sqrt(x - 50)');
+    commitExpr(plots);
+
+    const root = plotsOf(plots).find((plot) => plot.expr === 'sqrt(x - 50)');
+
+    expect((root?.points as Point[])[0]?.[0]).toBeCloseTo(50, 2);
+  });
+
+  it('функция без точек: сообщение под полем, в сцену не пишется', () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'sqrt(-1 - x^2)');
+    commitExpr(plots);
+    expect(errorOf(plots)).toBeNull();
+    expect(noticeOf(plots)).toBe('У этой функции нет точек — график нарисовать нельзя');
+    expect(plotsOf(plots)).toEqual([]);
+
+    // Запись с точками — сообщения нет.
+    typeExpr(plots, 'x');
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)).toHaveLength(1);
+  });
+
+  it('«Показать целиком» вписывает функцию за краем листа: кривая видна, подсказки нет', async () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'x^2 + 100');
+    commitExpr(plots);
+
+    const color = String(plotsOf(plots)[0]?.color);
+    const visiblePoints = (): number => {
+      const layer = canvasOf(plots).querySelector('.rte-sketch__layer');
+      const d = layer?.querySelector(`path[stroke="${color}"]`)?.getAttribute('d') ?? layer?.querySelector(`polyline[stroke="${color}"]`)?.getAttribute('points') ?? '';
+      const numbers = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+      const pairs = numbers.flatMap((value, index) => (index % 2 === 0 ? [[value, numbers[index + 1] ?? NaN]] : []));
+
+      return pairs.filter(([x, y]) => x >= 0 && x <= 560 && y >= 0 && y <= 420).length;
+    };
+
+    expect(visiblePoints()).toBe(0);
+    actionButton(plots, 'Показать целиком').click();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(visiblePoints()).toBeGreaterThan(1);
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)[0]).toMatchObject({ expr: 'x^2 + 100' });
+  });
+
+  it('fn уникален в сцене: замена готовой кривой и вставка копии не берут занятый fn', () => {
+    const plots = create();
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'a', type: 'freehand', points: [[-3, -3], [3, 3]], expr: 'x', fn: 'p', color: '#16a34a' },
+        // Ломаная с неразобранной записью — обычная ломаная, но её fn тоже занят.
+        { id: 'b', type: 'freehand', points: [[-3, 1], [3, 1]], expr: 'x^', fn: 'plot_1', color: '#7c3aed' },
+        { id: 'p', type: 'parabola', vertex: [0, -2], direction: 'up', stretchX: 1, stretchY: 1, color: '#dc2626' },
+      ],
+    });
+    clickCurve(plots, '#dc2626');
+    typeExpr(plots, 'x^2 - 3');
+    commitExpr(plots);
+
+    const fns = (): unknown[] => plotsOf(plots).map((plot) => plot.fn);
+    const replaced = plotsOf(plots).find((plot) => plot.expr === 'x^2 - 3');
+
+    expect(replaced).toMatchObject({ id: 'p', color: '#dc2626' });
+    expect(replaced?.fn).not.toBe('p');
+    expect(replaced?.fn).not.toBe('plot_1');
+
+    actionButton(plots, 'Копировать график').click();
+    actionButton(plots, 'Вставить график').click();
+
+    const all = fns();
+
+    expect(all).toHaveLength(4);
+    expect(new Set(all).size).toBe(4);
   });
 
   it('вид полотна изменился — ветви пересчитываются под новое окно', async () => {

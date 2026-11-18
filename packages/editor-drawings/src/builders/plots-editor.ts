@@ -7,7 +7,7 @@ import type { BuilderIconId } from './builder-icons';
 import { DRAWING_COLORS, DRAWING_COLOR_HEX } from './color-picker';
 import { checkField, colorField, numberField, pairField, propsEmpty, propsTitle, textField, type NumberPair } from './fields';
 import { functionLabelText, parseFunction, sameLabel } from './function-expr';
-import { FunctionPanel, type FunctionView } from './function-panel';
+import { FunctionPanel, type FunctionNotice, type FunctionView } from './function-panel';
 import { sampleFunction } from './function-sampler';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
@@ -140,13 +140,26 @@ interface FunctionItem {
   color?: string;
   style?: 'solid' | 'dashed';
   label?: string;
-  /** Ветви под текущий вид полотна. */
+  /** Ветви под текущий вид полотна, а если в видимом окне графика нет — из запасного окна (см. `sample`). */
   branches: Vec2[][];
+  /** Где нашлись ветви при последнем пересчёте; у загруженных дословно — не задано. */
+  reach?: Reach;
   /** Ветви, как их загрузили: пока функцию не правили и вид не меняли, сцена отдаёт их дословно. */
   loaded?: RawScene[];
   /** Чужие поля первой ветви. */
   extra?: RawScene;
 }
+
+/**
+ * Где нашлись ветви функции: в видимом окне; только в запасном — график за
+ * краем листа, но в сцену пишется; нигде — точек у функции нет.
+ */
+type Reach = 'visible' | 'outside' | 'none';
+
+/** Значения запасного окна не выше этого по модулю: обрезки по высоте как бы нет, но ветви конечны. */
+const FALLBACK_HEIGHT = 1e4;
+/** Отрезок по x запасного окна, если на видимом отрезке точек нет. */
+const FALLBACK_WIDTH: [number, number] = [-100, 100];
 
 /** Элемент конструктора: график сцены или набранная функция. */
 type Item = PlotItem | FunctionItem;
@@ -550,6 +563,15 @@ const plotDistance = (plot: Item, p: Vec2): number => {
 /** Точки важнее кривых, кривые важнее областей: точка на параболе выбирается первой. */
 const hitRank = (plot: Item): number => (plot.type === 'point' ? 0 : plot.type === 'shading' ? 2 : 1);
 
+/** Сообщение под полем записи: точек нет вовсе или график за краем листа. */
+const noticeOf = (item: FunctionItem): FunctionNotice => {
+  if (item.expr === '' || item.loaded) return null;
+
+  if (item.reach === 'none') return 'none';
+
+  return item.reach === 'outside' ? 'outside' : null;
+};
+
 /** Новая набранная функция: ветви считаются под вид полотна отдельно. */
 const newFunction = (id: string, expr: string, color: string | undefined): FunctionItem => ({
   id,
@@ -793,7 +815,10 @@ class PlotsEditor implements SceneEditor {
     const { state } = this;
 
     // Новый вид полотна, ещё не пересчитанный к кадру, — в сцену уже с новыми ветвями.
-    if (this.resampleFrame !== null) this.resampleAll();
+    if (this.resampleFrame !== null) {
+      this.resampleAll();
+      this.refreshNotice();
+    }
 
     const scene: RawScene = {
       ...state.extra,
@@ -925,24 +950,46 @@ class PlotsEditor implements SceneEditor {
     return { from: -cx / scale, to: (CANVAS_WIDTH - cx) / scale, yFrom: (cy - CANVAS_HEIGHT) / scale, yTo: cy / scale };
   }
 
-  /** Ветви функции под текущий вид полотна; запись не разбирается — ветвей нет. */
-  private sample(item: FunctionItem): Vec2[][] {
+  /**
+   * Ветви функции под текущий вид полотна; запись не разбирается — ветвей нет.
+   * Если в видимом окне графика нет, ветви для сцены — из запасного окна: тот
+   * же отрезок по x без обрезки по высоте, затем x от −100 до 100 — иначе
+   * правильная функция за краем листа (`x^2 + 100`) пропала бы из сцены.
+   */
+  private sample(item: FunctionItem): { branches: Vec2[][]; reach: Reach } {
     const parsed = parseFunction(item.expr);
 
-    if (!parsed.ok) return [];
+    if (!parsed.ok) return { branches: [], reach: 'none' };
 
+    const visible = this.visibleWindow();
     // Точность упрощения — полпикселя полотна.
-    return sampleFunction(parsed.ast, item.params, { ...this.visibleWindow(), domain: item.domain, tolerance: 0.5 / this.canvas.viewport.scale });
+    const common = { domain: item.domain, tolerance: 0.5 / this.canvas.viewport.scale };
+    const branches = sampleFunction(parsed.ast, item.params, { ...visible, ...common });
+
+    if (branches.length > 0) return { branches, reach: 'visible' };
+
+    const tall = { yFrom: -FALLBACK_HEIGHT, yTo: FALLBACK_HEIGHT };
+    const [from, to] = FALLBACK_WIDTH;
+    const nearby = sampleFunction(parsed.ast, item.params, { from: visible.from, to: visible.to, ...tall, ...common });
+    const outside = nearby.length > 0 ? nearby : sampleFunction(parsed.ast, item.params, { from, to, ...tall, ...common });
+
+    return { branches: outside, reach: outside.length > 0 ? 'outside' : 'none' };
+  }
+
+  /** Функция с ветвями под текущий вид (или запасными). */
+  private withBranches(item: FunctionItem): FunctionItem {
+    const { branches, reach } = this.sample(item);
+
+    return { ...item, branches, reach };
   }
 
   /** Функция после правки: ветви заново, загруженные ветви больше не отдаются дословно. */
   private resampled(item: FunctionItem): FunctionItem {
-    const next: FunctionItem = { ...item, branches: [] };
+    const next: FunctionItem = { ...item };
 
     delete next.loaded;
-    next.branches = this.sample(next);
 
-    return next;
+    return this.withBranches(next);
   }
 
   /** Вид полотна изменился: картинка — сразу, ветви функций — к следующему кадру. */
@@ -957,6 +1004,7 @@ class PlotsEditor implements SceneEditor {
       this.resampleFrame = null;
       this.resampleAll();
       this.render();
+      this.refreshNotice();
     });
   }
 
@@ -983,7 +1031,7 @@ class PlotsEditor implements SceneEditor {
 
   /** После отмены и повтора ветви правленых функций — под текущий вид, загруженные — как были. */
   private refreshBranches(): void {
-    this.state.plots = this.state.plots.map((item) => (isFunctionItem(item) && !item.loaded ? { ...item, branches: this.sample(item) } : item));
+    this.state.plots = this.state.plots.map((item) => (isFunctionItem(item) && !item.loaded ? this.withBranches(item) : item));
   }
 
   /** Подпись-формула элемента: у функции — её запись, у готовой кривой — её формула; иначе `null`. */
@@ -1011,12 +1059,28 @@ class PlotsEditor implements SceneEditor {
   private functionView(item: FunctionLike): FunctionView {
     const formulaLabel = this.state.formulaLabels.includes(item.id);
 
-    if (!isFunctionItem(item)) return { expr: plotExpression(item, this.separator) ?? '', params: [], domain: item.domain, color: item.color, formulaLabel };
+    if (!isFunctionItem(item)) {
+      return { expr: plotExpression(item, this.separator) ?? '', params: [], domain: item.domain, color: item.color, formulaLabel, notice: null };
+    }
 
     const parsed = parseFunction(item.expr);
     const names = parsed.ok ? parsed.params : [];
 
-    return { expr: item.expr, params: names.map((name) => ({ name, value: item.params[name] ?? 1 })), domain: item.domain, color: item.color, formulaLabel };
+    return {
+      expr: item.expr,
+      params: names.map((name) => ({ name, value: item.params[name] ?? 1 })),
+      domain: item.domain,
+      color: item.color,
+      formulaLabel,
+      notice: noticeOf(item),
+    };
+  }
+
+  /** Под видом полотна пересчитались ветви: сообщение под полем выделенной функции — заново. */
+  private refreshNotice(): void {
+    const selected = this.selectedPlot();
+
+    if (selected && isFunctionItem(selected)) this.functionPanel.setNotice(noticeOf(selected));
   }
 
   private selectedIndex(): number {
@@ -1051,7 +1115,8 @@ class PlotsEditor implements SceneEditor {
           type: 'function',
           expr,
           params: {},
-          fn: current.id,
+          // `fn` не должен совпасть с занятым: id готовой кривой мог уже стать чьим-то `fn`.
+          fn: this.uniqueFn(current.id, current.id),
           branches: [],
           ...(current.domain ? { domain: current.domain } : {}),
           ...(current.color ? { color: current.color } : {}),
@@ -1331,8 +1396,37 @@ class PlotsEditor implements SceneEditor {
     return id;
   }
 
+  /** Свободный id: не совпадает ни с id, ни с `fn` в сцене — новая функция берёт его и как `fn`. */
   private nextId(): string {
-    return this.freshId(new Set(this.state.plots.flatMap((item) => (isFunctionItem(item) ? [item.id, item.fn] : [item.id]))));
+    return this.freshId(new Set([...this.state.plots.map((item) => item.id), ...this.takenFns()]));
+  }
+
+  /**
+   * Занятые `fn`: у функций (и загруженных из сцены) и у прочих графиков, что
+   * несут его в чужих полях (ломаная с неразобранной записью). `except` — id
+   * элемента, чей `fn` не в счёт.
+   */
+  private takenFns(except?: string): Set<string> {
+    return new Set(
+      this.state.plots.flatMap((item) => {
+        if (item.id === except) return [];
+
+        if (isFunctionItem(item)) return [item.fn];
+
+        const fn = item.extra?.fn;
+
+        return typeof fn === 'string' ? [fn] : [];
+      }),
+    );
+  }
+
+  /** `fn` новой функции: `preferred`, если он в сцене свободен, иначе свободный `plot_n`. */
+  private uniqueFn(preferred: string, except?: string): string {
+    const taken = this.takenFns(except);
+
+    if (!taken.has(preferred)) return preferred;
+
+    return this.freshId(new Set([...this.state.plots.map((item) => item.id), ...taken]));
   }
 
   /** График из нормализованной сцены: с уникальным id и без привязки центра к вершине — центр уже разрешён. */
@@ -1796,7 +1890,7 @@ class PlotsEditor implements SceneEditor {
     const id = this.nextId();
     const copy = cloneScene(this.clipboard);
     // Копия функции — новая функция со своим `fn`; на месте оригинала, сдвинуть её может только запись.
-    const plot = isFunctionItem(copy) ? this.resampled({ ...copy, id, fn: id }) : translatePlot({ ...copy, id }, PASTE_OFFSET);
+    const plot = isFunctionItem(copy) ? this.resampled({ ...copy, id, fn: this.uniqueFn(id) }) : translatePlot({ ...copy, id }, PASTE_OFFSET);
 
     this.clipboard = cloneScene(plot);
     this.addPlot(plot);

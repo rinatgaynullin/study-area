@@ -66,6 +66,8 @@ export const PLOTS_MESSAGES: Record<string, Messages> = {
     drawings_plots_fn_error_left: 'Слева от «=» может быть только y или f(x)',
     drawings_plots_fn_error_long: 'Слишком длинная запись',
     drawings_plots_fn_error_nesting: 'Слишком много вложенных скобок',
+    drawings_plots_fn_no_points: 'У этой функции нет точек — график нарисовать нельзя',
+    drawings_plots_fn_offscreen: 'График сейчас за краем листа. Нажми «Показать целиком»',
   },
   en: {
     drawings_plots_hint_select: 'Press “+ Function” and type a formula. Click a plot to select it and drag to move it; hold Shift to move it off the grid. Drag an empty spot to move the sheet',
@@ -128,5 +130,7 @@ export const PLOTS_MESSAGES: Record<string, Messages> = {
     drawings_plots_fn_error_left: 'Only y or f(x) can be to the left of “=”',
     drawings_plots_fn_error_long: 'The formula is too long',
     drawings_plots_fn_error_nesting: 'Too many nested brackets',
+    drawings_plots_fn_no_points: 'This function has no points — there is no graph to draw',
+    drawings_plots_fn_offscreen: 'The graph is off the sheet right now. Press “Fit to view”',
   },
 };

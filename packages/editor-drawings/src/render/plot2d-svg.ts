@@ -99,25 +99,67 @@ const drawCurve = (builder: SvgBuilder, d: string, color: string, dashed: boolea
 /** Подпись графика: дроби и греческие буквы в юникод, остальные команды — без слеша. */
 const plotLabelText = (label: string): string => prettifyMathText(label).replace(/\\/g, '');
 
-/** Степень в подписи: `^2`, `^{…}` или один знак после `^`. */
-const POWER_PATTERN = /\^(?:\{([^{}]*)\}|([^\s{}]))/g;
-
 interface LabelPiece {
   text: string;
   power: boolean;
 }
 
+/** Закрывающая фигурная скобка к открытой в `text[open]` с учётом вложенных; пары нет — `-1`. */
+const closingBrace = (text: string, open: number): number => {
+  let depth = 0;
+  let index = open;
+  let found = -1;
+
+  while (index < text.length && found < 0) {
+    const char = text.charAt(index);
+
+    if (char === '{') depth += 1;
+
+    if (char === '}') depth -= 1;
+
+    if (char === '}' && depth === 0) found = index;
+
+    index += 1;
+  }
+
+  return found;
+};
+
+/**
+ * Степень в подписи с позиции `at` (там `^`): `^2`, один знак или `^{…}` с
+ * вложенными скобками. Вложенная степень поднята вместе с внешней, внутри —
+ * строкой со знаком `^` и обычными скобками: `^{x^{x + 1}}` → `x^(x + 1)`.
+ * Не степень (`^` в конце, перед пробелом, без пары к `{`) — `null`.
+ */
+const powerAt = (label: string, at: number): { text: string; end: number } | null => {
+  const next = label.charAt(at + 1);
+
+  if (next === '{') {
+    const close = closingBrace(label, at + 1);
+
+    return close < 0 ? null : { text: label.slice(at + 2, close).replace(/\{/g, '(').replace(/\}/g, ')'), end: close + 1 };
+  }
+
+  return next === '' || /[\s{}]/.test(next) ? null : { text: next, end: at + 2 };
+};
+
 /** Подпись графика кусками: обычный текст и показатели степени по порядку; пустые куски выброшены. */
 const labelPieces = (label: string): LabelPiece[] => {
   const pieces: LabelPiece[] = [];
   let from = 0;
+  let at = label.indexOf('^');
 
-  [...label.matchAll(POWER_PATTERN)].forEach((match) => {
-    const at = match.index;
+  while (at >= 0) {
+    const power = powerAt(label, at);
 
-    pieces.push({ text: label.slice(from, at), power: false }, { text: match[1] ?? match[2] ?? '', power: true });
-    from = at + match[0].length;
-  });
+    if (power) {
+      pieces.push({ text: label.slice(from, at), power: false }, { text: power.text, power: true });
+      from = power.end;
+    }
+
+    at = label.indexOf('^', power ? power.end : at + 1);
+  }
+
   pieces.push({ text: label.slice(from), power: false });
 
   return pieces.filter((piece) => piece.text !== '');

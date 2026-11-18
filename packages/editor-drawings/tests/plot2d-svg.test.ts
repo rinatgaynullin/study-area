@@ -220,6 +220,18 @@ describe('renderPlot2dContent: точки и подписи', () => {
     expect(svg).toMatch(/class="rte-drawing__halo"[^>]*>y = 2\(x - 1\)<tspan dy="-4.5" font-size="8.5">2<\/tspan>/);
   });
 
+  it('вложенная степень поднята целиком, внутри — строкой со знаком ^, без фигурных скобок', () => {
+    const svg = plotSvg([
+      { type: 'line', k: 1, b: 0, label: 'y = 2^{x^{x + 1}} + 1', color: '#dc2626' },
+      { type: 'line', k: 2, b: 0, label: 'y = 2^{x + 1', color: '#10b981' },
+    ]);
+    const label = (color: string): string => new RegExp(`<text[^>]*fill="${color}">(.*?)</text>`).exec(svg)?.[1] ?? '';
+
+    expect(label('#dc2626')).toBe('y = 2<tspan dy="-4.5" font-size="8.5">x^(x + 1)</tspan><tspan dy="4.5"> + 1</tspan>');
+    // Без пары к `{` — степени нет, подпись как есть.
+    expect(label('#10b981')).toBe('y = 2^{x + 1');
+  });
+
   it('подпись без степени рисуется как раньше, степень с разметкой экранируется', () => {
     const plain = plotSvg([{ type: 'hyperbola', center: [1, -2], k: 3, label: 'y = 3/(x - 1) - 2', color: '#dc2626' }]);
 

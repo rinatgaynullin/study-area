@@ -201,8 +201,8 @@ const splitWord = (word: string, start: number): Token[] => {
 
 /**
  * Число со строки `text` с позиции `start`: цифры и один разделитель — точка
- * или запятая между цифрами. `comma: false` — внутри `log(…)`, где запятая
- * разделяет аргументы: `log(2,8)`.
+ * или запятая между цифрами. `comma: false` — на верхнем уровне `log(…)` без
+ * точки с запятой, где запятая разделяет аргументы: `log(2,8)`.
  */
 const readNumber = (text: string, start: number, comma: boolean): Token => {
   const match = (comma ? /^(?:\d+(?:[.,]\d+)?|\.\d+)/ : /^(?:\d+(?:\.\d+)?|\.\d+)/).exec(text.slice(start));
@@ -232,9 +232,32 @@ const readSuperscript = (text: string, start: number): Token => {
   return token('super', digits, start, text.slice(start, index), Number(digits));
 };
 
+/**
+ * Есть ли точка с запятой на верхнем уровне скобки, открытой в `text[open]`:
+ * у `log(2; 0,5)` запятая десятичная, у `log(2,8)` — разделитель аргументов.
+ */
+const hasTopSemicolon = (text: string, open: number): boolean => {
+  let depth = 0;
+  let index = open;
+  let found = false;
+
+  while (index < text.length && !found && (depth > 0 || index === open)) {
+    const symbol = SYMBOLS[text.charAt(index)];
+
+    if (symbol === '(') depth += 1;
+
+    if (symbol === ')') depth -= 1;
+
+    found = symbol === ';' && depth === 1;
+    index += 1;
+  }
+
+  return found;
+};
+
 const tokenize = (text: string, offset: number): Token[] => {
   const tokens: Token[] = [];
-  // Открытые скобки: `true` — скобка сразу за `log`, внутри неё запятая разделяет аргументы.
+  // Открытые скобки: `true` — скобка сразу за `log` без `;` внутри: на её верхнем уровне запятая разделяет аргументы.
   const parens: boolean[] = [];
   let afterLog = false;
   let index = 0;
@@ -244,7 +267,7 @@ const tokenize = (text: string, offset: number): Token[] => {
     const at = offset + index;
 
     if (!/\s/.test(char)) {
-      if (SYMBOLS[char] === '(') parens.push(afterLog);
+      if (SYMBOLS[char] === '(') parens.push(afterLog && !hasTopSemicolon(text, index));
 
       if (SYMBOLS[char] === ')') parens.pop();
 
@@ -254,7 +277,8 @@ const tokenize = (text: string, offset: number): Token[] => {
     if (/\s/.test(char)) {
       index += 1;
     } else if (isDigit(char) || (char === '.' && isDigit(text.charAt(index + 1)))) {
-      const number = readNumber(text, index, !parens.includes(true));
+      // Запятая — разделитель только на верхнем уровне такого `log(…)`: `log(2, sin(0,5x))`.
+      const number = readNumber(text, index, parens[parens.length - 1] !== true);
 
       tokens.push({ ...number, start: at });
       index += number.raw.length;
@@ -862,37 +886,31 @@ const leftmost = (node: FunctionNode): FunctionNode => {
   return node;
 };
 
-const rightmost = (node: FunctionNode): FunctionNode => {
-  if (node.kind === 'binary') return node.op === '^' ? node : rightmost(node.right);
-
-  if (node.kind === 'negate') return rightmost(node.operand);
-
-  return node;
-};
-
-const isLetter = (node: FunctionNode): boolean => node.kind === 'x' || node.kind === 'param' || node.kind === 'constant';
-
 /** Функция с названием (`sin`, `log`) — не модуль и не корень, которые пишутся знаком. */
 const isNamedCall = (node: FunctionNode): boolean => node.kind === 'call' && node.fn !== 'abs' && node.fn !== 'sqrt' && node.fn !== 'cbrt';
 
 /**
- * Знак между множителями: число на букву — без знака (`2x`, `2sin(x)`),
- * буква перед названием функции — пробел (`x sin(x)`), перед числом и
- * между `x` и буквой — точка (`x·2`, `2·3`, `x·a`).
+ * Знак между множителями по тому, чем кончается запись левого и
+ * начинается запись правого: число и буква, буква и скобка — без знака
+ * (`2x`, `2sin(x)`, `a(x + 1)`); перед числом и модулем — точка (`x·2`,
+ * `x·|x|`: иначе `|x·|x||` не разобрать); после `x` перед названием
+ * функции — пробел (`x sin(x)`), перед буквой — точка (`x·a`). Буква перед
+ * буквой — точка: без неё `p·i·x` слилось бы в `pix` (π·x), `l·n·x` — в
+ * `lnx`. Буква перед `x` — без знака (`kx`, `ax²`): слова записи с `x`
+ * после буквы нет (в `exp` за `x` идёт буква, а после `x` знак ставится
+ * всегда).
  */
-const productSign = (left: FunctionNode, right: FunctionNode, rightGrouped: boolean): string => {
-  if (rightGrouped) return '';
+const productSign = (left: string, right: string, call: boolean): string => {
+  const last = left.charAt(left.length - 1);
+  const first = right.charAt(0);
 
-  const first = leftmost(right);
-  const last = rightmost(left);
+  if (isDigit(first) || first === '|') return '·';
 
-  const bothModuli = first.kind === 'call' && first.fn === 'abs' && last.kind === 'call' && last.fn === 'abs';
+  if (!isLatin(last) || !isLatin(first)) return '';
 
-  if (first.kind === 'number' || (last.kind === 'x' && isLetter(first)) || bothModuli) return '·';
+  if (last === 'x') return call ? ' ' : '·';
 
-  if (isNamedCall(first) && (isLetter(last) || last.kind === 'number')) return last.kind === 'number' ? '' : ' ';
-
-  return '';
+  return first === 'x' ? '' : '·';
 };
 
 /** Число с разделителем `separator`. */
@@ -955,10 +973,12 @@ class Writer {
         // В подписи частное перед множителем — в скобках: `(1/2)x`, а не `1/2x`.
         const leftGrouped = precedence(left) < 2 || (this.mode === 'label' && left.kind === 'binary' && left.op === '/');
         const rightGrouped = precedence(right) < 2 || right.kind === 'negate';
+        const leftParts = this.maybeGrouped(left, leftGrouped);
+        const rightParts = this.maybeGrouped(right, rightGrouped);
+        // Знак — по записи одной строкой: там буквы соседних множителей сливаются в слово.
+        const sign = productSign(flatten(leftParts, 'label'), flatten(rightParts, 'label'), isNamedCall(leftmost(right)));
 
-        return [...this.maybeGrouped(left, leftGrouped), text(productSign(left, right, rightGrouped)), ...this.maybeGrouped(right, rightGrouped)].filter(
-          (part) => part.kind !== 'text' || part.text !== '',
-        );
+        return [...leftParts, text(sign), ...rightParts].filter((part) => part.kind !== 'text' || part.text !== '');
       }
       case '/':
         if (this.mode === 'card') return [{ kind: 'frac', num: this.write(left), den: this.write(right) }];
@@ -982,7 +1002,14 @@ class Writer {
       case 'cbrt':
         return [{ kind: 'sqrt', body: this.write(first), index: '3' }];
       case 'log':
-        return second ? [text('log'), { kind: 'sub', body: this.write(first) }, ...this.grouped(second)] : [];
+        if (!second) return [];
+
+        // Одной строкой основание индексом — только натуральное (`log₂(x)`), иначе `log(a; x)`: `_{a}` не разобрать обратно и не нарисовать.
+        if (this.mode === 'label' && !(first.kind === 'number' && /^\d+$/.test(first.text))) {
+          return [text('log('), ...this.write(first), text('; '), ...this.write(second), text(')')];
+        }
+
+        return [text('log'), { kind: 'sub', body: this.write(first) }, ...this.grouped(second)];
       default:
         return [text(node.name), ...this.grouped(first)];
     }
@@ -994,12 +1021,11 @@ export const functionParts = (ast: FunctionNode, separator: string): FormulaPart
 
 // ------------------------------------------------------ запись одной строкой
 
-const SUPERSCRIPT_CHARS: Record<string, string> = { '-': '⁻', [MINUS]: '⁻', n: 'ⁿ', x: 'ˣ' };
-
+/** Надстрочно — только целый показатель (`x²`, `x⁻¹`): такой разбор читает обратно. */
 const superscript = (value: string): string | null => {
-  const chars = [...value].map((char) => (isDigit(char) ? SUPERSCRIPT_DIGITS.charAt(Number(char)) : SUPERSCRIPT_CHARS[char]));
+  if (!/^[-−]?\d+$/.test(value)) return null;
 
-  return chars.every((char) => char !== undefined) ? chars.join('') : null;
+  return [...value].map((char) => (isDigit(char) ? SUPERSCRIPT_DIGITS.charAt(Number(char)) : SUPERSCRIPT_MINUS)).join('');
 };
 
 const subscript = (value: string): string | null => (/^\d+$/.test(value) ? [...value].map((char) => SUBSCRIPT_DIGITS.charAt(Number(char))).join('') : null);
@@ -1010,13 +1036,15 @@ const isSimple = (parts: FormulaPart[], flat: string): boolean => parts.length =
 type Flavor = 'plain' | 'label';
 
 /**
- * Части одной строкой: `plain` — для чтения и `aria-label` (`x²`, `−`),
- * `label` — подпись на чертеже: дефис вместо минуса, степень `^2` и `^{…}` —
- * её поднимает рендер SVG и понимает LaTeX.
+ * Части одной строкой: `plain` — для чтения и `aria-label` (`x²`, `−`,
+ * `^(…)`), `label` — подпись на чертеже: дефис вместо минуса, степень `^2`
+ * и `^{…}` — её поднимает рендер SVG и понимает LaTeX. Обе разбираются
+ * обратно в ту же функцию.
  */
-const flatten = (parts: FormulaPart[], flavor: Flavor): string => parts.map((part) => flattenPart(part, flavor)).join('');
+const flatten = (parts: FormulaPart[], flavor: Flavor): string => parts.map((part, index) => flattenPart(part, flavor, parts[index - 1])).join('');
 
-const flattenPart = (part: FormulaPart, flavor: Flavor): string => {
+/** `previous` — часть перед этой: надстрочная цифра после корня ушла бы под корень (`√x²` = `√(x²)`). */
+const flattenPart = (part: FormulaPart, flavor: Flavor, previous?: FormulaPart): string => {
   switch (part.kind) {
     case 'text':
       return flavor === 'label' ? part.text.split(MINUS).join('-') : part.text;
@@ -1024,10 +1052,13 @@ const flattenPart = (part: FormulaPart, flavor: Flavor): string => {
       return part.name;
     case 'sup': {
       const body = flatten(part.body, flavor);
+      const raised = flavor === 'plain' && previous?.kind !== 'sqrt' ? superscript(body) : null;
 
-      if (flavor === 'plain') return superscript(body) ?? `^(${body})`;
+      if (raised !== null) return raised;
 
-      return body.length === 1 ? `^${body}` : `^{${body}}`;
+      if (body.length === 1) return `^${body}`;
+
+      return flavor === 'label' ? `^{${body}}` : `^(${body})`;
     }
     case 'sub': {
       const body = flatten(part.body, flavor);
@@ -1052,8 +1083,13 @@ const flattenPart = (part: FormulaPart, flavor: Flavor): string => {
   }
 };
 
-/** Запись одной строкой для чтения: `y = x² − 3x + 1`, `y = 1/x` — для `aria-label` карточки. */
-export const functionText = (ast: FunctionNode, separator = ','): string => `y = ${flatten(functionParts(ast, separator), 'plain')}`;
+/**
+ * Запись одной строкой для чтения: `y = x² − 3x + 1`, `y = (1/2)x`,
+ * `y = √x^2` — для `aria-label` карточки. Та же запись, что у подписи
+ * (`functionLabelText`): однозначная, разбирается обратно в ту же функцию;
+ * отличаются только минус и целые степени надстрочными цифрами.
+ */
+export const functionText = (ast: FunctionNode, separator = ','): string => `y = ${flatten(new Writer('label', separator).write(ast), 'plain')}`;
 
 /**
  * Подпись на чертеже: `y = x^2 - 3x + 1`, `y = sin(x)`, `y = |x - 2|`.

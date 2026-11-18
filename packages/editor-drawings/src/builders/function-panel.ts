@@ -2,7 +2,19 @@ import { el, type Translate } from '@rich-editor/core';
 import { checkField, pairField, sliderField, textField, type SliderField } from './fields';
 import { functionParts, functionText, parseFunction, type FormulaPart, type FunctionNode, type ParsedFunction } from './function-expr';
 
-/** Что показывает блок: запись в поле, буквы-параметры, область, цвет карточки, признак подписи-формулы. */
+/**
+ * Сообщение под полем записи о графике правильной функции: `none` — точек
+ * нет нигде, нарисовать нельзя; `outside` — график за краем листа.
+ */
+export type FunctionNotice = 'none' | 'outside' | null;
+
+/** Ключи сообщений под полем записи. */
+const NOTICE_KEYS: Record<'none' | 'outside', string> = {
+  none: 'drawings_plots_fn_no_points',
+  outside: 'drawings_plots_fn_offscreen',
+};
+
+/** Что показывает блок: запись в поле, буквы-параметры, область, цвет карточки, признак подписи-формулы, сообщение под полем. */
 export interface FunctionView {
   /** Запись в поле: набранная функция или запись готовой кривой. */
   expr: string;
@@ -11,6 +23,7 @@ export interface FunctionView {
   domain?: [number, number];
   color?: string;
   formulaLabel: boolean;
+  notice: FunctionNotice;
 }
 
 export interface FunctionPanelOptions {
@@ -143,6 +156,9 @@ export class FunctionPanel {
 
   private readonly error: HTMLElement;
 
+  /** Сообщение о графике правильной записи: точек нет или график за краем листа. */
+  private readonly notice: HTMLElement;
+
   private readonly params: HTMLElement;
 
   /** Строки параметров: ползунок и число обновляются на месте, без пересоздания. */
@@ -154,6 +170,7 @@ export class FunctionPanel {
     errorCount += 1;
     this.card = el('div', { class: 'rte-plots-fn__formula', attrs: { role: 'img' } });
     this.error = el('p', { class: 'rte-plots-fn__error', attrs: { id: `rte-plots-fn-error-${errorCount}`, hidden: true } });
+    this.notice = el('p', { class: 'rte-builder__prop-hint rte-plots-fn__notice', attrs: { id: `rte-plots-fn-notice-${errorCount}`, role: 'status', hidden: true } });
     this.params = el('div', { class: 'rte-plots-fn__params' });
     this.element = el('section', { class: 'rte-plots-fn', attrs: { 'aria-label': options.t('drawings_plots_fn_title') } });
   }
@@ -181,6 +198,7 @@ export class FunctionPanel {
       this.card,
       this.exprField(view.expr),
       this.error,
+      this.notice,
       this.keys(),
       this.params,
       this.domainField(view.domain),
@@ -188,6 +206,7 @@ export class FunctionPanel {
     );
     this.renderCard();
     this.renderParams(view.params);
+    this.setNotice(view.notice);
 
     return this.element;
   }
@@ -221,8 +240,15 @@ export class FunctionPanel {
 
     this.renderCard();
     this.renderParams(view.params);
+    this.setNotice(view.notice);
 
     if (this.labelCheckbox) this.labelCheckbox.checked = view.formulaLabel;
+  }
+
+  /** Сообщение под полем: точек у функции нет или график сейчас за краем листа. */
+  setNotice(notice: FunctionNotice): void {
+    this.notice.hidden = notice === null;
+    this.notice.textContent = notice === null ? '' : this.options.t(NOTICE_KEYS[notice]);
   }
 
   private renderCard(): void {
@@ -230,6 +256,7 @@ export class FunctionPanel {
     const parts = ast ? functionParts(ast, this.options.separator) : [];
 
     this.card.replaceChildren(el('i', { class: 'rte-plots-fn__var', text: 'y' }), ' = ', ...formulaNodes(parts));
+    // Та же однозначная запись, что у подписи: `(1/2)x`, `√x^2` читаются обратно той же функцией.
     this.card.setAttribute('aria-label', ast ? functionText(ast, this.options.separator) : 'y =');
     // Цвет графика: строка из сцены идёт через CSSOM, недопустимую браузер просто не примет.
     this.card.style.color = view?.color ?? '';
@@ -276,7 +303,7 @@ export class FunctionPanel {
     input.setAttribute('autocorrect', 'off');
     input.setAttribute('spellcheck', 'false');
     input.setAttribute('aria-label', t('drawings_plots_fn_input'));
-    input.setAttribute('aria-describedby', this.error.id);
+    input.setAttribute('aria-describedby', `${this.error.id} ${this.notice.id}`);
     input.setAttribute('aria-invalid', 'false');
     input.addEventListener('input', () => this.typed(input.value));
     input.addEventListener('change', () => this.commit());
