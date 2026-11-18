@@ -1037,7 +1037,8 @@ export class StructureEditor {
   /**
    * Клавиши конструктора: Enter и пробел на атоме, связи или «плюсе», отмена и
    * повтор, Delete и Backspace для выделенного, Escape снимает выделение и
-   * тогда диалог не закрывает. В полях ввода клавиши остаются полю.
+   * тогда дальше не уходит; окно Escape не закрывает в любом случае. В полях
+   * ввода клавиши остаются полю.
    */
   private readonly onKeydown = (event: KeyboardEvent): void => {
     const { target } = event;

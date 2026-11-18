@@ -59,6 +59,12 @@ export interface ModalOptions {
   wide?: boolean;
   /** Окно на весь экран: тело растягивается на всю высоту (конструктор чертежей). */
   fill?: boolean;
+  /**
+   * Escape закрывает окно (по умолчанию). `false` — модалка Escape не
+   * обрабатывает вовсе: окно-конструктор само решает, что он отменяет, а
+   * закрывают его крестик и кнопка «Отмена».
+   */
+  closeOnEscape?: boolean;
   onClose?(): void;
 }
 
@@ -283,11 +289,11 @@ class ModalController implements Modal {
     this.element.style.height = `${viewport.height}px`;
   };
 
-  /** Escape закрывает диалог, Tab ходит по панели по кольцу. */
+  /** Escape закрывает диалог (если это не выключено), Tab ходит по панели по кольцу. */
   private readonly onDocumentKeydown = (event: KeyboardEvent): void => {
     if (!this.isOpen) return;
 
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && this.options.closeOnEscape !== false) {
       event.stopPropagation();
       this.close();
 

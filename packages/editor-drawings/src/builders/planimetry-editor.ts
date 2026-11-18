@@ -319,6 +319,18 @@ class PlanimetryEditor implements SceneEditor {
     this.canvas.focus();
   }
 
+  /** Escape: черновик и выделение — прочь, инструмент — «Выбрать». */
+  cancel(): void {
+    // Перетаскивание, уже сдвинувшее точку, доводится, как при отпускании.
+    if (this.drag?.moved) this.afterChange();
+
+    this.drag = null;
+    this.selection = null;
+    this.setTool('select');
+    this.render();
+    this.renderProperties();
+  }
+
   destroy(): void {
     this.disposer.dispose();
     this.changes.clear();
@@ -708,10 +720,9 @@ class PlanimetryEditor implements SceneEditor {
     }
 
     if (event.key === 'Escape') {
-      this.draft = [];
-      this.selection = null;
-      this.render();
-      this.renderProperties();
+      // Отмена сделана здесь: диалог по `defaultPrevented` её не повторяет.
+      event.preventDefault();
+      this.cancel();
     }
   };
 

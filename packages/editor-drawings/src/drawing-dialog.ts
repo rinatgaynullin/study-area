@@ -55,6 +55,20 @@ const JSON_TAB = 'json';
 /** Ни одна вкладка не выбрана: диалог только открывается или чертёж здесь не изменить. */
 const NO_TAB = '';
 
+/** Поля, в которые печатают: их значение применяется по `change`, то есть при потере фокуса. */
+const TYPED_INPUT_TYPES = new Set(['text', 'number', 'search', 'url', 'email', 'tel']);
+
+/**
+ * Недописанное значение поля возвращается к отрисованному: Escape уводит
+ * фокус на полотно, и `change` при потере фокуса не должен применить
+ * случайный ввод. Программная запись значения снимает с поля признак правки.
+ */
+const discardTypedValue = (target: EventTarget | null): void => {
+  if (target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && TYPED_INPUT_TYPES.has(target.type))) {
+    target.value = target.defaultValue;
+  }
+};
+
 /** Сцена из текста; `null` — текст не разобран. */
 const readRawScene = (text: string): RawScene | null => parseSceneJson(text) as RawScene | null;
 
@@ -264,7 +278,14 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
       ],
     });
 
-    this.modal = createModal({ title: t('drawings_title_insert_geometry'), closeLabel: t('common_close'), fill: true });
+    // Escape окно не закрывает: в конструкторе он отменяет начатое (`onEscape`),
+    // а нарисованное школьником не должно пропасть от одного нажатия.
+    this.modal = createModal({
+      title: t('drawings_title_insert_geometry'),
+      closeLabel: t('common_close'),
+      fill: true,
+      closeOnEscape: false,
+    });
 
     // Служебное — образцы, предпросмотр, TikZ — под одной свёрнутой строкой,
     // чтобы полотно занимало окно; статус остаётся снаружи, ошибку видно всегда.
@@ -328,6 +349,7 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
     this.element = this.modal.element;
 
+    this.disposer.add(on(this.modal.element, 'keydown', this.onEscape));
     this.disposer.add(on(this.tabList, 'click', this.onTabClick));
     this.disposer.add(on(this.tabList, 'keydown', this.onTabKeydown));
     this.disposer.add(on(this.codeInput, 'input', this.onCodeInput));
@@ -784,6 +806,32 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
     this.drafts.markSynced(factory.id);
     this.selectTab(target ? target.id : JSON_TAB);
     this.editors.get(this.activeTab)?.focus();
+  };
+
+  /**
+   * Escape где угодно в окне — отмена начатого в конструкторе активной
+   * вкладки и фокус обратно на полотно; окно остаётся открытым. На вкладке
+   * JSON и у чертежа, который здесь не изменить, Escape ничего не делает.
+   * Нажатие на самом полотне конструктор уже обработал (`defaultPrevented`).
+   */
+  private readonly onEscape = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+
+    const editor = this.unavailable || this.activeTab === JSON_TAB ? undefined : this.editors.get(this.activeTab);
+
+    if (!editor) return;
+
+    const handled = event.defaultPrevented;
+
+    event.preventDefault();
+
+    if (!handled) {
+      if (event.target instanceof Node && editor.element.contains(event.target)) discardTypedValue(event.target);
+
+      editor.cancel?.();
+    }
+
+    editor.focus();
   };
 
   private readonly onCancelClick = (): void => {

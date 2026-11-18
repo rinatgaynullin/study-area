@@ -643,6 +643,18 @@ class PlotsEditor implements SceneEditor {
     this.canvas.focus();
   }
 
+  /** Escape: штрих, черновик области и выделение — прочь, инструмент — «Выбрать». */
+  cancel(): void {
+    // Перетаскивание, уже сдвинувшее график, доводится, как при отпускании.
+    if (this.drag?.moved) this.afterChange();
+
+    this.drag = null;
+    this.selectedId = null;
+    this.setTool('select');
+    this.render();
+    this.renderProperties();
+  }
+
   destroy(): void {
     this.changes.clear();
     this.tools.destroy();
@@ -1004,12 +1016,9 @@ class PlotsEditor implements SceneEditor {
     }
 
     if (event.key === 'Escape') {
-      this.stroke = null;
-      this.draft = [];
-      this.drag = null;
-      this.selectedId = null;
-      this.render();
-      this.renderProperties();
+      // Отмена сделана здесь: диалог по `defaultPrevented` её не повторяет.
+      event.preventDefault();
+      this.cancel();
     }
   };
 

@@ -265,6 +265,47 @@ describe('слушатели документа у оверлеев', () => {
     modal.destroy();
   });
 
+  it('модалка с closeOnEscape: false Escape не закрывает и событие не останавливает', () => {
+    const onClose = vi.fn();
+    const outer = vi.fn();
+    const modal = createModal({ title: 'Конструктор', closeLabel: 'Закрыть', closeOnEscape: false, onClose });
+    const field = document.createElement('input');
+
+    modal.body.appendChild(field);
+    document.body.appendChild(modal.element);
+    window.addEventListener('keydown', outer);
+    modal.open();
+    field.focus();
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+    field.dispatchEvent(escape);
+    expect(modal.isVisible).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(escape.defaultPrevented).toBe(false);
+    // Событие дошло выше документа: модалка его не остановила.
+    expect(outer).toHaveBeenCalledTimes(1);
+
+    // Крестик и close() работают как раньше.
+    modal.element.querySelector<HTMLButtonElement>('.rte-modal__close')!.click();
+    expect(modal.isVisible).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    window.removeEventListener('keydown', outer);
+    modal.destroy();
+  });
+
+  it('модалка без опции закрывается по Escape и зовёт onClose', () => {
+    const onClose = vi.fn();
+    const modal = createModal({ title: 'Ссылка', closeLabel: 'Закрыть', onClose });
+
+    document.body.appendChild(modal.element);
+    modal.open();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(modal.isVisible).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    modal.destroy();
+  });
+
   it('поповер отпускает документ и окно при закрытии', () => {
     watchDocument();
 

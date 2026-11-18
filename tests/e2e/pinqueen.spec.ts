@@ -92,7 +92,7 @@ test.describe('структурные формулы', () => {
 
     // Модалка ставит автофокус на полотно в следующем кадре. Пока он не
     // случился, фокус, поставленный сценарием, он перехватит: Enter уйдёт
-    // пустому полотну, а Escape без выделения закроет окно. Ждём автофокус.
+    // пустому полотну. Ждём автофокус.
     await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__stage`)).toBeFocused();
 
     const start = page.locator(`${OPEN_MODAL} .rte-chem-builder__start`);

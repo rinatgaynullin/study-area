@@ -75,7 +75,14 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
     this.codeInput = options.code ? this.createCodeInput() : null;
     this.codeBlock = this.codeInput ? this.createCodeBlock(this.codeInput) : null;
 
-    this.modal = createModal({ title: t('chemistry_title_insert'), closeLabel: t('common_close'), wide: true });
+    // Escape окно не закрывает: собранная формула не должна пропасть от одного
+    // нажатия. В конструкторе он снимает выделение, в поле кода — ничего.
+    this.modal = createModal({
+      title: t('chemistry_title_insert'),
+      closeLabel: t('common_close'),
+      wide: true,
+      closeOnEscape: false,
+    });
 
     this.modal.body.appendChild(
       el('div', {

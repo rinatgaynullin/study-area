@@ -734,6 +734,18 @@ class PhysicsEditor implements SceneEditor {
     this.canvas.focus();
   }
 
+  /** Escape: выделение — прочь, инструмент — «Выбрать». */
+  cancel(): void {
+    // Перетаскивание, уже сдвинувшее элемент, доводится, как при отпускании.
+    if (this.drag?.moved) this.afterChange();
+
+    this.drag = null;
+    this.selection = null;
+    this.setTool('select');
+    this.render();
+    this.renderProperties();
+  }
+
   destroy(): void {
     this.propsDisposer.dispose();
     this.disposer.dispose();
@@ -1262,10 +1274,9 @@ class PhysicsEditor implements SceneEditor {
     }
 
     if (event.key === 'Escape') {
-      this.selection = null;
-      this.drag = null;
-      this.render();
-      this.renderProperties();
+      // Отмена сделана здесь: диалог по `defaultPrevented` её не повторяет.
+      event.preventDefault();
+      this.cancel();
     }
   };
 

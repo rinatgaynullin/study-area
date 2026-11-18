@@ -447,6 +447,62 @@ describe('возможность целиком: кнопка, диалог, п�
   });
 });
 
+describe('Escape в окне структуры', () => {
+  const escape = (target: Element): void => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  };
+
+  const isOpen = (dialog: HTMLElement): boolean => !dialog.hidden;
+
+  it('снимает выделение, без выделения окно остаётся открытым; закрывают «Отмена» и крестик', () => {
+    mountEditor();
+    toolbarButton('Структурная формула').click();
+
+    let dialog = openDialog();
+    const stage = dialog.querySelector<HTMLElement>('.rte-chem-builder__stage')!;
+
+    dialog.querySelector('[data-action="start"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(dialog.querySelector('[data-plus]')).not.toBeNull();
+
+    escape(stage);
+    expect(dialog.querySelector('[data-plus]')).toBeNull();
+    expect(isOpen(dialog)).toBe(true);
+
+    escape(stage);
+    escape(dialog.querySelector('.rte-modal__panel')!);
+    expect(isOpen(dialog)).toBe(true);
+    // Собранное не пропало.
+    expect(dialog.querySelector<HTMLButtonElement>('.rte-button--primary')?.disabled).toBe(false);
+
+    [...dialog.querySelectorAll<HTMLButtonElement>('.rte-modal__footer .rte-button')]
+      .find((button) => button.textContent === 'Отмена')
+      ?.click();
+    expect(isOpen(dialog)).toBe(false);
+
+    toolbarButton('Структурная формула').click();
+    dialog = openDialog();
+    dialog.querySelector<HTMLButtonElement>('.rte-modal__close')?.click();
+    expect(isOpen(dialog)).toBe(false);
+  });
+
+  it('в поле кода Escape ничего не делает', () => {
+    mountEditor({ features: [createChemistryFeature({ code: true })] });
+    toolbarButton('Структурная формула').click();
+
+    const dialog = openDialog();
+
+    typeCode(dialog, 'CH_3-CH_2');
+
+    const input = dialog.querySelector<HTMLTextAreaElement>('textarea')!;
+
+    input.focus();
+    escape(input);
+    expect(isOpen(dialog)).toBe(true);
+    expect(input.value).toBe('CH_3-CH_2');
+    expect(document.activeElement).toBe(input);
+  });
+});
+
 describe('вьюер', () => {
   it('документная часть пропускает разметку и дорисовывает SVG по коду', async () => {
     host = document.createElement('div');
