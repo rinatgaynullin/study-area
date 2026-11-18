@@ -42,6 +42,8 @@ export type BuilderIconId =
   | 'resetView'
   | 'copy'
   | 'paste'
+  // Отметки
+  | 'check'
   // Тела
   | 'cube'
   | 'box'
@@ -236,6 +238,11 @@ export const BUILDER_ICONS: Record<BuilderIconId, BuilderIconSpec> = {
       ['line', { x1: 9, y1: 12, x2: 15, y2: 12 }],
       ['line', { x1: 9, y1: 16, x2: 13, y2: 16 }],
     ],
+  },
+
+  // Галочка выбранной плитки цвета.
+  check: {
+    shapes: [['polyline', { points: '5,12.5 10,17.5 19.5,7' }]],
   },
 
   // Тела — только видимые рёбра и дуги: пунктир невидимых на 20px превращается

@@ -2,6 +2,27 @@ export type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } fr
 export { HistoryStack, cloneScene } from './history';
 export { ChangeEmitter, HIT_RADIUS_PX, SketchCanvas, type PointerInfo, type SketchCanvasOptions } from './sketch-canvas';
 export { ToolBar, actionButton, propertyField, selectControl, type ToolButton, type ToolBarOptions } from './tool-bar';
+export {
+  checkField,
+  colorField,
+  numberField,
+  pairField,
+  propsEmpty,
+  propsTitle,
+  selectField,
+  sliderField,
+  textField,
+  type CheckFieldOptions,
+  type FieldOption,
+  type NumberFieldOptions,
+  type NumberPair,
+  type PairFieldOptions,
+  type SelectFieldOptions,
+  type SliderField,
+  type SliderFieldOptions,
+  type TextFieldOptions,
+} from './fields';
+export { ColorPicker, DRAWING_COLORS, findDrawingColor, type ColorPickerOptions, type DrawingColor, type DrawingColorId } from './color-picker';
 export { BUILDER_ICONS, createBuilderIcon, type BuilderIconId, type BuilderIconShape, type BuilderIconSpec } from './builder-icons';
 export {
   angleBetween,

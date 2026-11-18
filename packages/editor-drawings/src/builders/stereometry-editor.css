@@ -1,21 +1,9 @@
-/* Конструктор стереометрии: ряд координат, переключатели и заметки в панели свойств. */
+/* Конструктор стереометрии: ряд координат и заметки в панели свойств. */
 
 .rte-stereo__coords {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-}
-
-.rte-stereo__check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--rte-ui-font-size-sm, 14px);
-  cursor: pointer;
-}
-
-.rte-stereo__check input {
-  margin: 0;
 }
 
 .rte-stereo__note {
@@ -36,12 +24,6 @@
 /* Пока сцену вращают, курсор — «схваченная рука» на всём полотне. */
 .rte-stereo--rotating .rte-sketch {
   cursor: grabbing;
-}
-
-.rte-stereo__range {
-  width: 100%;
-  margin: 0;
-  accent-color: var(--rte-color-primary, #ff892e);
 }
 
 .rte-stereo__reset {

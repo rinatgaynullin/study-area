@@ -471,7 +471,7 @@ describe('конструктор стереометрии', () => {
     clickVertex(canvas, [0, 0, 5.5]);
 
     const name = propsOf(stereo).querySelector<HTMLInputElement>('input[type="text"]');
-    const z = propsOf(stereo).querySelector<HTMLInputElement>('input[data-axis="z"]');
+    const z = propsOf(stereo).querySelector<HTMLInputElement>('input[data-prop="z"]');
 
     expect(name?.value).toBe('S');
     expect(z?.value).toBe('5.5');
@@ -725,7 +725,7 @@ describe('конструктор стереометрии', () => {
     expect(vertexOf(stereo, 'S')).toEqual([1.5, -1, 5.5]);
     // Во время движения — только перерисовка, координаты в панели не отстают.
     expect(changes).toBe(0);
-    expect(propsOf(stereo).querySelector<HTMLInputElement>('input[data-axis="x"]')?.value).toBe('1.5');
+    expect(propsOf(stereo).querySelector<HTMLInputElement>('input[data-prop="x"]')?.value).toBe('1.5');
     pointerAt(canvas, 'pointerup', { x: target.x + grab.x, y: target.y + grab.y });
 
     expect(changes).toBe(1);
@@ -1662,7 +1662,7 @@ describe('конструктор стереометрии', () => {
     view = fittedViewport(stereo);
     pickTool(stereo, 'select');
     clickVertex(canvas, [0, 0, 8]);
-    setValue(firstControl(stereo, 'input[data-axis="z"]'), '3');
+    setValue(firstControl(stereo, 'input[data-prop="z"]'), '3');
     expect(anglesOf(stereo)[0]?.label).toBe(pyramidAngle(3));
 
     const top = svgOf([0, 0, 3]);
@@ -1744,7 +1744,7 @@ describe('конструктор стереометрии', () => {
 
     // Правка геометрии: первая подпись — новая величина, чужие не трогаются.
     clickVertex(canvas, [2, 3.46, 0]);
-    setValue(firstControl(stereo, 'input[data-axis="y"]'), '4');
+    setValue(firstControl(stereo, 'input[data-prop="y"]'), '4');
 
     const angles = anglesOf(stereo);
 

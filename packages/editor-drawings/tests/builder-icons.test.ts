@@ -24,6 +24,7 @@ const ICON_IDS: BuilderIconId[] = [
   'resetView',
   'copy',
   'paste',
+  'check',
   'cube',
   'box',
   'prism',

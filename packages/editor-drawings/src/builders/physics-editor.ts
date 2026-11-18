@@ -6,7 +6,8 @@ import type { AxisTick, PhysicsElement, PhysicsElementType, PhysicsScene, Vec2 }
 import { distance, distanceToSegment, projectOnSegment, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
 import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
-import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
+import { checkField, colorField, numberField, propertyField, propsEmpty, propsTitle, selectField, textField } from './fields';
+import { ToolBar, actionButton, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
 type Tool = 'select' | 'delete';
@@ -232,18 +233,6 @@ const ANGLE_TYPE_OPTIONS: Option[] = [
   { value: 'inner', labelKey: 'drawings_physics_angle_inner' },
   { value: 'outer', labelKey: 'drawings_physics_angle_outer' },
 ];
-
-const COLOR_OPTIONS: Option[] = [
-  { value: '', labelKey: 'drawings_physics_color_default' },
-  { value: '#2563eb', labelKey: 'drawings_physics_color_blue' },
-  { value: '#dc2626', labelKey: 'drawings_physics_color_red' },
-  { value: '#16a34a', labelKey: 'drawings_physics_color_green' },
-  { value: '#f97316', labelKey: 'drawings_physics_color_orange' },
-  { value: '#8b5cf6', labelKey: 'drawings_physics_color_purple' },
-  { value: '#64748b', labelKey: 'drawings_physics_color_gray' },
-];
-
-const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 /** Типы, у которых рендер читает `label`. */
 const LABELED_TYPES = new Set<PhysicsElementType>(['vector', 'angle', 'dimension_line', 'thermo_point', 'piston_vessel', 'optics_arrow']);
@@ -1354,12 +1343,12 @@ class PhysicsEditor implements SceneEditor {
     this.properties.replaceChildren();
 
     if (!item) {
-      this.properties.appendChild(el('p', { class: 'rte-builder__props-empty', text: t('drawings_nothing_selected') }));
+      this.properties.appendChild(propsEmpty(t('drawings_nothing_selected')));
 
       return;
     }
 
-    this.properties.appendChild(el('h4', { class: 'rte-builder__props-title', text: this.titleOf(item) }));
+    this.properties.appendChild(propsTitle(this.titleOf(item)));
 
     if (item.type === 'text_label') this.textField(item, 'text', t('drawings_prop_text'));
 
@@ -1475,17 +1464,16 @@ class PhysicsEditor implements SceneEditor {
   }
 
   private textField(item: PhysicsItem, key: 'label' | 'text' | 'charge' | 'xLabel' | 'yLabel' | 'originLabel', label: string): void {
-    const input = el('input', { class: 'rte-input', attrs: { type: 'text', value: item[key] ?? '', 'data-prop': key } });
-
-    this.properties.appendChild(propertyField(label, input));
-    this.propsDisposer.add(
-      on(input, 'change', () => {
-        const value = input.value.trim();
-
-        this.mutateSelected(item.id, (target) => {
-          if (value) target[key] = value;
-          else delete target[key];
-        });
+    this.properties.appendChild(
+      textField({
+        label,
+        value: item[key] ?? '',
+        prop: key,
+        onChange: (value) =>
+          this.mutateSelected(item.id, (target) => {
+            if (value) target[key] = value;
+            else delete target[key];
+          }),
       }),
     );
   }
@@ -1496,51 +1484,41 @@ class PhysicsEditor implements SceneEditor {
     label: string,
     options: { min?: number; max?: number; step: number; fallback: number; signed?: boolean },
   ): void {
-    const input = el('input', {
-      class: 'rte-input',
-      attrs: {
-        type: 'number',
-        step: String(options.step),
-        min: options.min !== undefined ? String(options.min) : undefined,
-        max: options.max !== undefined ? String(options.max) : undefined,
-        value: String(item[key] ?? options.fallback),
-        'data-prop': key,
-      },
-    });
+    this.properties.appendChild(
+      numberField({
+        label,
+        value: item[key] ?? options.fallback,
+        step: options.step,
+        min: options.min,
+        max: options.max,
+        prop: key,
+        onChange: (value) => {
+          const belowMin = options.min !== undefined && value < options.min;
+          const aboveMax = options.max !== undefined && value > options.max;
 
-    this.properties.appendChild(propertyField(label, input));
-    this.propsDisposer.add(
-      on(input, 'change', () => {
-        const value = Number(input.value);
-        const belowMin = options.min !== undefined && value < options.min;
-        const aboveMax = options.max !== undefined && value > options.max;
+          if (belowMin || aboveMax || (!options.signed && options.min === undefined && value <= 0)) return false;
 
-        if (!Number.isFinite(value) || belowMin || aboveMax || (!options.signed && options.min === undefined && value <= 0)) {
-          this.renderProperties();
+          this.mutateSelected(item.id, (target) => {
+            target[key] = roundTo(value);
+          });
 
-          return;
-        }
-
-        this.mutateSelected(item.id, (target) => {
-          target[key] = roundTo(value);
-        });
+          return true;
+        },
       }),
     );
   }
 
   private checkField(item: PhysicsItem, key: 'dashed' | 'weight' | 'wavy', label: string): void {
-    const input = el('input', { class: 'rte-builder__check', attrs: { type: 'checkbox', 'data-prop': key } });
-
-    input.checked = item[key] === true;
-    this.properties.appendChild(propertyField(label, input));
-    this.propsDisposer.add(
-      on(input, 'change', () => {
-        const { checked } = input;
-
-        this.mutateSelected(item.id, (target) => {
-          if (checked) target[key] = true;
-          else delete target[key];
-        });
+    this.properties.appendChild(
+      checkField({
+        label,
+        checked: item[key] === true,
+        prop: key,
+        onChange: (checked) =>
+          this.mutateSelected(item.id, (target) => {
+            if (checked) target[key] = true;
+            else delete target[key];
+          }),
       }),
     );
   }
@@ -1553,53 +1531,35 @@ class PhysicsEditor implements SceneEditor {
   ): void {
     const current = item[key] ?? '';
     const known = options.some((option) => option.value === current);
-    const select = selectControl(
-      [...options.map((option) => ({ value: option.value, label: this.t(option.labelKey) })), ...(known ? [] : [{ value: current, label: current }])],
-      current,
-    );
 
-    select.dataset.prop = key;
-    this.properties.appendChild(propertyField(label, select));
-    this.propsDisposer.add(
-      on(select, 'change', () => {
-        const { value } = select;
-
-        this.mutateSelected(item.id, (target) => {
-          if (value) (target as Record<string, unknown>)[key] = value;
-          else delete target[key];
-        });
+    this.properties.appendChild(
+      selectField({
+        label,
+        options: [...options.map((option) => ({ value: option.value, label: this.t(option.labelKey) })), ...(known ? [] : [{ value: current, label: current }])],
+        value: current,
+        prop: key,
+        onChange: (value) =>
+          this.mutateSelected(item.id, (target) => {
+            if (value) (target as Record<string, unknown>)[key] = value;
+            else delete target[key];
+          }),
       }),
     );
   }
 
-  /** Цвет: именованный из списка или свой hex; пустое значение — основной цвет темы. */
+  /** Цвет: плитка палитры; «Обычный цвет» убирает поле — элемент рисуется цветом своего вида. */
   private colorField(item: PhysicsItem): void {
-    const { t } = this;
-    const current = item.color ?? '';
-    const known = COLOR_OPTIONS.some((option) => option.value === current);
-    const select = selectControl(
-      [...COLOR_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) })), ...(known ? [] : [{ value: current, label: current }])],
-      current,
-    );
-    const hex = el('input', { class: 'rte-input', attrs: { type: 'text', value: current, placeholder: '#2563eb', 'data-prop': 'color-hex' } });
-
-    select.dataset.prop = 'color';
-    this.properties.append(propertyField(t('drawings_prop_color'), select), propertyField(t('drawings_physics_prop_color_custom'), hex));
-
-    const apply = (value: string): void => {
-      this.mutateSelected(item.id, (target) => {
-        if (value) target.color = value;
-        else delete target.color;
-      });
-    };
-
-    this.propsDisposer.add(on(select, 'change', () => apply(select.value)));
-    this.propsDisposer.add(
-      on(hex, 'change', () => {
-        const value = hex.value.trim();
-
-        if (value === '' || HEX_COLOR.test(value)) apply(value.toLowerCase());
-        else this.renderProperties();
+    this.properties.appendChild(
+      colorField({
+        t: this.t,
+        label: this.t('drawings_prop_color'),
+        value: item.color ?? '',
+        allowDefault: true,
+        onChange: (value) =>
+          this.mutateSelected(item.id, (target) => {
+            if (value) target.color = value;
+            else delete target.color;
+          }),
       }),
     );
   }
