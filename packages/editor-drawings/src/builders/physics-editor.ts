@@ -5,7 +5,7 @@ import { normalizePhysicsScene } from '../scene/normalize';
 import type { AxisTick, PhysicsElement, PhysicsElementType, PhysicsScene, Vec2 } from '../scene/types';
 import { distance, distanceToSegment, projectOnSegment, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
-import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { ChangeEmitter, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { checkField, colorField, numberField, propertyField, propsEmpty, propsTitle, selectField, textField } from './fields';
 import { ToolBar, actionButton, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
@@ -727,10 +727,8 @@ class PhysicsEditor implements SceneEditor {
 
   /** Escape: выделение — прочь, инструмент — «Выбрать». */
   cancel(): void {
-    // Перетаскивание, уже сдвинувшее элемент, доводится, как при отпускании.
-    if (this.drag?.moved) this.afterChange();
-
-    this.drag = null;
+    // Перетаскивание, уже сдвинувшее элемент, откатывается: элемент — на прежнем месте, шага истории нет.
+    this.cancelDrag();
     this.selection = null;
     this.setTool('select');
     this.render();
@@ -1203,11 +1201,35 @@ class PhysicsEditor implements SceneEditor {
     this.render();
   };
 
-  private readonly onPointerUp = (): void => {
+  private readonly onPointerUp = (info: PointerInfo): void => {
+    if (isCancelled(info)) {
+      this.cancelDrag();
+
+      return;
+    }
+
     if (this.drag?.moved) this.afterChange();
 
     this.drag = null;
   };
+
+  /**
+   * Отменённое перетаскивание: сцена — из снимка его начала, шаг истории
+   * снимается. Копия с Ctrl записана тем же снимком — пропадает вместе с переносом.
+   */
+  private cancelDrag(): void {
+    const recorded = this.drag?.recorded === true;
+
+    this.drag = null;
+
+    if (!recorded) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange();
+  }
 
   private readonly onDoubleClick = (info: PointerInfo): void => {
     const target = this.elementAt(info.world);

@@ -219,7 +219,7 @@ describe('перемещение листа в планиметрии', () => {
     expect(verticesOf(planimetry)).toEqual({ A: [1, 1], B: [2, 2] });
   });
 
-  it('второй палец обрывает перетаскивание вершины; оставшийся палец ничего не двигает', () => {
+  it('второй палец отменяет перетаскивание вершины: она на месте; оставшийся палец ничего не двигает', () => {
     const planimetry = create(planimetryEditorFactory, 40);
     const canvas = canvasOf(planimetry);
 
@@ -241,17 +241,17 @@ describe('перемещение листа в планиметрии', () => {
     pointer(canvas, 'pointerup', [520, 80], { pointerId: 2 });
     pointer(canvas, 'pointermove', [300, 300], { pointerId: 1 });
     pointer(canvas, 'pointerup', [300, 300], { pointerId: 1 });
-    expect(verticesOf(planimetry)).toEqual({ A: [2, 1] });
-
-    // Ничего не залипло: движение без нажатия вершину не тащит, отмена возвращает её одним шагом.
-    pointer(canvas, 'pointermove', clientOf([-3, -3]));
-    expect(verticesOf(planimetry)).toEqual({ A: [2, 1] });
-    key(canvas, 'z', { ctrlKey: true });
     expect(verticesOf(planimetry)).toEqual({ A: [1, 1] });
+
+    // Ничего не залипло: движение без нажатия вершину не тащит; отмена снимает саму точку — шага переноса нет.
+    pointer(canvas, 'pointermove', clientOf([-3, -3]));
+    expect(verticesOf(planimetry)).toEqual({ A: [1, 1] });
+    key(canvas, 'z', { ctrlKey: true });
+    expect(verticesOf(planimetry)).toEqual({});
 
     pickTool(planimetry, 'point');
     click(canvas, clientOf([-2, -2]));
-    expect(verticesOf(planimetry)).toEqual({ A: [1, 1], B: [-2, -2] });
+    expect(Object.values(verticesOf(planimetry))).toEqual([[-2, -2]]);
   });
 });
 
@@ -394,7 +394,7 @@ describe('перемещение листа в физике', () => {
     expect(elementsOf(physics)[0]?.center).toEqual([1, 0.5]);
   });
 
-  it('второй палец обрывает перетаскивание элемента, дальше всё как обычно', () => {
+  it('второй палец отменяет перетаскивание элемента, дальше всё как обычно', () => {
     const physics = create(physicsEditorFactory, 30);
     const canvas = canvasOf(physics);
 
@@ -414,9 +414,145 @@ describe('перемещение листа в физике', () => {
     pointer(canvas, 'pointerup', [530, 60], { pointerId: 2 });
     pointer(canvas, 'pointermove', [120, 320], { pointerId: 1 });
     pointer(canvas, 'pointerup', [120, 320], { pointerId: 1 });
-    expect(elementsOf(physics)[0]?.center).toEqual([1, 0]);
+    expect(elementsOf(physics)[0]?.center).toEqual([0, 0]);
 
-    drag(canvas, clientOf([1.3, 0.2]), clientOf([2.3, 1.2]));
+    drag(canvas, clientOf([0.3, 0.2]), clientOf([2.3, 1.2]));
     expect(elementsOf(physics)[0]?.center).toEqual([2, 1]);
+  });
+});
+
+/**
+ * Отмены жеста: `pointercancel`, второй палец и Escape (`cancel()` конструктора).
+ * После отмены отпускаются все пальцы — это ничего не должно менять.
+ */
+const CANCELS: Record<string, (target: HTMLElement, at: Vec) => void> = {
+  pointercancel: (target, at) => pointer(target, 'pointercancel', at),
+  'второй палец': (target) => pointer(target, 'pointerdown', [500, 60], { pointerId: 2 }),
+  Escape: (target) => key(target, 'Escape'),
+};
+
+const releaseAll = (target: HTMLElement, at: Vec): void => {
+  pointer(target, 'pointerup', [500, 60], { pointerId: 2 });
+  pointer(target, 'pointerup', at);
+};
+
+describe('отменённый жест не оставляет результата', () => {
+  it('планиметрия: вершина возвращается на место, шага истории нет', () => {
+    const planimetry = create(planimetryEditorFactory, 40);
+    const canvas = canvasOf(planimetry);
+    const verticesOf = (): unknown => planimetry.getScene().vertices;
+    let changes = 0;
+
+    pickTool(planimetry, 'point');
+    click(canvas, clientOf([1, 1]));
+    planimetry.onChange(() => {
+      changes += 1;
+    });
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      changes = 0;
+      pickTool(planimetry, 'select');
+      pointer(canvas, 'pointerdown', clientOf([1, 1]));
+      pointer(canvas, 'pointermove', clientOf([3, 2]));
+      expect(verticesOf(), name).toEqual({ A: [3, 2] });
+
+      cancel(canvas, clientOf([3, 2]));
+      expect(verticesOf(), name).toEqual({ A: [1, 1] });
+      expect(changes, name).toBeLessThanOrEqual(1);
+      releaseAll(canvas, clientOf([3, 2]));
+      expect(verticesOf(), name).toEqual({ A: [1, 1] });
+    });
+
+    // Одна отмена снимает саму точку: от перетаскиваний шагов не осталось.
+    key(canvas, 'z', { ctrlKey: true });
+    expect(verticesOf()).toEqual({});
+  });
+
+  it('графики: прямая возвращается на место, шага истории нет', () => {
+    const plots = create(plotsEditorFactory, 30);
+    const canvas = canvasOf(plots);
+    const plotsOf = (): Array<Record<string, unknown>> => plots.getScene().plots as Array<Record<string, unknown>>;
+    let changes = 0;
+
+    plots.element.querySelector<HTMLButtonElement>('button[data-plot-template="line"]')?.click();
+    plots.onChange(() => {
+      changes += 1;
+    });
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      changes = 0;
+      pickTool(plots, 'select');
+      pointer(canvas, 'pointerdown', clientOf([1, 1]));
+      pointer(canvas, 'pointermove', clientOf([2, 1]));
+      expect(plotsOf()[0], name).toMatchObject({ type: 'line', k: 1, b: -1 });
+
+      cancel(canvas, clientOf([2, 1]));
+      expect(plotsOf()[0], name).toMatchObject({ type: 'line', k: 1, b: 0 });
+      expect(changes, name).toBeLessThanOrEqual(1);
+      releaseAll(canvas, clientOf([2, 1]));
+      expect(plotsOf()[0], name).toMatchObject({ type: 'line', k: 1, b: 0 });
+    });
+
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf()).toEqual([]);
+  });
+
+  it('графики: отменённый штрих карандаша отбрасывается целиком, обычный — рисует', () => {
+    const plots = create(plotsEditorFactory, 30);
+    const canvas = canvasOf(plots);
+    const stroke = (): void => {
+      pickTool(plots, 'pencil');
+      pointer(canvas, 'pointerdown', clientOf([-3, -3]));
+      [-2, -1, 0, 1, 2, 3].forEach((x) => pointer(canvas, 'pointermove', clientOf([x, -3])));
+    };
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      stroke();
+      cancel(canvas, clientOf([3, -3]));
+      releaseAll(canvas, clientOf([3, -3]));
+      expect(plots.getScene().plots, name).toEqual([]);
+      expect(canvas.querySelector('.rte-sketch__overlay polyline'), name).toBeNull();
+    });
+
+    stroke();
+    pointer(canvas, 'pointerup', clientOf([3, -3]));
+    expect(plots.getScene().plots).toMatchObject([{ type: 'line' }]);
+  });
+
+  it('физика: элемент возвращается на место, копия с Ctrl пропадает, шага истории нет', () => {
+    const physics = create(physicsEditorFactory, 30);
+    const canvas = canvasOf(physics);
+    const elementsOf = (): Array<Record<string, unknown>> => physics.getScene().elements as Array<Record<string, unknown>>;
+    let changes = 0;
+
+    physics.element.querySelector<HTMLButtonElement>('button[data-element="block_rect"]')?.click();
+    physics.onChange(() => {
+      changes += 1;
+    });
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      changes = 0;
+      pickTool(physics, 'select');
+      pointer(canvas, 'pointerdown', clientOf([0.3, 0.2]));
+      pointer(canvas, 'pointermove', clientOf([2.3, 1.2]));
+      expect(elementsOf()[0]?.center, name).toEqual([2, 1]);
+
+      cancel(canvas, clientOf([2.3, 1.2]));
+      expect(elementsOf()[0]?.center, name).toEqual([0, 0]);
+      expect(changes, name).toBeLessThanOrEqual(1);
+      releaseAll(canvas, clientOf([2.3, 1.2]));
+      expect(elementsOf()[0]?.center, name).toEqual([0, 0]);
+    });
+
+    // Ctrl тянет копию: отмена снимает и перенос, и саму копию.
+    pointer(canvas, 'pointerdown', clientOf([0.3, 0.2]), { ctrlKey: true });
+    pointer(canvas, 'pointermove', clientOf([2.3, 1.2]), { ctrlKey: true });
+    expect(elementsOf()).toHaveLength(2);
+    pointer(canvas, 'pointercancel', clientOf([2.3, 1.2]));
+    expect(elementsOf()).toHaveLength(1);
+    expect(elementsOf()[0]?.center).toEqual([0, 0]);
+
+    key(canvas, 'z', { ctrlKey: true });
+    expect(elementsOf()).toEqual([]);
   });
 });

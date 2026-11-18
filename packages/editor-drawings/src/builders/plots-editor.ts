@@ -10,7 +10,7 @@ import { FunctionPanel } from './function-panel';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
 import { FINE_DIGITS, MIN_RADIUS, MIN_STRETCH, functionLabel, isFunctionLabel, isFunctionPlot, type ParabolaForm } from './plot-functions';
-import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { ChangeEmitter, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { ToolBar, actionButton, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
@@ -677,10 +677,8 @@ class PlotsEditor implements SceneEditor {
 
   /** Escape: штрих, черновик области и выделение — прочь, инструмент — «Выбрать». */
   cancel(): void {
-    // Перетаскивание, уже сдвинувшее график, доводится, как при отпускании.
-    if (this.drag?.moved) this.afterChange();
-
-    this.drag = null;
+    // Перетаскивание, уже сдвинувшее график, откатывается: график — на прежнем месте, шага истории нет.
+    this.cancelDrag();
     this.selectedId = null;
     this.setTool('select');
     this.render();
@@ -937,6 +935,8 @@ class PlotsEditor implements SceneEditor {
 
     if (!previous) return;
 
+    // Отмена посреди перетаскивания его заканчивает: снимок жеста уже ушёл в повтор.
+    this.drag = null;
     this.state = previous;
     this.followLabelForm();
     this.afterChange();
@@ -947,6 +947,7 @@ class PlotsEditor implements SceneEditor {
 
     if (!next) return;
 
+    this.drag = null;
     this.state = next;
     this.followLabelForm();
     this.afterChange();
@@ -1143,7 +1144,16 @@ class PlotsEditor implements SceneEditor {
       const points = this.stroke;
 
       this.stroke = null;
-      this.finishStroke(points, info);
+
+      // Отменённый штрих отбрасывается целиком, какой бы длины он ни был.
+      if (isCancelled(info)) this.renderOverlay();
+      else this.finishStroke(points, info);
+
+      return;
+    }
+
+    if (isCancelled(info)) {
+      this.cancelDrag();
 
       return;
     }
@@ -1152,6 +1162,21 @@ class PlotsEditor implements SceneEditor {
 
     this.drag = null;
   };
+
+  /** Отменённое перетаскивание: сцена — из снимка его начала, шаг истории снимается. */
+  private cancelDrag(): void {
+    const moved = this.drag?.moved === true;
+
+    this.drag = null;
+
+    if (!moved) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange();
+  }
 
   private readonly onDoubleClick = (info: PointerInfo): void => {
     if (this.tool === 'shading') {

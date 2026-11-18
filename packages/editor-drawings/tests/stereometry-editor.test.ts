@@ -751,6 +751,105 @@ describe('конструктор стереометрии', () => {
     expect(stereo.getScene().vertices).toEqual({});
   });
 
+  /** Отмены жеста: `pointercancel`, второй палец и Escape; после — отпускание всех пальцев. */
+  const CANCELS: Record<string, (target: HTMLElement, at: At, init?: Partial<PointerEventInit>) => void> = {
+    pointercancel: (target, at, init) => pointerAt(target, 'pointercancel', at, init),
+    'второй палец': (target) => pointerAt(target, 'pointerdown', { x: 500, y: 60 }, { pointerId: 2 }),
+    Escape: (target) => press(target, 'Escape'),
+  };
+
+  const releaseAll = (target: HTMLElement, at: At, init: Partial<PointerEventInit> = {}): void => {
+    pointerAt(target, 'pointerup', { x: 500, y: 60 }, { pointerId: 2 });
+    pointerAt(target, 'pointerup', at, init);
+  };
+
+  it('отменённое перетаскивание вершины возвращает её на место без шага истории', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    const at = svgOf([0, 0, 5.5]);
+    const target = svgOf([1.5, -1, 5.5]);
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      changes = 0;
+      pickTool(stereo, 'select');
+      pointerAt(canvas, 'pointerdown', at);
+      pointerAt(canvas, 'pointermove', target);
+      expect(vertexOf(stereo, 'S'), name).toEqual([1.5, -1, 5.5]);
+
+      cancel(canvas, target);
+      expect(vertexOf(stereo, 'S'), name).toEqual([0, 0, 5.5]);
+      expect(changes, name).toBeLessThanOrEqual(1);
+      releaseAll(canvas, target);
+      expect(vertexOf(stereo, 'S'), name).toEqual([0, 0, 5.5]);
+    });
+
+    // Одна отмена снимает шаблон: от перетаскиваний шагов не осталось.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
+  it('отменённый поворот правой кнопкой возвращает углы без шага истории', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      changes = 0;
+      pointerAt(canvas, 'pointerdown', EMPTY_CORNER, { button: 2 });
+      pointerAt(canvas, 'pointermove', { x: 16, y: 6 }, { button: 2 });
+      expect(stereo.getScene().angleZ, name).toBeCloseTo(-22);
+
+      cancel(canvas, { x: 16, y: 6 }, { button: 2 });
+      expect(stereo.getScene().angleZ, name).toBe(-30);
+      expect(stereo.getScene().angleY, name).toBe(15);
+      expect(viewField(stereo, 'angleZ').value, name).toBe('-30');
+      expect(changes, name).toBeLessThanOrEqual(1);
+      releaseAll(canvas, { x: 16, y: 6 }, { button: 2 });
+      expect(stereo.getScene().angleZ, name).toBe(-30);
+    });
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
+  it('Escape посреди жеста ползунка возвращает угол без шага истории', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    const slider = viewField(stereo, 'angleZRange');
+
+    slider.value = '40';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(stereo.getScene().angleZ).toBe(40);
+
+    press(canvas, 'Escape');
+    expect(stereo.getScene().angleZ).toBe(-30);
+    expect(viewField(stereo, 'angleZRange').value).toBe('-30');
+    expect(viewField(stereo, 'angleZ').value).toBe('-30');
+    expect(changes).toBe(0);
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
   it('с Alt вершина тащится по вертикали: меняется только z', () => {
     const stereo = create();
     const canvas = canvasOf(stereo);

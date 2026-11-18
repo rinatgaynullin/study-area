@@ -54,6 +54,12 @@ interface PinchGesture {
   cy: number;
 }
 
+/**
+ * Отпускание — на самом деле отмена жеста: `pointercancel`, второй палец или
+ * потерянный захват. Отменённый жест не оставляет результата.
+ */
+export const isCancelled = (info: PointerInfo): boolean => info.event.type === 'pointercancel';
+
 const clampScale = (scale: number): number => Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
 
 /** Середина и расстояние между двумя экранными точками. */
@@ -150,10 +156,15 @@ export class SketchCanvas {
     this.disposer.add(on(this.element, 'pointerup', this.onPointerUp));
     this.disposer.add(on(this.element, 'pointercancel', this.onPointerUp));
     // Захват отняли без отпускания кнопки: указатель ушёл с полотна, жест вида
-    // обрывается, отложенный клик не доставляется.
+    // обрывается, отложенный клик не доставляется, начатое конструктором
+    // отменяется, как при `pointercancel`.
     this.disposer.add(
       on(this.element, 'lostpointercapture', (event) => {
-        if (!this.pointers.delete(event.pointerId)) return;
+        if (!this.pointers.has(event.pointerId)) return;
+
+        if (this.delivered === event.pointerId) this.cancelDelivered();
+
+        this.pointers.delete(event.pointerId);
 
         if (this.pinch) this.leavePinch(event.pointerId);
         else if (this.pan?.pointerId === event.pointerId) this.cancelPan();

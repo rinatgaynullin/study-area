@@ -157,6 +157,24 @@ describe('полотно конструктора: перемещение вид
     expect(calls.down).not.toHaveBeenCalled();
   });
 
+  it('потеря захвата посреди жеста конструктора приходит ему как pointercancel', () => {
+    const { element, calls } = create({ canPanFrom: () => false });
+
+    pointer(element, 'pointerdown', 100, 100);
+    pointer(element, 'pointermove', 130, 100);
+    element.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1 }));
+    expect(calls.up).toHaveBeenCalledTimes(1);
+    expect(calls.up.mock.calls[0]?.[0].event.type).toBe('pointercancel');
+    expect(svgOf(calls.up.mock.calls[0]?.[0])).toEqual([130, 100]);
+
+    // Потеря захвата после обычного отпускания второй раз ничего не присылает.
+    pointer(element, 'pointerdown', 100, 100);
+    pointer(element, 'pointerup', 100, 100);
+    element.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1 }));
+    expect(calls.up).toHaveBeenCalledTimes(2);
+    expect(calls.up.mock.calls[1]?.[0].event.type).toBe('pointerup');
+  });
+
   it('средняя кнопка двигает вид сразу, без порога и без опроса конструктора', () => {
     const canPanFrom = vi.fn(() => false);
     const { sketch, element, calls } = create({ canPanFrom });

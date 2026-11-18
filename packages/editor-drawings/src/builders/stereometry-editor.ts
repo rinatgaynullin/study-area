@@ -15,7 +15,7 @@ import {
   type StereoTemplateId,
   type StereoTemplateParams,
 } from './stereo-templates';
-import { ChangeEmitter, DRAG_THRESHOLD_PX, HIT_RADIUS_PX, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { ChangeEmitter, DRAG_THRESHOLD_PX, HIT_RADIUS_PX, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { checkField, numberField, propsTitle, selectField, sliderField, textField } from './fields';
 import { ToolBar, actionButton, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
@@ -667,12 +667,6 @@ class StereometryEditor implements SceneEditor {
         this.renderOverlay();
       }),
     );
-    // Захват отняли без отпускания кнопки: жест обрывается, отложенный клик не выполняется.
-    this.disposer.add(
-      on(this.canvas.element, 'lostpointercapture', (event) => {
-        if (this.gesture?.pointerId === event.pointerId) this.finishGesture();
-      }),
-    );
 
     this.hint = el('p', { class: 'rte-builder__hint', attrs: { role: 'status' } });
     this.properties = el('div', { class: 'rte-builder__props', attrs: { 'aria-live': 'polite' } });
@@ -823,12 +817,10 @@ class StereometryEditor implements SceneEditor {
   /** Escape: контур, стороны угла и выделение — прочь, инструмент — «Выбрать». */
   cancel(): void {
     // Жест указателя закрывается без клика: вращение и перетаскивание вершины,
-    // уже начатые, доводятся, как при отпускании; жест ползунка — так же.
-    this.finishGesture();
+    // уже начатые, откатываются без шага истории; жест ползунка — так же.
+    this.cancelGesture();
     this.canvas.cancelPan();
-
-    if (this.closeSlide()) this.changes.emit();
-
+    this.cancelSlide();
     this.selection = null;
     this.setTool('select');
   }
@@ -1362,8 +1354,9 @@ class StereometryEditor implements SceneEditor {
   private readonly onPointerUp = (info: PointerInfo): void => {
     if (this.gesture?.pointerId !== info.event.pointerId) return;
 
-    // SketchCanvas присылает сюда и pointercancel: жест доводится до конца так же.
-    this.finishGesture();
+    // Вместо отпускания SketchCanvas присылает pointercancel при отмене жеста: тогда жест откатывается.
+    if (isCancelled(info)) this.cancelGesture();
+    else this.finishGesture();
   };
 
   /** Указатель ушёл от точки нажатия дальше порога? Считается в пикселях экрана. */
@@ -1482,7 +1475,28 @@ class StereometryEditor implements SceneEditor {
     return [x, y, roundTo(info.shift ? z + dz : snapHeight(z + dz))];
   }
 
-  /** Конец жеста: вращение и перетаскивание доводятся до конца и при отпускании, и при отмене. */
+  /**
+   * Отменённый жест: вращение и перетаскивание вершины, уже менявшие сцену,
+   * откатываются к снимку начала жеста, шаг истории снимается.
+   */
+  private cancelGesture(): void {
+    const { gesture } = this;
+
+    this.gesture = null;
+    this.element.classList.remove(ROTATING_CLASS);
+
+    const changed = gesture?.type === 'rotate' ? gesture.recorded : gesture?.moving === true;
+
+    if (!changed) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange(false);
+  }
+
+  /** Конец жеста при отпускании: вращение и перетаскивание доводятся до конца. */
   private finishGesture(): void {
     const { gesture } = this;
 
@@ -2225,6 +2239,22 @@ class StereometryEditor implements SceneEditor {
     this.history.record({ ...this.state, angleY: from.angleY, angleZ: from.angleZ, edges: from.edges });
 
     return true;
+  }
+
+  /**
+   * Отменённый жест ползунка: углы вида и пунктир — как до жеста, шага
+   * истории нет. Рисунок и панель обновляет вызывающий.
+   */
+  private cancelSlide(): void {
+    const from = this.slideFrom;
+
+    this.slideFrom = null;
+
+    if (!from) return;
+
+    this.state.angleY = from.angleY;
+    this.state.angleZ = from.angleZ;
+    this.state.edges = from.edges;
   }
 
   /** Конец жеста ползунка от его собственных событий: о правке узнают слушатели. */

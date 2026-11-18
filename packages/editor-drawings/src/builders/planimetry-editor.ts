@@ -16,7 +16,7 @@ import {
   snapToGrid,
 } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
-import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { ChangeEmitter, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { checkField, numberField, propsEmpty, propsTitle, selectField, textField } from './fields';
 import { ToolBar, actionButton, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
@@ -324,10 +324,8 @@ class PlanimetryEditor implements SceneEditor {
 
   /** Escape: черновик и выделение — прочь, инструмент — «Выбрать». */
   cancel(): void {
-    // Перетаскивание, уже сдвинувшее точку, доводится, как при отпускании.
-    if (this.drag?.moved) this.afterChange();
-
-    this.drag = null;
+    // Перетаскивание, уже сдвинувшее точку, откатывается: точка — на прежнем месте, шага истории нет.
+    this.cancelDrag();
     this.selection = null;
     this.setTool('select');
     this.render();
@@ -470,6 +468,8 @@ class PlanimetryEditor implements SceneEditor {
 
     if (!previous) return;
 
+    // Отмена посреди перетаскивания его заканчивает: снимок жеста уже ушёл в повтор.
+    this.drag = null;
     this.state = previous;
     this.selection = null;
     this.afterChange();
@@ -480,6 +480,7 @@ class PlanimetryEditor implements SceneEditor {
 
     if (!next) return;
 
+    this.drag = null;
     this.state = next;
     this.selection = null;
     this.afterChange();
@@ -684,11 +685,32 @@ class PlanimetryEditor implements SceneEditor {
     if (this.draft.length > 0) this.renderOverlay();
   };
 
-  private readonly onPointerUp = (): void => {
+  private readonly onPointerUp = (info: PointerInfo): void => {
+    if (isCancelled(info)) {
+      this.cancelDrag();
+
+      return;
+    }
+
     if (this.drag?.moved) this.afterChange();
 
     this.drag = null;
   };
+
+  /** Отменённое перетаскивание: сцена — из снимка его начала, шаг истории снимается. */
+  private cancelDrag(): void {
+    const moved = this.drag?.moved === true;
+
+    this.drag = null;
+
+    if (!moved) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange();
+  }
 
   private readonly onDoubleClick = (info: PointerInfo): void => {
     const vertex = this.vertexAt(info.world);
