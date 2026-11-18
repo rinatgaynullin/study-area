@@ -245,6 +245,21 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   private fieldLoading: Promise<void> | null = null;
 
   /**
+   * Диалог открыт, но поле ещё не готово: грузится MathLive или сохранённая
+   * формула переводится в LaTeX. Шаблоны, нажатые в это время, ждут.
+   */
+  private preparing = false;
+
+  /**
+   * Сохранённую формулу не удалось даже прочитать (не доехал конвертер).
+   * Сохранять поверх неё нельзя до следующего открытия.
+   */
+  private blocked = false;
+
+  /** «Сохранить» нажата, конвертер ещё работает: второе нажатие не нужно. */
+  private saving = false;
+
+  /**
    * Номер последнего запуска отрисовки. Рендер асинхронный, а вкладку можно
    * переключить раньше, чем он закончится: ответы прошлых запусков отбрасываем
    * по номеру, иначе в галерею попадут чужие формулы.
@@ -444,6 +459,10 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     this.categoryList.scrollLeft = 0;
     this.openToken += 1;
     this.pendingTemplate = null;
+    this.preparing = true;
+    this.blocked = false;
+    this.saving = false;
+    this.syncSaveButton();
     this.prepareField(this.openToken).catch(this.onPrepareError);
   }
 
@@ -538,7 +557,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   private syncSaveButton(): void {
     const isEmpty = this.latex.trim() === '';
 
-    this.saveButton.disabled = isEmpty || !this.field;
+    this.saveButton.disabled = isEmpty || !this.field || this.blocked || this.saving;
     this.saveButton.title = isEmpty && this.field ? this.t('formula_empty') : '';
   }
 
@@ -699,9 +718,11 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
   }
 
   private applyTemplate(template: FormulaTemplate): void {
-    // На медленной сети шаблон успевают нажать раньше, чем загрузится MathLive.
-    // Нажатие не теряем: шаблон дождётся поля (см. `flushPendingTemplate`).
-    if (!this.field) {
+    // На медленной сети шаблон успевают нажать раньше, чем загрузится MathLive
+    // или чем сохранённая формула встанет в поле. Нажатие не теряем: шаблон
+    // дождётся готового поля (см. `flushPendingTemplate`). Вставленный раньше,
+    // он был бы стёрт открываемой формулой.
+    if (!this.field || this.preparing) {
       this.pendingTemplate = template;
 
       return;
@@ -796,9 +817,18 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     await this.ensureMathfield();
 
     // Диалог успели открыть заново, пока грузился MathLive.
-    if (token !== this.openToken || !this.field) return;
+    if (token !== this.openToken) return;
+
+    // MathLive не загрузился: вставлять шаблон некуда.
+    if (!this.field) {
+      this.preparing = false;
+      this.pendingTemplate = null;
+
+      return;
+    }
 
     this.host.replaceChildren(this.field);
+    this.field.readOnly = false;
     // Меню MathLive — десктопный инструмент для тех, кто знает LaTeX; школьнику
     // хватает шаблонов. Пустой список прячет кнопку меню и гасит контекстное
     // меню. Задаётся после монтирования: до него MathLive бросает исключение.
@@ -822,12 +852,10 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
     try {
       nextLatex = storedMathml ? await mathmlToLatex(storedMathml) : '';
     } catch {
-      // Конвертер не загрузился. Поле и кнопки остаются как есть — меняется
-      // только объяснение.
-      if (token === this.openToken) {
-        this.setStatus('unreadable');
-        this.flushPendingTemplate();
-      }
+      // `mathmlToLatex` бросает, только когда не доехал сам конвертер: нет сети
+      // или сменилась сборка. Формула цела — её не удалось прочитать. Набрать
+      // её заново не предлагаем: это стёрло бы целую формулу из-за сети.
+      if (token === this.openToken) this.blockUnloadedFormula();
 
       return;
     }
@@ -836,20 +864,64 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
 
     this.field.value = nextLatex;
     this.setLatex(nextLatex);
+    this.preparing = false;
+
     // Формула есть, а LaTeX из неё не собрался: поле пустое, и школьник должен
-    // понять почему.
-    if (storedMathml && !nextLatex) this.setStatus('unreadable');
+    // понять почему. Шаблон, нажатый заранее, сюда не вставляем: он стёр бы
+    // это объяснение и разрешил сохранить поверх формулы один шаблон.
+    if (storedMathml && !nextLatex) {
+      this.pendingTemplate = null;
+      this.setStatus('unreadable');
+    }
 
     this.field.focus();
     this.flushPendingTemplate();
   }
 
+  /** Конвертер не доехал: поле только для чтения, сохранить нельзя, объясняем про сеть. */
+  private blockUnloadedFormula(): void {
+    this.preparing = false;
+    this.pendingTemplate = null;
+    this.blocked = true;
+
+    if (this.field) this.field.readOnly = true;
+
+    this.syncSaveButton();
+    this.setStatus('loadFailed');
+  }
+
   private async save(): Promise<void> {
     const value = this.latex.trim();
 
-    if (!value) return;
+    if (!value || this.saving || this.blocked) return;
 
-    const mathml = await latexToMathML(value, this.type);
+    // Конвертер грузится лениво. Пока он едет, диалог могут закрыть и открыть
+    // на другой формуле: результат принадлежит тому открытию, в котором нажали
+    // «Сохранить». Запоминаем его до ожидания и сверяем после.
+    const token = this.openToken;
+    const { type } = this;
+    const pos = this.payload?.pos ?? null;
+
+    this.saving = true;
+    this.syncSaveButton();
+
+    const mathml = await latexToMathML(value, type).catch(() => null);
+
+    // Диалог уже открыт на другой формуле: её состояние не трогаем.
+    if (token !== this.openToken) return;
+
+    this.saving = false;
+    this.syncSaveButton();
+
+    // Диалог закрыли, не дождавшись: сохранять нечего.
+    if (!this.modal.isVisible) return;
+
+    // Не доехал конвертер — дело в сети, а не в формуле.
+    if (mathml === null) {
+      this.setStatus('loadFailed');
+
+      return;
+    }
 
     // Запись не разобралась — обычно что-то не дописано. Без живого превью
     // сказать об этом можно только здесь.
@@ -859,7 +931,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
       return;
     }
 
-    this.options.onSave({ mathml, type: this.type, pos: this.payload?.pos ?? null });
+    this.options.onSave({ mathml, type, pos });
     this.modal.close();
   }
 
@@ -962,6 +1034,7 @@ class FormulaDialogController implements DialogComponent<FormulaPayload | null> 
    * необработанного отклонения промиса.
    */
   private readonly onPrepareError = (): void => {
+    this.preparing = false;
     this.setStatus('unreadable');
   };
 
