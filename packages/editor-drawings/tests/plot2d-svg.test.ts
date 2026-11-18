@@ -212,6 +212,23 @@ describe('renderPlot2dContent: кривые', () => {
     expect(paths[0]).toContain('d="M 170 150 L');
   });
 
+  it('гипербола далеко от вида рисуется быстро: шаг выборки растёт с расстоянием', () => {
+    // Вид у точки x = 1 000 000, центр гиперболы — в начале координат.
+    const scene = normalizeGeometryScene({
+      type: 'plot_2d',
+      plots: [{ type: 'hyperbola', center: [0, 0], k: 1 }],
+      scale: 20,
+      offsetX: -20_000_000,
+      showGrid: false,
+      showAxesTicks: false,
+    });
+    const startedAt = performance.now();
+    const svg = renderGeometrySvg(scene);
+
+    expect(performance.now() - startedAt).toBeLessThan(200);
+    expect(svg.length).toBeLessThan(200_000);
+  });
+
   it('гипербола — два пути, по одному на ветвь', () => {
     const svg = plotSvg([{ type: 'hyperbola', center: [0, 0], k: 1 }]);
 

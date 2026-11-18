@@ -56,6 +56,8 @@ const SQRT_RANGE = 50;
 const SQRT_STEP = 0.02;
 const HYPERBOLA_NEAR_ZERO = 0.05;
 const HYPERBOLA_STEP = 0.05;
+/** Больше точек на ветвь гиперболы не берём: дальше шаг выборки растёт. */
+const HYPERBOLA_MAX_SAMPLES = 4000;
 /** Запас за краем картинки для парабол и корней — путь обрезается там, а не в бесконечности. */
 const PARABOLA_MARGIN = 300;
 const SQRT_MARGIN = 50;
@@ -445,12 +447,16 @@ const renderHyperbola = (context: PlotContext, plot: Extract<Plot, { type: 'hype
   const [hx, hy] = plot.center;
   const [visibleMin, visibleMax] = visibleXRange(context.viewport, context.size);
   const reach = Math.max(5, visibleMax - hx, hx - visibleMin);
+  // Вид может оказаться очень далеко от центра гиперболы (далёкая точка в той
+  // же сцене): с постоянным шагом выборка шла бы миллионы шагов и вешала
+  // страницу. Обычный вид шаг не меняет.
+  const step = Math.max(HYPERBOLA_STEP, reach / HYPERBOLA_MAX_SAMPLES);
 
   // Две ветви — два пути: у каждой своя выборка от особой точки наружу.
   [1, -1].forEach((branch) => {
     const samples: Array<SvgPoint | null> = [];
 
-    for (let t = HYPERBOLA_NEAR_ZERO; t <= reach; t += HYPERBOLA_STEP) {
+    for (let t = HYPERBOLA_NEAR_ZERO; t <= reach; t += step) {
       const x = hx + t * branch;
 
       if (!inDomain(x, plot.domain)) {
