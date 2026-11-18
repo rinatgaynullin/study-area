@@ -221,6 +221,90 @@ describe('полотно конструктора: перемещение вид
     expect(sketch.panByKey('a', 1)).toBe(false);
     expect(calls.viewport).toHaveBeenCalledTimes(4);
   });
+
+  it('движение мыши без нажатых кнопок обрывает жест вида: потерянное отпускание не оставляет лист у курсора', () => {
+    const { sketch, element, calls } = create({ canPanFrom: () => true });
+    const mouse = (type: PointerType, x: number, y: number, buttons: number): void => {
+      pointer(element, type, x, y, { pointerType: 'mouse', buttons });
+    };
+
+    mouse('pointerdown', 100, 100, 1);
+    mouse('pointermove', 110, 100, 1);
+    mouse('pointermove', 130, 100, 1);
+    expect(sketch.viewport.cx).toBe(300);
+
+    // Отпускание потерялось: следующее движение — уже без кнопок.
+    mouse('pointermove', 170, 100, 0);
+    expect(sketch.panning).toBe(false);
+    expect(element.classList.contains('rte-sketch--panning')).toBe(false);
+    mouse('pointermove', 200, 120, 0);
+    expect(sketch.viewport).toEqual({ scale: 40, cx: 300, cy: 210 });
+    // Движения без кнопок — обычное наведение, конструктор их получает.
+    expect(calls.move).toHaveBeenCalledTimes(2);
+
+    // Придержанное нажатие с потерянным отпусканием кликом не становится.
+    mouse('pointerdown', 100, 100, 1);
+    mouse('pointermove', 101, 100, 0);
+    mouse('pointerup', 101, 100, 0);
+    expect(calls.down).not.toHaveBeenCalled();
+    expect(sketch.viewport.cx).toBe(300);
+  });
+
+  it('колесо во время придержанного нажатия или перемещения вида масштаб не меняет', () => {
+    const { sketch, element, calls } = create({ canPanFrom: () => true });
+    const wheel = (x: number, y: number): void => {
+      element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: x, clientY: y, deltaY: -100 }));
+    };
+
+    // Придержанное нажатие: колесо не сдвигает точку, куда придёт клик.
+    pointer(element, 'pointerdown', 100, 100);
+    wheel(400, 300);
+    expect(sketch.viewport).toEqual({ scale: 40, cx: 280, cy: 210 });
+    pointer(element, 'pointerup', 100, 100);
+    expect(calls.down.mock.calls[0]?.[0].world).toEqual([-4.5, 2.75]);
+
+    // Перемещение вида: колесо ничего не меняет, протяжка продолжается без рывка.
+    pointer(element, 'pointerdown', 100, 100);
+    pointer(element, 'pointermove', 110, 100);
+    pointer(element, 'pointermove', 130, 100);
+    wheel(400, 300);
+    expect(sketch.viewport).toEqual({ scale: 40, cx: 300, cy: 210 });
+    pointer(element, 'pointermove', 140, 100);
+    expect(sketch.viewport).toEqual({ scale: 40, cx: 310, cy: 210 });
+    pointer(element, 'pointerup', 140, 100);
+
+    // Жест кончился — колесо снова масштабирует.
+    wheel(400, 300);
+    expect(sketch.viewport.scale).toBeCloseTo(44);
+  });
+
+  it('сброс жестов: придержанное нажатие и перемещение вида пропадают без колбэков', () => {
+    const { sketch, element, calls } = create({ canPanFrom: () => true });
+
+    pointer(element, 'pointerdown', 100, 100);
+    sketch.resetGestures();
+    pointer(element, 'pointerup', 100, 100);
+    expect(calls.down).not.toHaveBeenCalled();
+
+    pointer(element, 'pointerdown', 100, 100);
+    pointer(element, 'pointermove', 110, 100);
+    pointer(element, 'pointermove', 130, 100);
+    sketch.resetGestures();
+    expect(sketch.panning).toBe(false);
+    expect(element.classList.contains('rte-sketch--panning')).toBe(false);
+    pointer(element, 'pointermove', 180, 100);
+    expect(sketch.viewport.cx).toBe(300);
+    expect(calls.down).not.toHaveBeenCalled();
+  });
+
+  it('сброс жестов: нажатие, полученное конструктором, забывается без pointercancel', () => {
+    const { sketch, element, calls } = create({ canPanFrom: () => false });
+
+    pointer(element, 'pointerdown', 100, 100);
+    sketch.resetGestures();
+    element.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1 }));
+    expect(calls.up).not.toHaveBeenCalled();
+  });
 });
 
 describe('полотно конструктора: жест двумя пальцами', () => {
@@ -379,5 +463,30 @@ describe('полотно конструктора: жест двумя паль�
     touch(element, 'pointerdown', 2, 200, 100);
     expect(sketch.panByKey('ArrowLeft', 1)).toBe(false);
     expect(sketch.panning).toBe(true);
+  });
+
+  it('сброс жестов обрывает жест двумя пальцами; следующее касание — обычное нажатие', () => {
+    const { sketch, element, calls } = create({ canPanFrom: () => false });
+
+    touch(element, 'pointerdown', 1, 100, 100);
+    touch(element, 'pointerdown', 2, 200, 100);
+    sketch.resetGestures();
+    expect(sketch.panning).toBe(false);
+    touch(element, 'pointermove', 2, 400, 100);
+    expect(sketch.viewport).toEqual({ scale: 40, cx: 280, cy: 210 });
+
+    touch(element, 'pointerdown', 1, 100, 100);
+    touch(element, 'pointerup', 1, 100, 100);
+    expect(calls.down).toHaveBeenCalledTimes(2);
+    expect(calls.up.mock.calls.at(-1)?.[0].event.type).toBe('pointerup');
+  });
+
+  it('колесо во время жеста двумя пальцами масштаб не меняет', () => {
+    const { sketch, element } = create();
+
+    touch(element, 'pointerdown', 1, 100, 100);
+    touch(element, 'pointerdown', 2, 200, 100);
+    element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 150, clientY: 100, deltaY: -100 }));
+    expect(sketch.viewport.scale).toBe(40);
   });
 });

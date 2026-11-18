@@ -703,6 +703,8 @@ class PhysicsEditor implements SceneEditor {
     this.history.clear();
     this.selection = null;
     this.drag = null;
+    // Жест, начатый над прежней сценой, в новую не переходит.
+    this.canvas.resetGestures();
     this.fitView();
     this.renderProperties();
   }
@@ -729,6 +731,7 @@ class PhysicsEditor implements SceneEditor {
   cancel(): void {
     // Перетаскивание, уже сдвинувшее элемент, откатывается: элемент — на прежнем месте, шага истории нет.
     this.cancelDrag();
+    this.canvas.cancelPan();
     this.selection = null;
     this.setTool('select');
     this.render();

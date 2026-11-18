@@ -280,6 +280,22 @@ export class SketchCanvas {
     this.element.classList.remove(PANNING_CLASS);
   }
 
+  /**
+   * Забывает все жесты полотна: придержанное нажатие, перемещение вида, жест
+   * двумя пальцами и нажатие, отпускания которого ждёт конструктор. Колбэков
+   * нет — конструктор сбрасывает своё состояние сам (загрузка сцены). Захват
+   * указателей отпускается; их дальнейшие события — как без нажатия.
+   */
+  resetGestures(): void {
+    const held = [...this.pointers.keys()];
+
+    this.cancelPan();
+    this.pinch = null;
+    this.pointers.clear();
+    this.delivered = null;
+    held.forEach((pointerId) => this.capture(pointerId, false));
+  }
+
   focus(): void {
     this.element.focus();
   }
@@ -359,7 +375,13 @@ export class SketchCanvas {
       return;
     }
 
-    if (pan && pan.pointerId === event.pointerId) {
+    // Мышь движется без нажатых кнопок — отпускание потерялось: жест вида
+    // обрывается без клика, а движение — обычное наведение.
+    if (pan && pan.pointerId === event.pointerId && event.pointerType === 'mouse' && event.buttons === 0) {
+      this.cancelPan();
+      this.pointers.delete(event.pointerId);
+      this.capture(event.pointerId, false);
+    } else if (pan && pan.pointerId === event.pointerId) {
       this.continuePan(pan, event);
 
       return;
@@ -530,6 +552,11 @@ export class SketchCanvas {
 
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault();
+
+    // Во время жеста вида масштаб не меняется: опорная точка протяжки и
+    // придержанное нажатие посчитаны при прежнем масштабе — вид прыгнул бы.
+    if (this.pan || this.pinch) return;
+
     this.zoomAt(this.clientToSvg(event.clientX, event.clientY), event.deltaY < 0 ? 1.1 : 1 / 1.1);
   };
 }

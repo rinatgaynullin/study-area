@@ -556,3 +556,104 @@ describe('отменённый жест не оставляет результа
     expect(elementsOf()).toEqual([]);
   });
 });
+
+describe('Escape и загрузка сцены обрывают жест полотна', () => {
+  /** Протяжка с пустого места: вид уезжает на `by`, затем Escape, и указатель едет дальше ещё на 80 px. */
+  const panThenEscape = (canvas: HTMLElement, from: Vec, [dx, dy]: Vec): void => {
+    const start: Vec = [from[0] + 5, from[1]];
+    const end: Vec = [start[0] + dx + 80, start[1] + dy + 40];
+
+    pointer(canvas, 'pointerdown', from);
+    pointer(canvas, 'pointermove', start);
+    pointer(canvas, 'pointermove', [start[0] + dx, start[1] + dy]);
+    key(canvas, 'Escape');
+    pointer(canvas, 'pointermove', end);
+    pointer(canvas, 'pointerup', end);
+  };
+
+  it('планиметрия: после Escape протяжка вид больше не двигает', () => {
+    const planimetry = create(planimetryEditorFactory, 40);
+    const canvas = canvasOf(planimetry);
+
+    panThenEscape(canvas, clientOf([-5, -4]), [40, -20]);
+    moveView(40, -20);
+
+    pickTool(planimetry, 'point');
+    click(canvas, clientOf([2, 2]));
+    expect(planimetry.getScene().vertices).toEqual({ A: [2, 2] });
+  });
+
+  it('графики: после Escape протяжка вид больше не двигает', () => {
+    const plots = create(plotsEditorFactory, 30);
+    const canvas = canvasOf(plots);
+
+    panThenEscape(canvas, clientOf([-8, -6]), [30, 15]);
+    moveView(30, 15);
+
+    pickTool(plots, 'point');
+    click(canvas, clientOf([2, 2]));
+    expect((plots.getScene().plots as Array<Record<string, unknown>>)[0]?.coords).toEqual([2, 2]);
+  });
+
+  it('физика: после Escape протяжка вид больше не двигает', () => {
+    const physics = create(physicsEditorFactory, 30);
+    const canvas = canvasOf(physics);
+
+    physics.element.querySelector<HTMLButtonElement>('button[data-element="block_rect"]')?.click();
+    pickTool(physics, 'select');
+    panThenEscape(canvas, clientOf([-6, -5]), [-30, 30]);
+    moveView(-30, 30);
+
+    // Брусок уехал только вместе с протяжкой до Escape: его берут там.
+    drag(canvas, clientOf([0.3, 0.2]), clientOf([2.3, 1.2]));
+    expect((physics.getScene().elements as Array<Record<string, unknown>>)[0]?.center).toEqual([2, 1]);
+  });
+
+  it('планиметрия: нажатие, придержанное до загрузки сцены, в новую сцену не попадает', () => {
+    const planimetry = create(planimetryEditorFactory, 40);
+    const canvas = canvasOf(planimetry);
+
+    pickTool(planimetry, 'point');
+    pointer(canvas, 'pointerdown', clientOf([1, 1]));
+    planimetry.load({ type: '2d', vertices: {}, edges: [] });
+    pointer(canvas, 'pointerup', clientOf([1, 1]));
+    expect(planimetry.getScene().vertices).toEqual({});
+
+    // Следующий клик — уже обычный.
+    click(canvas, clientOf([1, 1]));
+    expect(Object.keys(planimetry.getScene().vertices as Record<string, unknown>)).toEqual(['A']);
+  });
+
+  it('графики: нажатие, придержанное до загрузки сцены, в новую сцену не попадает', () => {
+    const plots = create(plotsEditorFactory, 30);
+    const canvas = canvasOf(plots);
+
+    pickTool(plots, 'point');
+    pointer(canvas, 'pointerdown', clientOf([1, 1]));
+    plots.load({ type: 'plot_2d', plots: [] });
+    pointer(canvas, 'pointerup', clientOf([1, 1]));
+    expect(plots.getScene().plots).toEqual([]);
+  });
+
+  it('физика: перемещение вида, начатое до загрузки сцены, после неё лист не двигает', () => {
+    const physics = create(physicsEditorFactory, 30);
+    const canvas = canvasOf(physics);
+    const layer = (): string => canvas.querySelector('.rte-sketch__layer')?.innerHTML ?? '';
+
+    physics.element.querySelector<HTMLButtonElement>('button[data-element="block_rect"]')?.click();
+
+    const scene = physics.getScene();
+
+    pickTool(physics, 'select');
+    pointer(canvas, 'pointerdown', clientOf([-6, -5]));
+    pointer(canvas, 'pointermove', clientOf([-5, -5]));
+    physics.load(scene);
+
+    // Сцена нарисована в своём виде; протяжка, начатая до загрузки, его не сдвигает.
+    const loaded = layer();
+
+    pointer(canvas, 'pointermove', clientOf([-1, -3]));
+    pointer(canvas, 'pointerup', clientOf([-1, -3]));
+    expect(layer()).toBe(loaded);
+  });
+});

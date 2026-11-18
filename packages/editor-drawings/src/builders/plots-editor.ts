@@ -647,6 +647,8 @@ class PlotsEditor implements SceneEditor {
     this.stroke = null;
     this.draft = [];
     this.drag = null;
+    // Жест, начатый над прежней сценой, в новую не переходит.
+    this.canvas.resetGestures();
     this.fitView();
     this.renderProperties();
   }
@@ -679,6 +681,7 @@ class PlotsEditor implements SceneEditor {
   cancel(): void {
     // Перетаскивание, уже сдвинувшее график, откатывается: график — на прежнем месте, шага истории нет.
     this.cancelDrag();
+    this.canvas.cancelPan();
     this.selectedId = null;
     this.setTool('select');
     this.render();
