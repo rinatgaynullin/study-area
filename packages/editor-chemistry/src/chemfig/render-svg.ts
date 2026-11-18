@@ -316,13 +316,8 @@ export const renderChemistrySvg = (
   options: ChemistrySvgOptions = {},
 ): string => drawScene(placeStructure(structure)).toSvg(options.scale ?? 1);
 
-/** Раскладка структуры в координатах `renderChemistrySvg` (с учётом полей и масштаба). */
-export const layoutChemistry = (
-  structure: ChemStructure,
-  options: ChemistrySvgOptions = {},
-): ChemLayout => {
-  const scene = placeStructure(structure);
-  const frame = drawScene(scene).frame(options.scale ?? 1);
+/** Раскладка сцены в координатах готового SVG: сдвиг на рамку и масштаб. */
+const frameLayout = (scene: ChemScene, frame: CanvasFrame): ChemLayout => {
   const toX = (x: number): number => (x - frame.minX) * frame.scale;
   const toY = (y: number): number => (y - frame.minY) * frame.scale;
 
@@ -338,6 +333,33 @@ export const layoutChemistry = (
       y2: toY(placed.y2),
     })),
   };
+};
+
+/** Раскладка структуры в координатах `renderChemistrySvg` (с учётом полей и масштаба). */
+export const layoutChemistry = (
+  structure: ChemStructure,
+  options: ChemistrySvgOptions = {},
+): ChemLayout => {
+  const scene = placeStructure(structure);
+
+  return frameLayout(scene, drawScene(scene).frame(options.scale ?? 1));
+};
+
+export interface RenderedChemistry {
+  svg: string;
+  layout: ChemLayout;
+}
+
+/** SVG и раскладка за один проход: конструктору нужны оба, и они не расходятся. */
+export const renderChemistry = (
+  structure: ChemStructure,
+  options: ChemistrySvgOptions = {},
+): RenderedChemistry => {
+  const scene = placeStructure(structure);
+  const canvas = drawScene(scene);
+  const scale = options.scale ?? 1;
+
+  return { svg: canvas.toSvg(scale), layout: frameLayout(scene, canvas.frame(scale)) };
 };
 
 /**

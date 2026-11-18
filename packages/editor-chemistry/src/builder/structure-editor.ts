@@ -1,7 +1,7 @@
 import { createDisposer, el, icon, on, sanitizeSvg, type Translate } from '@rich-editor/core';
 import { formatChemLabel } from '../chemfig/format-label';
-import { chemfigToSvg, layoutChemistry, renderChemistrySvg, type ChemLayout } from '../chemfig/render-svg';
-import { tryParseChemfig } from '../chemfig/parse-chemfig';
+import { chemfigToSvg, renderChemistry, type ChemLayout } from '../chemfig/render-svg';
+import { tryParseChemfig, unwrapChemfig } from '../chemfig/parse-chemfig';
 import type { ChemAtom, ChemBond, ChemBondType, ChemStructure } from '../chemfig/types';
 import { CHEMISTRY_TEMPLATES } from '../templates';
 import {
@@ -164,8 +164,20 @@ export class StructureEditor {
 
   private historyIndex = 0;
 
-  /** Конструктор заперт: например, в поле кода текст, который не разбирается. */
+  /** Конструктор заперт: снаружи (в поле кода нерабочий текст) или потому, что структура только для просмотра. */
   private locked = false;
+
+  /** Запер вызывающий через `setLocked`. */
+  private lockedOutside = false;
+
+  /** Разбор что-то отбросил: правка переписала бы код с потерями — только просмотр. */
+  private readonlyStructure = false;
+
+  /** Обёртка `\chemfig{…}` загруженного кода: запись возвращается в ту же обёртку. */
+  private wrapper = { before: '', after: '' };
+
+  /** Номер атома, который выделить после перерисовки: так выделение переживает загрузку кода из поля. */
+  private pendingSelection: number | null = null;
 
   private readonly stage: HTMLElement;
 
@@ -362,14 +374,20 @@ export class StructureEditor {
     this.render();
   }
 
-  /** Загружает код chemfig; `false`, если код не разбирается (конструктор тогда пуст). */
+  /**
+   * Загружает код chemfig; `false`, если код не разбирается (конструктор тогда
+   * пуст). Структура, которую модель не повторит без потерь, открывается
+   * только для просмотра — см. `isReadonly`.
+   */
   load(code: string): boolean {
-    const structure = code.trim() ? parseForEditing(code) : null;
+    const structure = this.parseWrapped(code);
 
     this.structure = structure;
     this.selection = null;
+    this.pendingSelection = null;
     this.history = [structureCode(structure)];
     this.historyIndex = 0;
+    this.setReadonly(structure?.lossy === true);
     this.setStatus('');
     this.render();
 
@@ -382,37 +400,50 @@ export class StructureEditor {
    * перезагружается. `false` — код не разбирается, конструктор не тронут.
    */
   applyCode(code: string): boolean {
-    const trimmed = code.trim();
-    const structure = trimmed ? parseForEditing(trimmed) : null;
+    const { wrapper } = this;
+    const structure = this.parseWrapped(code);
 
-    if (trimmed && !structure) return false;
+    if (code.trim() && !structure) {
+      this.wrapper = wrapper;
 
-    if (structureCode(structure) === this.getCode()) return true;
+      return false;
+    }
+
+    const lossy = structure?.lossy === true;
+
+    if (!lossy && !this.readonlyStructure && structureCode(structure) === structureCode(this.structure)) return true;
 
     // Выделение переносим по номеру атома в обходе: правка в поле обычно
     // меняет подпись или угол, а не порядок атомов.
     const selectedIndex = this.layout?.atoms.findIndex((placed) => placed.atom === this.selectedAtom) ?? -1;
 
     this.structure = structure;
+    this.selection = null;
+    this.pendingSelection = lossy || selectedIndex === -1 ? null : selectedIndex;
+    this.setReadonly(lossy);
 
-    const next = structure && selectedIndex !== -1 ? layoutChemistry(structure).atoms[selectedIndex] : undefined;
-
-    this.selection = next ? { kind: 'atom', atom: next.atom } : null;
-    this.commit(false);
+    if (lossy) this.render();
+    else this.commit(false);
 
     return true;
   }
 
   /** Код chemfig текущей структуры; пустая строка, если структуры нет. */
   getCode(): string {
-    return structureCode(this.structure);
+    const code = structureCode(this.structure);
+
+    return code ? this.wrapper.before + code + this.wrapper.after : '';
+  }
+
+  /** Структура только для просмотра: правка в конструкторе переписала бы код с потерями. */
+  get isReadonly(): boolean {
+    return this.readonlyStructure;
   }
 
   /** Запирает конструктор: нажатия и клавиши не принимаются, элементы вне обхода. */
   setLocked(locked: boolean): void {
-    this.locked = locked;
-    this.element.toggleAttribute('inert', locked);
-    this.element.classList.toggle('rte-chem-builder--locked', locked);
+    this.lockedOutside = locked;
+    this.applyLock();
   }
 
   focus(): void {
@@ -431,7 +462,7 @@ export class StructureEditor {
    * неразборчивого кода.
    */
   private commit(notify = true): void {
-    const code = this.getCode();
+    const code = structureCode(this.structure);
     const current = this.history[this.historyIndex] ?? '';
 
     if (code === '' && this.structure) this.structure = null;
@@ -458,7 +489,35 @@ export class StructureEditor {
   private restore(code: string): void {
     this.structure = code ? parseForEditing(code) : null;
     this.selection = null;
+    this.pendingSelection = null;
     this.render();
+  }
+
+  /** Разбирает код, запоминая обёртку `\chemfig{…}` вокруг него. */
+  private parseWrapped(code: string): ChemStructure | null {
+    const trimmed = code.trim();
+    const inner = unwrapChemfig(trimmed);
+    const at = trimmed.indexOf(inner);
+
+    this.wrapper =
+      inner && inner !== trimmed && at !== -1
+        ? { before: trimmed.slice(0, at), after: trimmed.slice(at + inner.length) }
+        : { before: '', after: '' };
+
+    return trimmed ? parseForEditing(trimmed) : null;
+  }
+
+  private setReadonly(readonly: boolean): void {
+    this.readonlyStructure = readonly;
+    this.applyLock();
+  }
+
+  private applyLock(): void {
+    const locked = this.lockedOutside || this.readonlyStructure;
+
+    this.locked = locked;
+    this.element.toggleAttribute('inert', locked);
+    this.element.classList.toggle('rte-chem-builder--locked', locked);
   }
 
   private stepHistory(step: number): void {
@@ -490,9 +549,18 @@ export class StructureEditor {
     return place !== null && place.vertex !== null && place.parent === null;
   }
 
+  /** Перерисовка: SVG и раскладка — за один проход рендера. */
   private render(): void {
-    this.layout = this.structure ? layoutChemistry(this.structure) : null;
-    this.renderStage();
+    const rendered = this.structure ? renderChemistry(this.structure) : null;
+
+    this.layout = rendered?.layout ?? null;
+
+    const pending = this.pendingSelection === null ? undefined : this.layout?.atoms[this.pendingSelection];
+
+    if (pending) this.selection = { kind: 'atom', atom: pending.atom };
+
+    this.pendingSelection = null;
+    this.renderStage(rendered?.svg ?? '');
     this.renderPanel();
   }
 
@@ -531,7 +599,7 @@ export class StructureEditor {
   }
 
   /** Полотно: структура тем же рендером и поверх — области нажатия, подсветка, «плюсы». */
-  private renderStage(): void {
+  private renderStage(svg: string): void {
     this.stage.replaceChildren();
     this.pluses = [];
 
@@ -566,7 +634,7 @@ export class StructureEditor {
 
     // Структура — тем же путём, каким её вставлял предпросмотр: строка рендера
     // через санитайзер. Вложенный svg кладёт её viewBox в рамку 0…width раскладки.
-    const holder = el('div', { html: sanitizeSvg(renderChemistrySvg(structure)) });
+    const holder = el('div', { html: sanitizeSvg(svg) });
     const drawing = holder.querySelector('svg');
 
     if (drawing) {
