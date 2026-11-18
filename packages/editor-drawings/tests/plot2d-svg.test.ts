@@ -196,8 +196,40 @@ describe('renderPlot2dContent: точки и подписи', () => {
       { type: 'circle', center: [0, 0], radius: 1, label: 'ω' },
     ]);
 
-    expect(labels(svg)).toEqual(expect.arrayContaining(['y = x^2', 'y = x', 'y = 1/x', 'ω']));
-    expect(svg).toMatch(/<text[^>]*fill="#dc2626">y = x\^2<\/text>/);
+    expect(labels(svg)).toEqual(expect.arrayContaining(['y = x', 'y = 1/x', 'ω']));
+    expect(svg).toMatch(/<text[^>]*fill="#dc2626">y = x<tspan dy="-4.5" font-size="8.5">2<\/tspan><\/text>/);
+  });
+
+  it('степень в подписи графика — верхним индексом, знака ^ в разметке нет', () => {
+    const svg = plotSvg([
+      { type: 'parabola', vertex: [1, -3], stretchY: 2, label: 'y = 2(x - 1)^2 - 3', color: '#dc2626' },
+      { type: 'circle', center: [1, -2], radius: 2.5, label: '(x - 1)^2 + (y + 2)^2 = 6,25', color: '#10b981' },
+      { type: 'line', k: 1, b: 0, label: 'y = x^{10} + a^n', color: '#8b5cf6' },
+    ]);
+    const label = (color: string): string => new RegExp(`<text[^>]*fill="${color}">(.*?)</text>`).exec(svg)?.[1] ?? '';
+
+    expect(svg).not.toContain('^');
+    // После показателя текст возвращается на строку.
+    expect(label('#dc2626')).toBe('y = 2(x - 1)<tspan dy="-4.5" font-size="8.5">2</tspan><tspan dy="4.5"> - 3</tspan>');
+    expect(label('#10b981')).toBe(
+      '(x - 1)<tspan dy="-4.5" font-size="8.5">2</tspan><tspan dy="4.5"> + (y + 2)</tspan><tspan dy="-4.5" font-size="8.5">2</tspan><tspan dy="4.5"> = 6,25</tspan>',
+    );
+    // `^{…}` — группа целиком, одиночный знак после `^` — тоже показатель.
+    expect(label('#8b5cf6')).toBe('y = x<tspan dy="-4.5" font-size="8.5">10</tspan><tspan dy="4.5"> + a</tspan><tspan dy="-4.5" font-size="8.5">n</tspan>');
+    // Обводка под подписью — с той же разметкой.
+    expect(svg).toMatch(/class="rte-drawing__halo"[^>]*>y = 2\(x - 1\)<tspan dy="-4.5" font-size="8.5">2<\/tspan>/);
+  });
+
+  it('подпись без степени рисуется как раньше, степень с разметкой экранируется', () => {
+    const plain = plotSvg([{ type: 'hyperbola', center: [1, -2], k: 3, label: 'y = 3/(x - 1) - 2', color: '#dc2626' }]);
+
+    expect(plain).toMatch(/<text[^>]*fill="#dc2626">y = 3\/\(x - 1\) - 2<\/text>/);
+    expect(plain).not.toContain('<tspan');
+
+    const unsafe = plotSvg([{ type: 'line', k: 1, b: 0, label: '<b>^{<i>} & "x"', color: '#dc2626' }]);
+
+    expect(unsafe).not.toMatch(/<b>|<i>/);
+    expect(unsafe).toContain('&lt;b&gt;<tspan dy="-4.5" font-size="8.5">&lt;i&gt;</tspan><tspan dy="4.5"> &amp; &quot;x&quot;</tspan>');
   });
 
   it('подписи экранируются', () => {

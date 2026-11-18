@@ -49,6 +49,19 @@ export { planimetryEditorFactory } from './planimetry-editor';
 export { stereometryEditorFactory, projectVertex, unprojectToGround, parseAngleVertices } from './stereometry-editor';
 export { STEREOMETRY_MESSAGES } from './stereometry-messages';
 export { plotsEditorFactory } from './plots-editor';
+export {
+  applyFunctionParam,
+  describeFunction,
+  functionLabel,
+  functionParams,
+  functionText,
+  isFunctionLabel,
+  type FormulaPart,
+  type FunctionParam,
+  type FunctionParamId,
+  type FunctionPlot,
+  type ParabolaForm,
+} from './plot-functions';
 export { PLOTS_MESSAGES } from './plots-messages';
 export { physicsEditorFactory } from './physics-editor';
 export { PHYSICS_BUILDER_MESSAGES } from './physics-messages';
