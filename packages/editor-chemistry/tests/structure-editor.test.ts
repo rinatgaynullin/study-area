@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHEMISTRY_MESSAGES, chemfigToSvg, parseChemfig, type ChemAtom } from '../src';
+import { CHEMISTRY_MESSAGES, chemfigToSvg, formatChemLabel, parseChemfig, type ChemAtom } from '../src';
 import { StructureEditor } from '../src/builder/structure-editor';
 import { normalizeGroupLabel } from '../src/builder/structure-model';
 import { CHEMISTRY_TEMPLATES } from '../src/templates';
@@ -546,5 +546,67 @@ describe('конструктор структуры: связи с клавиа�
     click(button(builder, 'button[data-ring="benzene"]'));
     expect(find(builder, '[data-bond="0"]').getAttribute('aria-label')).toBe('Связь C – C: одинарная');
     expect(find(builder, '[data-atom="0"]').getAttribute('aria-label')).toBe('Атом C');
+  });
+});
+
+describe('конструктор структуры: сохранность кода', () => {
+  const replaceLabel = (root: StructureEditor, atomIndex: number, group: string): void => {
+    click(root.element.querySelector(`[data-atom="${atomIndex}"]`));
+
+    const toggle = root.element.querySelector<HTMLInputElement>('.rte-chem-builder__toggle input');
+
+    if (toggle && !toggle.checked) toggle.click();
+
+    chooseGroup(root, group);
+  };
+
+  it('правка подписи сохраняет параметры связей дословно', () => {
+    const builder = mount();
+
+    expect(builder.load('[:30]-[::-60]-[::60]OH')).toBe(true);
+    replaceLabel(builder, 2, 'Cl');
+    expect(builder.getCode()).toBe('[:30]-[::-60]-[::60]Cl');
+
+    builder.load('A-[:30,1.5]B');
+    replaceLabel(builder, 1, 'Cl');
+    expect(builder.getCode()).toBe('A-[:30,1.5]Cl');
+
+    click(builder.element.querySelector('[data-bond="0"]'));
+    click(button(builder, 'button[data-set-bond="="]'));
+    expect(builder.getCode()).toBe('A=[:30,1.5]Cl');
+  });
+
+  it('обёртка \\chemfig{…} возвращается вокруг записи', () => {
+    const builder = mount();
+
+    builder.load('\\chemfig{CH_3-OH}');
+    replaceLabel(builder, 1, 'Cl');
+    expect(builder.getCode()).toBe('\\chemfig{CH_3-Cl}');
+  });
+
+  it('структура с потерями при разборе — только просмотр', () => {
+    const onChange = vi.fn();
+    const builder = mount(onChange);
+
+    expect(builder.load('A*6(B-----)')).toBe(true);
+    expect(builder.isReadonly).toBe(true);
+    expect(builder.element.hasAttribute('inert')).toBe(true);
+    expect(builder.element.querySelector('.rte-chem-builder__canvas svg')).not.toBeNull();
+
+    click(builder.element.querySelector('[data-atom="0"]'));
+    click(button(builder, 'button[data-action="clear"]'));
+    expect(onChange).not.toHaveBeenCalled();
+
+    expect(builder.applyCode('*6(B------)')).toBe(true);
+    expect(builder.isReadonly).toBe(false);
+    expect(builder.element.hasAttribute('inert')).toBe(false);
+  });
+
+  it('многозначный индекс своей группы — в фигурных скобках, картинка та же', () => {
+    expect(normalizeGroupLabel('C6H12O6')).toBe('C_6H_{12}O_6');
+    expect(normalizeGroupLabel('C10H22')).toBe('C_{10}H_{22}');
+    expect(normalizeGroupLabel('C2H5')).toBe('C_2H_5');
+    expect(formatChemLabel('C_6H_{12}O_6')).toBe(formatChemLabel('C6H12O6'));
+    expect(chemfigToSvg('C_6H_{12}O_6')).toBe(chemfigToSvg('C_6H_12O_6'));
   });
 });

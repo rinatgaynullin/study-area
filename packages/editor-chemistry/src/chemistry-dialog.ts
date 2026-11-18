@@ -54,6 +54,9 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
   /** Поле кода есть только при `code: true`. */
   private readonly codeInput: HTMLTextAreaElement | null;
 
+  /** Сворачиваемый блок с полем кода: раскрывается, когда исправлять можно только там. */
+  private readonly codeBlock: HTMLDetailsElement | null;
+
   private readonly status: HTMLElement;
 
   private readonly removeButton: HTMLButtonElement;
@@ -70,13 +73,14 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
     this.editor = new StructureEditor({ t, onChange: this.onEditorChange });
     this.status = el('p', { class: 'rte-chemistry-dialog__status', attrs: { role: 'status' } });
     this.codeInput = options.code ? this.createCodeInput() : null;
+    this.codeBlock = this.codeInput ? this.createCodeBlock(this.codeInput) : null;
 
     this.modal = createModal({ title: t('chemistry_title_insert'), closeLabel: t('common_close'), wide: true });
 
     this.modal.body.appendChild(
       el('div', {
         class: 'rte-chemistry-dialog',
-        children: [this.editor.element, this.codeInput ? this.createCodeBlock(this.codeInput) : null, this.status],
+        children: [this.editor.element, this.codeBlock, this.status],
       }),
     );
 
@@ -138,19 +142,22 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
 
     // Код, который не разобрать: с полем кода он остаётся в поле, а
     // конструктор заперт, чтобы первое нажатие не затёрло текст; без поля
-    // формулу собирают заново на пустом полотне.
+    // формулу собирают заново на пустом полотне. Код, который модель не
+    // повторит без потерь, только показывается.
     const unreadable = code.trim() !== '' && !loaded;
 
     this.setCodeInvalid(unreadable && this.codeInput !== null);
-
-    if (unreadable) {
-      this.setStatus(this.t(this.codeInput ? 'chemistry_invalid' : 'chemistry_unreadable'), true);
-    } else {
-      this.setStatus('', false);
-    }
-
+    this.showEditorState(unreadable);
     this.updateSaveButton();
+
+    const fixInField = this.codeBlock !== null && (unreadable || this.editor.isReadonly);
+
+    if (this.codeBlock) this.codeBlock.open = fixInField;
+
     this.modal.open();
+
+    // Исправлять можно только в поле: фокус туда. Кадр — после автофокуса модалки.
+    if (fixInField) requestAnimationFrame(() => this.codeInput?.focus());
   }
 
   close(): void {
@@ -179,7 +186,7 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
   }
 
   /** Сворачиваемый блок «Код chemfig» с прежним полем и подсказкой про синтаксис. */
-  private createCodeBlock(input: HTMLTextAreaElement): HTMLElement {
+  private createCodeBlock(input: HTMLTextAreaElement): HTMLDetailsElement {
     return el('details', {
       class: 'rte-chemistry-dialog__code-block',
       children: [
@@ -200,9 +207,20 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
     });
   }
 
-  /** Сохранить можно только непустую структуру и только когда поле кода разбирается. */
+  /** Сохранить можно непустую структуру, если поле кода разбирается и структура не только для просмотра. */
   private updateSaveButton(): void {
-    this.saveButton.disabled = this.codeInvalid || this.editor.getCode() === '';
+    this.saveButton.disabled = this.codeInvalid || this.editor.isReadonly || this.editor.getCode() === '';
+  }
+
+  /** Статус по состоянию: код не разбирается или формула только для просмотра. */
+  private showEditorState(unreadable: boolean): void {
+    if (unreadable) {
+      this.setStatus(this.t(this.codeInput ? 'chemistry_invalid' : 'chemistry_unreadable'), true);
+    } else if (this.editor.isReadonly) {
+      this.setStatus(this.t('chemistry_readonly'), false);
+    } else {
+      this.setStatus('', false);
+    }
   }
 
   private setCodeInvalid(invalid: boolean): void {
@@ -257,13 +275,11 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
 
     this.setCodeInvalid(invalid);
 
-    if (invalid) {
-      this.setStatus(this.t('chemistry_invalid'), true);
-    } else {
-      this.editor.applyCode(code);
-      this.setStatus('', false);
-    }
+    if (!invalid) this.editor.applyCode(code);
 
+    if (invalid && this.codeBlock) this.codeBlock.open = true;
+
+    this.showEditorState(invalid);
     this.updateSaveButton();
   };
 
@@ -292,7 +308,7 @@ class ChemistryDialogController implements DialogComponent<ChemistryPayload | nu
   };
 
   private save(): void {
-    if (this.codeInvalid) return;
+    if (this.codeInvalid || this.editor.isReadonly) return;
 
     const code = this.codeToSave();
 

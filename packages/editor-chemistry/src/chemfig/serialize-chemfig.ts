@@ -26,13 +26,16 @@ const serializeAtom = (atom: ChemAtom, onlyBranches: boolean): string => {
   return atom.label + branches + (continuation ? serializeBond(continuation) : '');
 };
 
+/** Связь с целью; параметры, которые модель хранит не целиком, — дословно из исходного кода. */
 const serializeBond = (bond: ChemBond): string =>
-  bond.type + angleSpec(bond.angle, bond.target.label) + serializeAtom(bond.target, false);
+  bond.type
+  + (bond.spec === undefined ? angleSpec(bond.angle, bond.target.label) : `[${bond.spec}]`)
+  + serializeAtom(bond.target, false);
 
 /**
  * Кольцо `*n(…)`: фрагмент вершины стоит перед знаком своей стороны. Префикс
  * перед `*` не нужен — разбор кладёт его в первую вершину, туда же его и
- * пишем.
+ * пишем. Параметры в скобках перед кольцом (`[:30]`) пишутся как были.
  */
 const serializeRing = (ring: ChemRing): string => {
   const sides = Array.from({ length: ring.size }, (_, index) => {
@@ -41,7 +44,9 @@ const serializeRing = (ring: ChemRing): string => {
     return (vertex ? serializeAtom(vertex, true) : '') + (ring.bonds[index] ?? '-');
   });
 
-  return `${ring.aromatic ? '**' : '*'}${ring.size}(${sides.join('')})`;
+  const prefix = ring.startSpec === undefined ? '' : `[${ring.startSpec}]`;
+
+  return `${prefix}${ring.aromatic ? '**' : '*'}${ring.size}(${sides.join('')})`;
 };
 
 /**
@@ -52,11 +57,13 @@ const serializeRing = (ring: ChemRing): string => {
 export const serializeChemfig = (structure: ChemStructure): string => {
   if (structure.kind === 'ring') return serializeRing(structure);
 
-  const { root, startAngle } = structure;
+  const { root, startAngle, startSpec } = structure;
 
   if (!root.label && root.bonds.length === 0) return '';
 
-  const prefix = startAngle === 0 ? angleSpec(null, root.label) : `[:${String(startAngle)}]`;
+  let prefix = startAngle === 0 ? angleSpec(null, root.label) : `[:${String(startAngle)}]`;
+
+  if (startSpec !== undefined) prefix = `[${startSpec}]`;
 
   return prefix + serializeAtom(root, false);
 };
