@@ -771,6 +771,207 @@ describe('набранная функция', () => {
     expect(JSON.stringify(plots.getScene())).toBe(edited);
   });
 
+  it('правка, вернувшая ту же запись и те же параметры, шага истории не оставляет и сцену не трогает', () => {
+    const plots = create();
+    const saved = {
+      type: 'plot_2d',
+      plots: [
+        { id: 'f', type: 'freehand', points: [[-2, 8.1], [0, 0.1], [2, 8.1]], expr: 'a*x^2+0.1', params: { a: 2 }, fn: 'f', color: '#16a34a', style: 'solid' },
+        { id: 'p', type: 'parabola', vertex: [1, -3], direction: 'up', stretchX: 1, stretchY: 2, color: '#3b82f6', style: 'solid' },
+      ],
+    };
+    let changes = 0;
+
+    plots.load(JSON.parse(JSON.stringify(saved)) as Record<string, unknown>);
+    plots.onChange(() => {
+      changes += 1;
+    });
+
+    const loaded = JSON.stringify(plots.getScene());
+
+    clickCurve(plots, '#16a34a');
+    typeExpr(plots, 'a*x^2+1', 'a*x^2+0.1');
+    commitExpr(plots);
+    expect(changes).toBe(0);
+    // Загруженная функция снова отдаётся дословно.
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+
+    // Ползунок туда и обратно — тоже без шага.
+    const slider = paramControl(plots, 'a', 'range');
+
+    slide(slider, '3');
+    slide(slider, '2');
+    release(slider);
+    expect(changes).toBe(0);
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+
+    // Готовая парабола: запись изменили и вернули — она остаётся параболой.
+    clickCurve(plots, '#3b82f6');
+    typeExpr(plots, '2(x-1)^2-5', '2(x-1)^2-3');
+    commitExpr(plots);
+    expect(changes).toBe(0);
+    expect(propsTitle(plots)).toBe('Парабола');
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+
+    // Отменять нечего.
+    key(canvasOf(plots), 'z', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+  });
+
+  it('Escape после неправильной записи возвращает последнюю правильную, а не неправильную', () => {
+    const plots = create();
+
+    pickTemplate(plots, 'parabola');
+    typeExpr(plots, 'x^3', 'x^');
+    commitExpr(plots);
+    expect(plotsOf(plots)[0]?.expr).toBe('x^3');
+    expect(errorOf(plots)).not.toBeNull();
+
+    const committed = JSON.stringify(plots.getScene());
+    const escape = (): KeyboardEvent => {
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+      exprOf(plots).dispatchEvent(event);
+
+      return event;
+    };
+
+    expect(escape().defaultPrevented).toBe(true);
+    expect(exprOf(plots).value).toBe('x^3');
+    expect(errorOf(plots)).toBeNull();
+    expect(JSON.stringify(plots.getScene())).toBe(committed);
+
+    // Посреди правки: правильная, затем неправильная — Escape возвращает запись до начала правки.
+    typeExpr(plots, 'x^4', 'x^4+');
+    escape();
+    expect(exprOf(plots).value).toBe('x^3');
+    expect(JSON.stringify(plots.getScene())).toBe(committed);
+
+    // Правка вернулась к прежней записи и закончилась неправильной: шага нет, Escape — снова к x^3.
+    typeExpr(plots, 'x^4', 'x^3', 'x^');
+    commitExpr(plots);
+    expect(exprOf(plots).value).toBe('x^');
+    expect(escape().defaultPrevented).toBe(true);
+    expect(exprOf(plots).value).toBe('x^3');
+    expect(JSON.stringify(plots.getScene())).toBe(committed);
+  });
+
+  it('слишком длинная или глубокая запись в поле — ошибка, сцена прежняя', () => {
+    const plots = create();
+
+    pickTemplate(plots, 'line');
+
+    const before = JSON.stringify(plots.getScene());
+
+    typeExpr(plots, `x${'+x'.repeat(3000)}`);
+    expect(errorOf(plots)).toBe('Слишком длинная запись');
+    typeExpr(plots, `${'('.repeat(60)}x${')'.repeat(60)}`);
+    expect(errorOf(plots)).toBe('Слишком много вложенных скобок');
+    commitExpr(plots);
+    expect(JSON.stringify(plots.getScene())).toBe(before);
+  });
+
+  it('сцена с повреждённой или слишком длинной записью загружается: такая ветвь — обычная ломаная', () => {
+    const plots = create();
+    const points = [[0, 0], [1, 1], [2, 0]];
+    const scene = {
+      type: 'plot_2d',
+      plots: [
+        { id: 'a', type: 'freehand', points, expr: `${'('.repeat(2000)}x${')'.repeat(2000)}`, fn: 'a' },
+        { id: 'b', type: 'freehand', points, expr: `x${'+x'.repeat(20000)}`, fn: 'b' },
+        { id: 'c', type: 'freehand', points, expr: 42, fn: 'c' },
+        { id: 'd', type: 'freehand', points, expr: '((((', fn: 'd' },
+      ],
+    };
+
+    expect(() => plots.load(scene)).not.toThrow();
+    expect(() => plots.getScene()).not.toThrow();
+    expect(plotsOf(plots).map((plot) => [plot.id, plot.type, plot.expr === scene.plots.find((item) => item.id === plot.id)?.expr])).toEqual([
+      ['a', 'freehand', true],
+      ['b', 'freehand', true],
+      ['c', 'freehand', true],
+      ['d', 'freehand', true],
+    ]);
+    // Ломаная, а не функция: блока «Функция» у неё нет.
+    clickCurve(plots, '#3b82f6');
+    expect(plots.element.querySelector('.rte-plots-fn')).toBeNull();
+  });
+
+  it('ветви с одним fn, но разной записью — разные функции со своими fn', () => {
+    const plots = create();
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'a', type: 'freehand', points: [[-3, -0.333], [-0.1, -10]], expr: '1/x', fn: 'f', color: '#16a34a' },
+        { id: 'b', type: 'freehand', points: [[0.1, 10], [3, 0.333]], expr: '1/x', fn: 'f', color: '#16a34a' },
+        { id: 'c', type: 'freehand', points: [[-2, 4], [0, 0], [2, 4]], expr: 'x^2', fn: 'f', color: '#dc2626' },
+        { id: 'd', type: 'freehand', points: [[2, 4], [3, 9]], expr: 'x^2', fn: 'f', color: '#dc2626' },
+      ],
+    });
+
+    const branches = plotsOf(plots);
+    const fnOf = (expr: string): unknown[] => [...new Set(branches.filter((plot) => plot.expr === expr).map((plot) => plot.fn))];
+
+    // Первая функция — дословно, вторая — со своим fn, обе её ветви вместе.
+    expect(fnOf('1/x')).toEqual(['f']);
+    expect(fnOf('x^2')).toHaveLength(1);
+    expect(fnOf('x^2')[0]).not.toBe('f');
+    expect(branches.filter((plot) => plot.expr === 'x^2')).toHaveLength(2);
+
+    // Удаление одной функции не задевает другую.
+    clickCurve(plots, '#dc2626');
+    key(canvasOf(plots), 'Delete');
+    expect(plotsOf(plots).map((plot) => plot.id)).toEqual(['a', 'b']);
+  });
+
+  it('смена выделения посреди правки записи: правка фиксируется у своей функции или отбрасывается', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+    let changes = 0;
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'A', type: 'freehand', points: [[-2, 4], [0, 0], [2, 4]], expr: 'x^2', fn: 'A', color: '#dc2626' },
+        { id: 'B', type: 'freehand', points: [[-5, -5], [5, -5]], expr: '-5', fn: 'B', color: '#16a34a' },
+      ],
+    });
+    plots.onChange(() => {
+      changes += 1;
+    });
+
+    const initial = JSON.stringify(plots.getScene());
+    const exprById = (id: string): unknown => plotsOf(plots).find((plot) => plot.id === id)?.expr;
+
+    // Только неправильная запись — отбрасывается: A прежняя, B не тронута, шага нет.
+    clickCurve(plots, '#dc2626');
+    typeExpr(plots, 'x^');
+    clickCurve(plots, '#16a34a');
+    expect(exprOf(plots).value).toBe('-5');
+    expect(errorOf(plots)).toBeNull();
+    expect(changes).toBe(0);
+    expect(JSON.stringify(plots.getScene())).toBe(initial);
+
+    // Правильная запись — фиксируется у A одним шагом; B не меняется.
+    clickCurve(plots, '#dc2626');
+    typeExpr(plots, 'x^2+1', 'x^2+');
+    clickCurve(plots, '#16a34a');
+    expect(changes).toBe(1);
+    expect(exprById('A')).toBe('x^2+1');
+    expect(exprById('B')).toBe('-5');
+    expect(exprOf(plots).value).toBe('-5');
+
+    // Правка B — свой шаг; отмены идут по одной: сначала B, затем A.
+    typeExpr(plots, '-4');
+    commitExpr(plots);
+    expect(changes).toBe(2);
+    key(canvas, 'z', { ctrlKey: true });
+    expect([exprById('A'), exprById('B')]).toEqual(['x^2+1', '-5']);
+    key(canvas, 'z', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(initial);
+  });
+
   it('буква a — ползунок от −10 до 10, жест — один шаг; пропавшие буквы забываются', () => {
     const plots = create();
     const canvas = canvasOf(plots);

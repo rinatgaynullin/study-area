@@ -232,6 +232,39 @@ describe('renderPlot2dContent: точки и подписи', () => {
     expect(unsafe).toContain('&lt;b&gt;<tspan dy="-4.5" font-size="8.5">&lt;i&gt;</tspan><tspan dy="4.5"> &amp; &quot;x&quot;</tspan>');
   });
 
+  it('подпись ломаной: ближе к правому концу, степень верхним индексом, текст экранирован', () => {
+    const svg = plotSvg([{ type: 'freehand', points: [[-2, -2], [0, 0], [2, 2]], label: 'y = x^2 & <b>', color: '#dc2626' }]);
+
+    // Видимая ширина 110…190, подпись — на 3/4 её (x = 170 на ломаной) со сдвигом, как у прямой.
+    expect(svg).toContain('<text x="180" y="120"');
+    expect(svg).toMatch(/<text[^>]*fill="#dc2626">y = x<tspan dy="-4.5" font-size="8.5">2<\/tspan><tspan dy="4.5"> &amp; &lt;b&gt;<\/tspan><\/text>/);
+    expect(svg).not.toContain('<b>');
+  });
+
+  it('подпись ломаной стоит внутри рисунка, даже если концы далеко за краем; ломаная вне рисунка — без подписи', () => {
+    const far = plotSvg([{ type: 'freehand', points: [[-100, -100], [100, 100]], label: 'y = x', color: '#dc2626' }]);
+    const at = /<text x="([\d.-]+)" y="([\d.-]+)"[^>]*fill="#dc2626">y = x<\/text>/.exec(far);
+
+    expect(at).not.toBeNull();
+    expect(Number(at?.[1])).toBeGreaterThan(150);
+    expect(Number(at?.[1])).toBeLessThan(300);
+    expect(Number(at?.[2])).toBeGreaterThan(0);
+    expect(Number(at?.[2])).toBeLessThan(150);
+
+    const outside = plotSvg([{ type: 'freehand', points: [[100, 100], [120, 90]], label: 'y = x', color: '#dc2626' }]);
+
+    expect(labels(outside)).not.toContain('y = x');
+  });
+
+  it('ломаная без подписи рисуется как раньше: подпись только добавляет свой текст', () => {
+    const points = [[-3, 1], [-1, 2], [0, 0.5], [2, -1], [4, 3]];
+    const plain = plotSvg([{ type: 'freehand', points, color: '#dc2626' }]);
+    const labelled = plotSvg([{ type: 'freehand', points, color: '#dc2626', label: 'y = a' }]);
+
+    expect(plain).not.toMatch(/<text(?![^>]*rte-drawing__axis-label)/);
+    expect(labelled.replace(/<text(?![^>]*rte-drawing__axis-label)[^>]*>y = a<\/text>/g, '')).toBe(plain);
+  });
+
   it('подписи экранируются', () => {
     const svg = plotSvg([{ type: 'point', coords: [0, 0], label: '<b>' }]);
 

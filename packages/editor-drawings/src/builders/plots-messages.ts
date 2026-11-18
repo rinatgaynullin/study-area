@@ -64,6 +64,8 @@ export const PLOTS_MESSAGES: Record<string, Messages> = {
     drawings_plots_fn_error_operator: 'Между числами нужен знак действия',
     drawings_plots_fn_error_log: 'У логарифма два числа: основание и аргумент, например log(2; x)',
     drawings_plots_fn_error_left: 'Слева от «=» может быть только y или f(x)',
+    drawings_plots_fn_error_long: 'Слишком длинная запись',
+    drawings_plots_fn_error_nesting: 'Слишком много вложенных скобок',
   },
   en: {
     drawings_plots_hint_select: 'Press “+ Function” and type a formula. Click a plot to select it and drag to move it; hold Shift to move it off the grid. Drag an empty spot to move the sheet',
@@ -124,5 +126,7 @@ export const PLOTS_MESSAGES: Record<string, Messages> = {
     drawings_plots_fn_error_operator: 'Put an operation sign between the numbers',
     drawings_plots_fn_error_log: 'A logarithm takes two numbers, the base and the argument: log(2; x)',
     drawings_plots_fn_error_left: 'Only y or f(x) can be to the left of “=”',
+    drawings_plots_fn_error_long: 'The formula is too long',
+    drawings_plots_fn_error_nesting: 'Too many nested brackets',
   },
 };

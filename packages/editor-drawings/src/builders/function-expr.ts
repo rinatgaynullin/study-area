@@ -32,7 +32,9 @@ export type FunctionErrorKey =
   | 'drawings_plots_fn_error_operand'
   | 'drawings_plots_fn_error_operator'
   | 'drawings_plots_fn_error_log'
-  | 'drawings_plots_fn_error_left';
+  | 'drawings_plots_fn_error_left'
+  | 'drawings_plots_fn_error_long'
+  | 'drawings_plots_fn_error_nesting';
 
 export interface FunctionError {
   key: FunctionErrorKey;
@@ -197,9 +199,13 @@ const splitWord = (word: string, start: number): Token[] => {
   return tokens;
 };
 
-/** Число со строки `text` с позиции `start`: цифры и один разделитель — точка или запятая между цифрами. */
-const readNumber = (text: string, start: number): Token => {
-  const match = /^(?:\d+(?:[.,]\d+)?|\.\d+)/.exec(text.slice(start));
+/**
+ * Число со строки `text` с позиции `start`: цифры и один разделитель — точка
+ * или запятая между цифрами. `comma: false` — внутри `log(…)`, где запятая
+ * разделяет аргументы: `log(2,8)`.
+ */
+const readNumber = (text: string, start: number, comma: boolean): Token => {
+  const match = (comma ? /^(?:\d+(?:[.,]\d+)?|\.\d+)/ : /^(?:\d+(?:\.\d+)?|\.\d+)/).exec(text.slice(start));
   const raw = match?.[0] ?? '';
   const digits = raw.replace(',', '.');
 
@@ -228,23 +234,37 @@ const readSuperscript = (text: string, start: number): Token => {
 
 const tokenize = (text: string, offset: number): Token[] => {
   const tokens: Token[] = [];
+  // Открытые скобки: `true` — скобка сразу за `log`, внутри неё запятая разделяет аргументы.
+  const parens: boolean[] = [];
+  let afterLog = false;
   let index = 0;
 
   while (index < text.length) {
     const char = text.charAt(index);
     const at = offset + index;
 
+    if (!/\s/.test(char)) {
+      if (SYMBOLS[char] === '(') parens.push(afterLog);
+
+      if (SYMBOLS[char] === ')') parens.pop();
+
+      afterLog = false;
+    }
+
     if (/\s/.test(char)) {
       index += 1;
     } else if (isDigit(char) || (char === '.' && isDigit(text.charAt(index + 1)))) {
-      const number = readNumber(text, index);
+      const number = readNumber(text, index, !parens.includes(true));
 
       tokens.push({ ...number, start: at });
       index += number.raw.length;
     } else if (isLatin(char)) {
       const word = /^[A-Za-z]+/.exec(text.slice(index))?.[0] ?? char;
+      const parts = splitWord(word, at);
+      const last = parts[parts.length - 1];
 
-      tokens.push(...splitWord(word, at));
+      tokens.push(...parts);
+      afterLog = last?.kind === 'function' && last.text === 'log';
       index += word.length;
     } else if (SUPERSCRIPT_DIGITS.includes(char) || char === SUPERSCRIPT_MINUS) {
       const power = readSuperscript(text, index);
@@ -285,6 +305,15 @@ const binary = (op: '+' | '-' | '*' | '/' | '^', left: FunctionNode, right: Func
 
 const numberNode = (value: number, text = String(value)): FunctionNode => ({ kind: 'number', value, text });
 
+/** Предел длины записи в символах: длиннее школьная функция не бывает, а разбор и запись остаются быстрыми. */
+const MAX_LENGTH = 300;
+
+/**
+ * Предел вложенности — скобки, модули, знаки, степени, функции и корни одним
+ * счётчиком: разбор, вычисление и запись рекурсивны, глубже стек не переполняется.
+ */
+const MAX_DEPTH = 50;
+
 /**
  * Разбор по уровням: сумма → произведение (в том числе без знака) → унарный
  * минус → степень (правоассоциативна, сильнее минуса: `-x^2` = `−(x²)`) →
@@ -298,6 +327,12 @@ class Parser {
 
   /** Открытых модулей: `|` после операнда внутри модуля его закрывает, снаружи — открывает новый. */
   private absDepth = 0;
+
+  /** Открытых скобок: `)` там, где ждали операнд, снаружи скобок — лишняя скобка. */
+  private parens = 0;
+
+  /** Текущая вложенность: см. `MAX_DEPTH`. */
+  private depth = 0;
 
   readonly params: string[] = [];
 
@@ -330,6 +365,19 @@ class Parser {
     this.index = Math.min(this.index + 1, this.tokens.length - 1);
 
     return current;
+  }
+
+  /** Уровень вложенности с лексемы `at`: глубже предела — ошибка, а не переполнение стека. */
+  private nested<T>(at: Token, read: () => T): T {
+    this.depth += 1;
+
+    if (this.depth > MAX_DEPTH) throw new ParseError({ key: 'drawings_plots_fn_error_nesting' }, at.start);
+
+    const result = read();
+
+    this.depth -= 1;
+
+    return result;
   }
 
   private sum(): FunctionNode {
@@ -387,16 +435,12 @@ class Parser {
 
   private unary(): FunctionNode {
     if (this.is('-')) {
-      this.take();
+      const sign = this.take();
 
-      return { kind: 'negate', operand: this.unary() };
+      return this.nested(sign, (): FunctionNode => ({ kind: 'negate', operand: this.unary() }));
     }
 
-    if (this.is('+')) {
-      this.take();
-
-      return this.unary();
-    }
+    if (this.is('+')) return this.nested(this.take(), () => this.unary());
 
     return this.power();
   }
@@ -406,24 +450,20 @@ class Parser {
 
     if (!this.is('^')) return base;
 
-    this.take();
+    const caret = this.take();
 
-    return binary('^', base, this.exponent());
+    return binary('^', base, this.nested(caret, () => this.exponent()));
   }
 
   /** Показатель после `^`: свой знак (`2^-x`) и снова степень — справа налево. */
   private exponent(): FunctionNode {
     if (this.is('-')) {
-      this.take();
+      const sign = this.take();
 
-      return { kind: 'negate', operand: this.exponent() };
+      return this.nested(sign, (): FunctionNode => ({ kind: 'negate', operand: this.exponent() }));
     }
 
-    if (this.is('+')) {
-      this.take();
-
-      return this.exponent();
-    }
+    if (this.is('+')) return this.nested(this.take(), () => this.exponent());
 
     return this.power();
   }
@@ -478,8 +518,11 @@ class Parser {
     if (this.is('√') || this.is('∛')) {
       const root = this.take();
 
-      return { kind: 'call', fn: root.text === '∛' ? 'cbrt' : 'sqrt', name: root.text, args: [this.postfix()] };
+      return { kind: 'call', fn: root.text === '∛' ? 'cbrt' : 'sqrt', name: root.text, args: [this.nested(root, () => this.postfix())] };
     }
+
+    // `)x`: закрывающая скобка, которую никто не открывал.
+    if (this.is(')') && this.parens === 0) throw new ParseError({ key: 'drawings_plots_fn_error_extra_paren' }, next.start);
 
     throw new ParseError({ key: 'drawings_plots_fn_error_operand' }, next.start);
   }
@@ -502,9 +545,11 @@ class Parser {
     const depth = this.absDepth;
 
     this.absDepth = 0;
+    this.parens += 1;
 
-    const inner = this.sum();
+    const inner = this.nested(open, () => this.sum());
 
+    this.parens -= 1;
     this.absDepth = depth;
     this.close(open);
 
@@ -530,7 +575,7 @@ class Parser {
 
     this.absDepth += 1;
 
-    const inner = this.sum();
+    const inner = this.nested(open, () => this.sum());
 
     this.absDepth -= 1;
 
@@ -555,7 +600,7 @@ class Parser {
     const fn = FUNCTION_WORDS[name.text] ?? 'sin';
     const base = fn === 'log' && this.peek().kind === 'sub' ? this.take() : null;
     const power = this.callPower();
-    const written = this.is('(') ? this.callArgs() : [this.simpleArgument()];
+    const written = this.nested(name, () => (this.is('(') ? this.callArgs() : [this.simpleArgument()]));
     // Основание подстрочными цифрами: `log₂(x)` — то же, что `log(2; x)`.
     const args = base ? [numberNode(base.value, base.text), ...written] : written;
 
@@ -595,6 +640,7 @@ class Parser {
     const args: FunctionNode[] = [];
 
     this.absDepth = 0;
+    this.parens += 1;
     args.push(this.sum());
 
     while (this.is(';')) {
@@ -602,6 +648,7 @@ class Parser {
       args.push(this.sum());
     }
 
+    this.parens -= 1;
     this.absDepth = depth;
     this.close(open);
 
@@ -611,9 +658,9 @@ class Parser {
   /** Аргумент без скобок: знак и множители без знака умножения, но без других функций — `sin x cos x`. */
   private simpleArgument(): FunctionNode {
     if (this.is('-')) {
-      this.take();
+      const sign = this.take();
 
-      return { kind: 'negate', operand: this.simpleArgument() };
+      return this.nested(sign, (): FunctionNode => ({ kind: 'negate', operand: this.simpleArgument() }));
     }
 
     let node = this.power();
@@ -630,10 +677,31 @@ class Parser {
 /** Левая часть `y =`, `f(x) =`; остальное слева от `=` — ошибка. */
 const LEFT_SIDE = /^\s*(?:y|[a-z]\s*\(\s*x\s*\))\s*$/i;
 
-/** Запись → дерево и буквы-параметры в порядке появления; ошибка — ключом сообщения и позицией в строке. */
+/**
+ * Запись → дерево и буквы-параметры в порядке появления; ошибка — ключом
+ * сообщения и позицией в строке. Не бросает: запись приходит и из сцены,
+ * где может оказаться что угодно.
+ */
 export const parseFunction = (text: string): ParsedFunction => {
-  // Кириллические х и у — те же буквы: позиции в строке не сдвигаются.
+  try {
+    return parseText(text);
+  } catch (error) {
+    if (error instanceof ParseError) return { ok: false, error: error.error, position: error.position };
+
+    // Непредвиденное (не строка из повреждённой сцены, переполнение стека) — тоже просто неправильная запись.
+    return { ok: false, error: { key: error instanceof RangeError ? 'drawings_plots_fn_error_nesting' : 'drawings_plots_fn_error_operand' }, position: 0 };
+  }
+};
+
+const parseText = (text: string): ParsedFunction => {
+  // Из повреждённой сцены может прийти не строка.
+  if (typeof text !== 'string') return { ok: false, error: { key: 'drawings_plots_fn_error_operand' }, position: 0 };
+
   const chars = [...text];
+
+  if (chars.length > MAX_LENGTH) return { ok: false, error: { key: 'drawings_plots_fn_error_long' }, position: chars.slice(0, MAX_LENGTH).join('').length };
+
+  // Кириллические х и у — те же буквы: позиции в строке не сдвигаются.
   const cyrillic = (char: string | undefined): boolean => char !== undefined && /[Ѐ-ӿ]/.test(char);
   // Только отдельная буква: в слове «синус» `у` остаётся кириллицей и даёт понятную ошибку.
   const source = chars.map((char, index) => (cyrillic(chars[index - 1]) || cyrillic(chars[index + 1]) ? char : (LOOKALIKES[char] ?? char))).join('');
@@ -648,17 +716,11 @@ export const parseFunction = (text: string): ParsedFunction => {
 
   if (right.trim() === '') return { ok: false, error: { key: 'drawings_plots_fn_error_empty' }, position: text.length };
 
-  try {
-    const parser = new Parser(tokenize(right, offset));
-    const ast = parser.parse();
+  const parser = new Parser(tokenize(right, offset));
+  const ast = parser.parse();
 
-    return { ok: true, ast, params: [...parser.params] };
-  } catch (error) {
-    if (error instanceof ParseError) return { ok: false, error: error.error, position: error.position };
-
-    throw error;
-  }
-}
+  return { ok: true, ast, params: [...parser.params] };
+};
 
 // -------------------------------------------------------------- вычисление
 

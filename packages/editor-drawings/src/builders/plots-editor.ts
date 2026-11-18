@@ -745,7 +745,7 @@ class PlotsEditor implements SceneEditor {
     const rawPlots = Array.isArray(raw.plots) ? raw.plots : [];
     const used = new Set<string>();
     const plots: Item[] = [];
-    /** Функции по `fn` и записи: их ветви собираются в один объект. */
+    /** Функции по `fn` (как в сцене) и записи: их ветви собираются в один объект. */
     const functions = new Map<string, FunctionItem>();
     let adopted = 0;
 
@@ -822,7 +822,7 @@ class PlotsEditor implements SceneEditor {
     // Перетаскивание, уже сдвинувшее график, откатывается: график — на прежнем месте, шага истории нет.
     this.cancelDrag();
     this.canvas.cancelPan();
-    this.selectedId = null;
+    this.select(null);
     this.setTool('select');
     this.render();
     this.renderProperties();
@@ -972,7 +972,13 @@ class PlotsEditor implements SceneEditor {
   /** Все функции — под текущий вид. Это следствие вида, а не правка: шага истории нет. */
   private resampleAll(): void {
     this.cancelResample();
-    this.state.plots = this.state.plots.map((item) => (isFunctionItem(item) && item.expr !== '' ? this.resampled(item) : item));
+
+    const resample = (plots: Item[]): Item[] => plots.map((item) => (isFunctionItem(item) && item.expr !== '' ? this.resampled(item) : item));
+
+    this.state.plots = resample(this.state.plots);
+
+    // Снимок начала правки — под тот же вид: правка, вернувшая всё как было, вернёт и ветви под текущий вид.
+    if (this.editFrom) this.editFrom.plots = resample(this.editFrom.plots);
   }
 
   /** После отмены и повтора ветви правленых функций — под текущий вид, загруженные — как были. */
@@ -1091,7 +1097,17 @@ class PlotsEditor implements SceneEditor {
       this.replaceSelected({ ...current, params });
     }
 
-    if (JSON.stringify(from) === JSON.stringify(this.state)) return;
+    const after = this.selectedPlot();
+    const before = after ? from.plots.find((item) => item.id === after.id) : undefined;
+
+    // Те же запись и параметры, что до правки: элемент — как был (загруженная функция снова отдаётся дословно), шага нет.
+    if (after && before && this.sameFormula(before, after)) {
+      this.replaceSelected(before);
+      this.render();
+      this.refreshFunction(before);
+
+      return;
+    }
 
     this.history.record(from);
     this.changes.emit();
@@ -1112,7 +1128,32 @@ class PlotsEditor implements SceneEditor {
     this.state = from;
     this.refreshBranches();
     this.render();
-    this.renderProperties();
+
+    // Блок — на месте, без пересоздания: фокус остаётся в поле записи.
+    const selected = this.selectedPlot();
+
+    if (selected) this.refreshFunction(selected);
+    else this.renderProperties();
+  }
+
+  /** Запись элемента для сравнения: у функции — набранная, у готовой кривой — её формула. */
+  private expressionOf(item: Item): string | null {
+    if (isFunctionItem(item)) return item.expr;
+
+    return hasFunctionBlock(item) ? plotExpression(item, this.separator) : null;
+  }
+
+  /** Одна и та же функция: та же запись и те же значения её букв-параметров (без значения — 1). */
+  private sameFormula(a: Item, b: Item): boolean {
+    const expr = this.expressionOf(a);
+
+    if (expr === null || expr !== this.expressionOf(b)) return false;
+
+    const parsed = parseFunction(expr);
+    const names = parsed.ok ? parsed.params : [];
+    const value = (item: Item, name: string): number => (isFunctionItem(item) ? (item.params[name] ?? 1) : 1);
+
+    return names.every((name) => value(a, name) === value(b, name));
   }
 
   /** Ползунок параметра: живой просмотр, шаг истории — по итогу жеста. */
@@ -1263,6 +1304,17 @@ class PlotsEditor implements SceneEditor {
     this.hint.textContent = this.t(`drawings_plots_hint_${this.tool}`);
   }
 
+  /**
+   * Смена выделения: незаконченная правка записи или жест ползунка прежнего
+   * элемента сначала фиксируется (или отбрасывается, если правильной записи
+   * не было) — в новый элемент она не попадёт и не повиснет без шага истории.
+   */
+  private select(id: string | null): void {
+    if (id !== this.selectedId) this.functionPanel.finish();
+
+    this.selectedId = id;
+  }
+
   private selectedPlot(): Item | null {
     return this.state.plots.find((plot) => plot.id === this.selectedId) ?? null;
   }
@@ -1296,10 +1348,18 @@ class PlotsEditor implements SceneEditor {
     return item;
   }
 
+  /** `fn` для функции с id `id`: сам id, если такого `fn` ещё нет, иначе свободный `plot_n`. */
+  private freeFn(id: string, functions: Map<string, FunctionItem>, used: Set<string>): string {
+    const taken = new Set([...functions.values()].map((item) => item.fn));
+
+    return taken.has(id) ? this.freshId(new Set([...used, ...taken])) : id;
+  }
+
   /**
    * Ветвь набранной функции из сцены: ломаная с записью, которая разбирается.
    * Ветви с одинаковыми `fn` и записью собираются в одну функцию на месте
-   * первой. `false` — это не ветвь функции, а обычный график.
+   * первой; тот же `fn` у другой записи — другая функция со своим `fn` (её
+   * ветви пишутся заново). `false` — это не ветвь функции, а обычный график.
    */
   private adoptBranch(raw: unknown, plot: Plot | undefined, used: Set<string>, functions: Map<string, FunctionItem>, plots: Item[]): boolean {
     if (!isRecord(raw) || raw.type !== 'freehand' || typeof raw.expr !== 'string' || !parseFunction(raw.expr).ok) return false;
@@ -1320,6 +1380,7 @@ class PlotsEditor implements SceneEditor {
     }
 
     const id = typeof raw.id === 'string' && raw.id !== '' && !used.has(raw.id) ? raw.id : this.freshId(used);
+    const clash = fn !== null && [...functions.values()].some((item) => item.fn === fn);
     const extra = extraOf(raw, new Set([...KNOWN_PLOT_KEYS, ...FUNCTION_KEYS]));
     const domain = readDomain(raw.domain);
     const item: FunctionItem = {
@@ -1327,9 +1388,10 @@ class PlotsEditor implements SceneEditor {
       type: 'function',
       expr: raw.expr,
       params: readParams(raw.params),
-      fn: fn ?? id,
+      fn: fn !== null && !clash ? fn : this.freeFn(id, functions, used),
       branches: points.length > 1 ? [points] : [],
-      loaded: [raw],
+      // Функция с чужим `fn` дословно не отдаётся: в сцене у неё будет свой.
+      ...(clash ? {} : { loaded: [raw] }),
       ...(domain ? { domain } : {}),
       ...(plot?.color ? { color: plot.color } : {}),
       ...(plot?.style ? { style: plot.style } : {}),
@@ -1338,8 +1400,8 @@ class PlotsEditor implements SceneEditor {
     };
 
     used.add(id);
-
-    if (key !== null) functions.set(key, item);
+    // Функция без `fn` тоже в списке — по ключу, которого не бывает у ветвей: её `fn` уже занят.
+    functions.set(key ?? `\u0001${id}`, item);
 
     plots.push(item);
 
@@ -1347,7 +1409,7 @@ class PlotsEditor implements SceneEditor {
   }
 
   private addPlot(plot: Item): void {
-    this.selectedId = plot.id;
+    this.select(plot.id);
     this.commit((state) => {
       state.plots.push(plot);
     });
@@ -1369,8 +1431,8 @@ class PlotsEditor implements SceneEditor {
   private addFunction(): void {
     const item = newFunction(this.nextId(), '', this.freeColor());
 
+    this.select(item.id);
     this.state.plots.push(item);
-    this.selectedId = item.id;
     this.setTool('select');
     this.render();
     this.renderProperties();
@@ -1443,7 +1505,7 @@ class PlotsEditor implements SceneEditor {
         const plot = this.plotAt(info.world);
 
         if (plot) {
-          this.selectedId = plot.id;
+          this.select(plot.id);
           this.deleteSelection();
         }
         break;
@@ -1636,7 +1698,7 @@ class PlotsEditor implements SceneEditor {
   private selectAt(info: PointerInfo): void {
     const plot = this.plotAt(info.world);
 
-    this.selectedId = plot?.id ?? null;
+    this.select(plot?.id ?? null);
     // Набранную функцию не тащат: её положение задаёт запись.
     this.drag = plot && !isFunctionItem(plot) ? { id: plot.id, origin: info.world, snapshot: cloneScene(plot), moved: false } : null;
     this.render();
@@ -1714,7 +1776,7 @@ class PlotsEditor implements SceneEditor {
 
     if (!plot) return;
 
-    this.selectedId = plot.id;
+    this.select(plot.id);
     this.render();
     this.renderProperties();
     this.properties.querySelector<HTMLInputElement>('input[data-autofocus]')?.focus();

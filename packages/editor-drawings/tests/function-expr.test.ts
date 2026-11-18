@@ -132,6 +132,17 @@ describe('разбор и вычисление записи', () => {
     ['2 3', 'drawings_plots_fn_error_operator', 2],
     ['log(x)', 'drawings_plots_fn_error_log', 0],
     ['x = 2', 'drawings_plots_fn_error_left', 0],
+    [')x', 'drawings_plots_fn_error_extra_paren', 0],
+    ['x + )', 'drawings_plots_fn_error_extra_paren', 4],
+    ['(x + )', 'drawings_plots_fn_error_operand', 5],
+    ['log(2,1,5)', 'drawings_plots_fn_error_log', 0],
+    [`x${' + x'.repeat(80)}`, 'drawings_plots_fn_error_long', 300],
+    [`${'('.repeat(51)}x${')'.repeat(51)}`, 'drawings_plots_fn_error_nesting', 50],
+    [`${'-'.repeat(51)}x`, 'drawings_plots_fn_error_nesting', 50],
+    [`${'sin'.repeat(51)}x`, 'drawings_plots_fn_error_nesting', 150],
+    [`${'√'.repeat(51)}x`, 'drawings_plots_fn_error_nesting', 50],
+    [`${'|'.repeat(51)}x${'|'.repeat(51)}`, 'drawings_plots_fn_error_nesting', 50],
+    [`x${'^x'.repeat(51)}`, 'drawings_plots_fn_error_nesting', 101],
   ];
 
   it.each(ERRORS)('ошибка в «%s»: %s @%i', (text, key, position, word) => {
@@ -141,6 +152,69 @@ describe('разбор и вычисление записи', () => {
     // Каждому ключу — перевод на обоих языках.
     expect(PLOTS_MESSAGES.ru?.[key]).toBeTruthy();
     expect(PLOTS_MESSAGES.en?.[key]).toBeTruthy();
+  });
+
+  it('log(…) с запятой: запятая разделяет аргументы, десятичные — через точку; вне log запятая десятичная', () => {
+    expect(valuesOf('log(2,8)', [0])).toEqual([3]);
+    expect(valuesOf('log(2, 8)', [0])).toEqual([3]);
+    expect(valuesOf('log(2,x)', [16])).toEqual([4]);
+    expect(valuesOf('log(0.5,x)', [4])).toEqual([-2]);
+    expect(valuesOf('log(2,(1.5+0.5)x)', [2])).toEqual([2]);
+    expect(valuesOf('2,5x + log(2,8)', [2])).toEqual([8]);
+    expect(valuesOf('0,5x', [4])).toEqual([2]);
+    expect(valuesOf('sin(1,5)', [0])[0]).toBeCloseTo(Math.sin(1.5));
+    // Основание подстрочными цифрами: скобка не сразу за log, запятая в ней десятичная.
+    expect(valuesOf('log₂(0,5)', [0])).toEqual([-1]);
+  });
+
+  it('длинные и глубокие записи: разбор отклоняет без исключения, принятые считаются и записываются', () => {
+    const huge = [
+      `${'('.repeat(2000)}x${')'.repeat(2000)}`,
+      `${'sin'.repeat(3000)}x`,
+      '√'.repeat(30000),
+      `${'-'.repeat(5000)}x`,
+      `x${'+x'.repeat(20000)}`,
+      `x${'^x'.repeat(5000)}`,
+    ];
+
+    huge.forEach((text) => expect(parseFunction(text)).toMatchObject({ ok: false, error: { key: 'drawings_plots_fn_error_long' } }));
+
+    // Ровно 300 символов — принимается, 301 — уже нет.
+    expect(parseFunction('x'.repeat(300)).ok).toBe(true);
+    expect(parseFunction('x'.repeat(301)).ok).toBe(false);
+    // Вложенность 50 — принимается, 51 — нет.
+    expect(parseFunction(`${'('.repeat(50)}x${')'.repeat(50)}`).ok).toBe(true);
+    expect(parseFunction(`${'-'.repeat(50)}x`).ok).toBe(true);
+
+    // Предельные принятые записи: длинная сумма, цепочка умножений без знака, глубокая вложенность.
+    const limits: Array<[string, number]> = [
+      [`x${'+x'.repeat(149)}`, 300],
+      ['x'.repeat(300), 2 ** 300],
+      ['2x'.repeat(150), 4 ** 150],
+      [`${'-'.repeat(50)}x`, 2],
+      [`${'√('.repeat(25)}x${')'.repeat(25)}`, 2 ** (1 / 2 ** 25)],
+      [`${'|'.repeat(50)}x${'|'.repeat(50)}`, 2],
+      ['x²'.repeat(150), 2 ** 300],
+    ];
+
+    limits.forEach(([text, value]) => {
+      const ast = astOf(text);
+
+      expect(evaluateFunction(ast, 2)).toBeCloseTo(value);
+      expect(() => functionParts(ast, ',')).not.toThrow();
+      expect(functionLabelText(ast).startsWith('y = ')).toBe(true);
+      expect(functionText(ast).startsWith('y = ')).toBe(true);
+    });
+  });
+
+  it('разбор никогда не бросает: не строка и мусор — ошибка записи', () => {
+    const junk: unknown[] = [undefined, null, 42, {}, ['x']];
+
+    junk.forEach((value) => expect(parseFunction(value as string).ok).toBe(false));
+    ['((((', '||||', '^^^', '√√√', 'log(', 'log₂', ')))(((', '-+-+-', '²', '⁻', ',,,', ';;'].forEach((text) => {
+      expect(() => parseFunction(text)).not.toThrow();
+      expect(parseFunction(text).ok).toBe(false);
+    });
   });
 
   it('в записи нет вызова eval и new Function', async () => {

@@ -125,8 +125,11 @@ export class FunctionPanel {
   /** Последняя правильная запись: её показывает карточка, пока в поле ошибка. */
   private ast: FunctionNode | null = null;
 
-  /** Запись на начало правки: её возвращает Escape. */
+  /** Последняя правильная запись на начало правки: её возвращает Escape. */
   private committed = '';
+
+  /** Последняя правильная запись, набранная в этой правке: она и фиксируется по её концу. */
+  private lastValid = '';
 
   /** Идёт правка поля: изменения уже на полотне, шага истории ещё нет. */
   private editing = false;
@@ -166,6 +169,7 @@ export class FunctionPanel {
     this.editing = false;
     this.gesture = null;
     this.committed = view.expr;
+    this.lastValid = view.expr;
     this.rows.clear();
     this.params.replaceChildren();
     this.setError(null);
@@ -188,6 +192,16 @@ export class FunctionPanel {
     return this.element;
   }
 
+  /**
+   * Закончить идущую правку поля и жест ползунка — перед сменой выделения:
+   * правка фиксируется последней правильной записью, а не повисает.
+   */
+  finish(): void {
+    if (this.gesture !== null) this.release(this.gesture);
+
+    this.commit();
+  }
+
   /** Новые значения на месте: карточка, параметры, флажок; поле — только если его сейчас не правят. */
   update(view: FunctionView): void {
     this.view = view;
@@ -197,6 +211,7 @@ export class FunctionPanel {
 
       this.ast = parsed.ok ? parsed.ast : null;
       this.committed = view.expr;
+      this.lastValid = view.expr;
 
       if (this.input && this.input !== document.activeElement) {
         this.input.value = view.expr;
@@ -289,6 +304,7 @@ export class FunctionPanel {
     const first = !this.editing;
 
     this.editing = true;
+    this.lastValid = text.trim();
     this.ast = parsed.ast;
     this.renderCard();
     this.options.onInput(text.trim(), parsed.params, first);
@@ -298,7 +314,8 @@ export class FunctionPanel {
     if (!this.editing) return;
 
     this.editing = false;
-    this.committed = this.input?.value.trim() ?? this.committed;
+    // Неправильная запись в поле не становится зафиксированной: Escape вернёт последнюю правильную.
+    this.committed = this.lastValid;
     this.options.onCommit();
   }
 
@@ -313,6 +330,7 @@ export class FunctionPanel {
     const wasEditing = this.editing;
 
     this.editing = false;
+    this.lastValid = this.committed;
     input.value = this.committed;
     this.setError(null);
 

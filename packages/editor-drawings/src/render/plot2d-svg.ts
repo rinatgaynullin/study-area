@@ -490,7 +490,90 @@ const renderPlot = (context: PlotContext, plot: Plot, highlighted: boolean): voi
   }
 };
 
-/** Подпись кривой у характерной точки: вершина параболы, центр гиперболы, середина прямой. */
+/** Отступ места подписи ломаной от краёв рисунка. */
+const FREEHAND_LABEL_INSET = 12;
+
+/** Где по видимой ширине ломаной стоит её подпись: ближе к правому концу, но с местом для текста. */
+const FREEHAND_LABEL_AT = 0.75;
+
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+const lerp = (a: SvgPoint, b: SvgPoint, t: number): SvgPoint => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+
+/** Часть отрезка `a–b` внутри прямоугольника (отсечение Лянга — Барски): доли `[t0, t1]` или `null`. */
+const clipSegment = (a: SvgPoint, b: SvgPoint, box: Box): [number, number] | null => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const sides: Array<[number, number]> = [
+    [-dx, a.x - box.left],
+    [dx, box.right - a.x],
+    [-dy, a.y - box.top],
+    [dy, box.bottom - a.y],
+  ];
+  let from = 0;
+  let to = 1;
+  let outside = false;
+
+  sides.forEach(([p, q]) => {
+    if (p === 0) {
+      // Отрезок параллелен стороне: снаружи от неё — целиком снаружи.
+      if (q < 0) outside = true;
+
+      return;
+    }
+
+    if (p < 0) from = Math.max(from, q / p);
+    else to = Math.min(to, q / p);
+  });
+
+  return outside || from > to ? null : [from, to];
+};
+
+/**
+ * Место подписи ломаной: точка её видимой части на `FREEHAND_LABEL_AT`
+ * видимой ширины — ближе к правому концу, внутри рисунка. Ломаная целиком
+ * за краем — `null`.
+ */
+const freehandLabelPoint = (points: SvgPoint[], size: PlotSize): SvgPoint | null => {
+  const box: Box = {
+    left: FREEHAND_LABEL_INSET,
+    top: FREEHAND_LABEL_INSET,
+    right: size.width - FREEHAND_LABEL_INSET,
+    bottom: size.height - FREEHAND_LABEL_INSET,
+  };
+  const pieces: Array<[SvgPoint, SvgPoint]> = [];
+
+  points.forEach((point, index) => {
+    const next = points[index + 1];
+    const part = next ? clipSegment(point, next, box) : null;
+
+    if (next && part) pieces.push([lerp(point, next, part[0]), lerp(point, next, part[1])]);
+  });
+
+  const ends = pieces.flat();
+  const first = ends[0];
+
+  if (!first) return null;
+
+  const left = ends.reduce((min, point) => Math.min(min, point.x), first.x);
+  const right = ends.reduce((max, point) => Math.max(max, point.x), first.x);
+  const target = left + (right - left) * FREEHAND_LABEL_AT;
+  // Последний по ходу кусок над нужным x; если там разрыв — ближайший к нему конец куска.
+  const piece = [...pieces].reverse().find(([a, b]) => Math.min(a.x, b.x) <= target && target <= Math.max(a.x, b.x));
+
+  if (!piece) return ends.reduce((best, point) => (Math.abs(point.x - target) < Math.abs(best.x - target) ? point : best), first);
+
+  const [a, b] = piece;
+
+  return lerp(a, b, b.x === a.x ? 0 : (target - a.x) / (b.x - a.x));
+};
+
+/** Подпись кривой у характерной точки: вершина параболы, центр гиперболы, середина прямой, правый край ломаной. */
 const renderPlotLabel = (context: PlotContext, plot: Plot): void => {
   if (!plot.label || plot.type === 'point' || plot.type === 'circle') return;
 
@@ -507,6 +590,10 @@ const renderPlotLabel = (context: PlotContext, plot: Plot): void => {
     if (ends) at = { x: (ends[0].x + ends[1].x) / 2 + 10, y: (ends[0].y + ends[1].y) / 2 - 10 };
   } else if (plot.type === 'sqrt') {
     at = context.toSvg([plot.vertex[0] + (plot.directionX === 'left' ? -2 : 2), plot.vertex[1] + (plot.directionY === 'down' ? -1.5 : 1.5)]);
+  } else if (plot.type === 'freehand') {
+    const on = freehandLabelPoint(plot.points.map(context.toSvg), context.size);
+
+    if (on) at = { x: on.x + 10, y: on.y - 10 };
   }
 
   if (at) drawPlotLabel(context.builder, at, plot.label, { size: LABEL_SIZE, color, anchor: 'start', halo: 3.5 });
