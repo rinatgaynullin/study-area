@@ -105,3 +105,76 @@ test('сетка цвета не даёт горизонтальной прок�
   // Две строки по пять плиток.
   expect(new Set(layout.tiles.map((tile) => tile.top)).size).toBe(2);
 });
+
+/** Графики с выделенной параболой из шаблона. */
+async function selectParabola(page: Page): Promise<void> {
+  await openDrawingDialog(page, 'Графики');
+  await page.locator(`${OPEN_MODAL} button[data-plot-template="parabola"]`).click();
+  await expect(page.locator(`${PROPS} .rte-plots-fn`)).toBeVisible();
+}
+
+test('графики: плитка «Красный» красит параболу и отмечена', async ({ page }) => {
+  await openDemo(page);
+  await selectParabola(page);
+
+  const red = page.locator(PROPS).getByRole('radio', { name: 'Красный' });
+
+  await red.click();
+  await expect(red).toHaveAttribute('aria-checked', 'true');
+  await expect(red).toBeFocused();
+  await expect(page.locator(`${LAYER} svg path[stroke="#dc2626"]`).first()).toBeAttached();
+  // Поля hex больше нет и здесь.
+  await expect(page.locator(`${PROPS} input[type="text"][placeholder^="#"]`)).toHaveCount(0);
+});
+
+test('графики: при выделенной параболе шаблоны — одна строка, формула и три ползунка видны без прокрутки', async ({ page, isMobile }) => {
+  if (!isMobile) await page.setViewportSize({ width: 1280, height: 720 });
+
+  await openDemo(page);
+  await selectParabola(page);
+
+  const layout = await page.locator(`${OPEN_MODAL} .rte-builder--plots`).evaluate((builder) => {
+    const props = builder.querySelector('.rte-builder__props');
+    const top = (element: Element | null | undefined): number => Math.round(element?.getBoundingClientRect().top ?? NaN);
+    const box = props?.getBoundingClientRect();
+    const formula = props?.querySelector('.rte-plots-fn__formula');
+    const inside = (element: Element): boolean => {
+      const rect = element.getBoundingClientRect();
+
+      return box !== undefined && rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1;
+    };
+
+    return {
+      templates: [...builder.querySelectorAll('[data-plot-template]')].map((button) => ({
+        top: top(button),
+        label: button.getAttribute('aria-label'),
+        title: button.getAttribute('title'),
+      })),
+      sliders: [...(props?.querySelectorAll('.rte-plots-fn input[type="range"]') ?? [])].map(inside),
+      formula: formula ? inside(formula) : false,
+      scrollTop: props?.scrollTop ?? NaN,
+      stageTop: top(builder.querySelector('.rte-builder__stage')),
+      propsTop: top(props),
+      hint: builder.querySelector('.rte-builder__hint')?.textContent,
+    };
+  });
+
+  expect(layout.templates).toHaveLength(5);
+  expect(new Set(layout.templates.map((template) => template.top)).size).toBe(1);
+  layout.templates.forEach((template) => {
+    expect(template.label).toBeTruthy();
+    expect(template.title).toBe(template.label);
+  });
+  expect(layout.hint).toBe('Двигай ползунки или тащи график — формула меняется вместе с ним');
+
+  if (isMobile) {
+    // На телефоне порядок прежний: полотно, затем блок свойств.
+    expect(layout.stageTop).toBeLessThan(layout.propsTop);
+
+    return;
+  }
+
+  expect(layout.scrollTop).toBe(0);
+  expect(layout.formula).toBe(true);
+  expect(layout.sliders).toEqual([true, true, true]);
+});

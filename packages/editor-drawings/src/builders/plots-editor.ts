@@ -4,12 +4,14 @@ import { fmt, pointsAttr } from '../render/svg-builder';
 import { normalizeGeometryScene } from '../scene/normalize';
 import type { GeometryHighlight, GeometryScene, Plot, Vec2 } from '../scene/types';
 import type { BuilderIconId } from './builder-icons';
+import { DRAWING_COLOR_HEX } from './color-picker';
+import { checkField, colorField, pairField, propsEmpty, propsTitle, textField, type NumberPair } from './fields';
 import { FunctionPanel } from './function-panel';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
 import { FINE_DIGITS, MIN_RADIUS, MIN_STRETCH, functionLabel, isFunctionLabel, isFunctionPlot, type ParabolaForm } from './plot-functions';
 import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
-import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
+import { ToolBar, actionButton, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
 type Tool = 'select' | 'point' | 'pencil' | 'shading' | 'text' | 'delete';
@@ -36,31 +38,14 @@ const TEMPLATE_ICONS: Record<TemplateId, BuilderIconId> = {
   sqrt: 'root',
 };
 
-/** Цвета шаблонов — те же, что в оригинале: по цвету ученик узнаёт вид графика. */
+/** Цвета шаблонов — из палитры, те же оттенки, что в оригинале: по цвету ученик узнаёт вид графика. */
 const TEMPLATE_COLORS: Record<TemplateId, string> = {
-  parabola: '#3b82f6',
-  hyperbola: '#10b981',
-  line: '#ef4444',
-  circle: '#f59e0b',
-  sqrt: '#8b5cf6',
+  parabola: DRAWING_COLOR_HEX.blue,
+  hyperbola: DRAWING_COLOR_HEX.green,
+  line: DRAWING_COLOR_HEX.red,
+  circle: DRAWING_COLOR_HEX.orange,
+  sqrt: DRAWING_COLOR_HEX.purple,
 };
-
-interface NamedColor {
-  id: string;
-  value: string;
-}
-
-/** Первый цвет — цвет по умолчанию, поэтому список непустой. */
-const NAMED_COLORS: [NamedColor, ...NamedColor[]] = [
-  { id: 'blue', value: '#3b82f6' },
-  { id: 'red', value: '#ef4444' },
-  { id: 'green', value: '#10b981' },
-  { id: 'orange', value: '#f59e0b' },
-  { id: 'purple', value: '#8b5cf6' },
-  { id: 'gray', value: '#475569' },
-];
-
-const HEX_COLOR = /^#[0-9a-f]{6}$/;
 
 const CANVAS_WIDTH = 560;
 const CANVAS_HEIGHT = 420;
@@ -498,6 +483,9 @@ class PlotsEditor implements SceneEditor {
 
   private readonly hint: HTMLElement;
 
+  /** Палитра шаблонов: при выделенной функции — одна строка значков, чтобы блоку «Функция» хватило места. */
+  private readonly palette: HTMLElement;
+
   private readonly properties: HTMLElement;
 
   private state: PlotsState = PlotsEditor.emptyState();
@@ -573,21 +561,22 @@ class PlotsEditor implements SceneEditor {
       ],
     });
 
-    const palette = el('div', {
+    this.palette = el('div', {
       class: 'rte-builder__palette rte-plots__palette',
       attrs: { role: 'group', 'aria-label': this.t('drawings_plots_templates') },
     });
 
     TEMPLATES.forEach((template) => {
       const label = this.t(`drawings_plots_template_${template}`);
+      // Имя кнопки — в `aria-label`: в строке значков подпись скрыта.
       const button = el('button', {
         class: 'rte-builder__tool rte-plots__template',
-        attrs: { type: 'button', title: label, 'data-plot-template': template },
+        attrs: { type: 'button', title: label, 'aria-label': label, 'data-plot-template': template },
         children: [toolIcon(TEMPLATE_ICONS[template]), el('span', { class: 'rte-builder__tool-label', text: label })],
       });
 
       button.addEventListener('click', () => this.addTemplate(template));
-      palette.appendChild(button);
+      this.palette.appendChild(button);
     });
 
     this.hint = el('p', { class: 'rte-builder__hint', attrs: { role: 'status' } });
@@ -597,7 +586,7 @@ class PlotsEditor implements SceneEditor {
       class: 'rte-builder rte-builder--plots',
       children: [
         el('div', { class: 'rte-builder__bar', children: [this.tools.element, actions] }),
-        palette,
+        this.palette,
         el('div', {
           class: 'rte-builder__body',
           children: [el('div', { class: 'rte-builder__stage', children: [this.canvas.element] }), this.properties],
@@ -790,7 +779,8 @@ class PlotsEditor implements SceneEditor {
   /** Вид записи, в котором подпись кривой совпадает с её формулой; сначала — выбранный в блоке. */
   private labelFormOf(plot: Plot): ParabolaForm | null {
     const current = this.functionPanel.form;
-    const forms: ParabolaForm[] = plot.type === 'parabola' ? [current, current === 'vertex' ? 'standard' : 'vertex'] : [current];
+    const other: ParabolaForm = current === 'vertex' ? 'standard' : 'vertex';
+    const forms: ParabolaForm[] = plot.type === 'parabola' ? [current, other] : [current];
 
     return forms.find((form) => isFunctionLabel(plot.label, plot, form, this.separator)) ?? null;
   }
@@ -932,6 +922,7 @@ class PlotsEditor implements SceneEditor {
     if (!previous) return;
 
     this.state = previous;
+    this.followLabelForm();
     this.afterChange();
   }
 
@@ -941,7 +932,20 @@ class PlotsEditor implements SceneEditor {
     if (!next) return;
 
     this.state = next;
+    this.followLabelForm();
     this.afterChange();
+  }
+
+  /**
+   * После отмены и повтора переключатель вида записи показывает тот вид, в
+   * котором записана подпись-формула выделенной параболы: иначе он остался бы
+   * на виде, из которого правку отменили.
+   */
+  private followLabelForm(): void {
+    const plot = this.selectedPlot();
+    const entry = plot?.type === 'parabola' ? this.formulaLabelOf(plot.id) : undefined;
+
+    if (entry) this.functionPanel.form = entry.form;
   }
 
   private toggleGrid(): void {
@@ -955,8 +959,21 @@ class PlotsEditor implements SceneEditor {
     this.draft = [];
     this.stroke = null;
     this.tools.setActive(tool);
-    this.hint.textContent = this.t(`drawings_plots_hint_${tool}`);
+    this.updateHint();
     this.renderOverlay();
+  }
+
+  /** Подсказка под панелью: у выделенной функции с инструментом «Выбрать» — о блоке «Функция», иначе — инструмента. */
+  private updateHint(): void {
+    const plot = this.selectedPlot();
+
+    if (this.tool === 'select' && plot && isFunctionPlot(plot)) {
+      this.hint.textContent = this.t('drawings_plots_fn_hint');
+
+      return;
+    }
+
+    this.hint.textContent = this.t(`drawings_plots_hint_${this.tool}`);
   }
 
   private selectedPlot(): PlotItem | null {
@@ -1334,6 +1351,10 @@ class PlotsEditor implements SceneEditor {
     this.pointFields = [];
 
     const plot = this.selectedPlot();
+    const isFunction = plot !== null && isFunctionPlot(plot);
+
+    this.palette.classList.toggle('rte-plots__palette--compact', isFunction);
+    this.updateHint();
 
     if (!plot) {
       this.renderAxesProperties();
@@ -1341,14 +1362,24 @@ class PlotsEditor implements SceneEditor {
       return;
     }
 
-    const isFunction = isFunctionPlot(plot);
-
-    this.properties.appendChild(el('h4', { class: 'rte-builder__props-title', text: t(`drawings_plots_selected_${plot.type}`) }));
+    this.properties.appendChild(propsTitle(t(`drawings_plots_selected_${plot.type}`)));
 
     // Блок «Функция» — первым: формула и параметры вместо направлений и растяжений.
-    if (isFunction) this.properties.appendChild(this.functionPanel.show(plot, this.formulaLabelOf(plot.id) !== undefined));
+    if (isFunctionPlot(plot)) this.properties.appendChild(this.functionPanel.show(plot, this.formulaLabelOf(plot.id) !== undefined));
 
-    this.appendColorFields(plot);
+    this.properties.appendChild(
+      colorField({
+        t,
+        label: t('drawings_prop_color'),
+        value: plot.color ?? '',
+        // Как прежде с пустым hex: без цвета кривая рисуется цветом по умолчанию.
+        allowDefault: true,
+        onChange: (value) =>
+          this.updatePlot(plot, (draft) => {
+            draft.color = value || undefined;
+          }),
+      }),
+    );
 
     if (plot.type !== 'point' && plot.type !== 'shading') {
       this.appendCheckbox(t('drawings_prop_dashed'), plot.style === 'dashed', (checked) =>
@@ -1358,17 +1389,20 @@ class PlotsEditor implements SceneEditor {
       );
     }
 
-    this.labelInput = this.appendText(
-      t('drawings_prop_label'),
-      plot.label ?? '',
-      (value) =>
+    const label = textField({
+      label: t('drawings_prop_label'),
+      value: plot.label ?? '',
+      autofocus: true,
+      onChange: (value) =>
         // Подпись, набранная руками, — уже не формула: признак снимается.
         this.commit((state) => {
           state.formulaLabels = state.formulaLabels.filter((entry) => entry.id !== plot.id);
           state.plots = state.plots.map((item) => (item.id === plot.id ? { ...item, label: value || undefined } : item));
         }),
-      true,
-    );
+    });
+
+    this.labelInput = label.querySelector('input');
+    this.properties.appendChild(label);
 
     switch (plot.type) {
       case 'parabola':
@@ -1404,7 +1438,7 @@ class PlotsEditor implements SceneEditor {
                 draft.p2 = point;
               }),
             ),
-          ];
+          ].flatMap((inputs) => (inputs ? [inputs] : []));
         } else {
           this.appendDomain(plot);
         }
@@ -1417,8 +1451,6 @@ class PlotsEditor implements SceneEditor {
 
     remove.addEventListener('click', () => this.deleteSelection());
     this.properties.appendChild(remove);
-
-    if (isFunction) this.properties.appendChild(el('p', { class: 'rte-plots__fn-hint', text: t('drawings_plots_fn_hint') }));
   }
 
   /** Без выделения панель показывает оси: подписи и числа на них. */
@@ -1426,17 +1458,23 @@ class PlotsEditor implements SceneEditor {
     const { t, state } = this;
 
     this.properties.append(
-      el('p', { class: 'rte-builder__props-empty', text: t('drawings_nothing_selected') }),
-      el('h4', { class: 'rte-builder__props-title', text: t('drawings_plots_axes') }),
-    );
-    this.appendText(t('drawings_plots_prop_x_label'), state.xLabel, (value) =>
-      this.commit((draft) => {
-        draft.xLabel = value;
+      propsEmpty(t('drawings_nothing_selected')),
+      propsTitle(t('drawings_plots_axes')),
+      textField({
+        label: t('drawings_plots_prop_x_label'),
+        value: state.xLabel,
+        onChange: (value) =>
+          this.commit((draft) => {
+            draft.xLabel = value;
+          }),
       }),
-    );
-    this.appendText(t('drawings_plots_prop_y_label'), state.yLabel, (value) =>
-      this.commit((draft) => {
-        draft.yLabel = value;
+      textField({
+        label: t('drawings_plots_prop_y_label'),
+        value: state.yLabel,
+        onChange: (value) =>
+          this.commit((draft) => {
+            draft.yLabel = value;
+          }),
       }),
     );
     this.appendCheckbox(t('drawings_plots_prop_ticks'), state.showAxesTicks, (checked) =>
@@ -1446,104 +1484,57 @@ class PlotsEditor implements SceneEditor {
     );
   }
 
-  /** Цвет: именованный из списка или любой hex; пустой hex возвращает цвет по умолчанию. */
-  private appendColorFields(plot: PlotItem): void {
-    const { t } = this;
-    const current = (plot.color ?? '').toLowerCase();
-    const options = NAMED_COLORS.map((color) => ({ value: color.value, label: t(`drawings_plots_color_${color.id}`) }));
+  private appendCheckbox(label: string, checked: boolean, onChange: (checked: boolean) => void): void {
+    this.properties.appendChild(checkField({ label, checked, onChange }));
+  }
 
-    if (current && !NAMED_COLORS.some((color) => color.value === current)) options.push({ value: current, label: current });
+  /**
+   * Точка отрезка: оба числа обязательны. Поля возвращаются, чтобы правка `k`
+   * или `b` обновляла их на месте; неполный ввод — панель заново с точкой из сцены.
+   */
+  private appendPoint(label: string, point: Vec2, apply: (point: Vec2) => void): [HTMLInputElement, HTMLInputElement] | null {
+    const row = pairField({
+      label,
+      values: point,
+      step: GRID_STEP,
+      onChange: ([x, y]: NumberPair) => {
+        if (x === null || y === null) {
+          this.renderProperties();
 
-    const select = selectControl(options, current || NAMED_COLORS[0].value);
+          return;
+        }
 
-    select.addEventListener('change', () =>
-      this.updatePlot(plot, (draft) => {
-        draft.color = select.value;
-      }),
-    );
-    this.properties.appendChild(propertyField(t('drawings_prop_color'), select));
-
-    const hex = el('input', { class: 'rte-input', attrs: { type: 'text', value: plot.color ?? '', placeholder: NAMED_COLORS[0].value, maxlength: 7, spellcheck: 'false' } });
-
-    hex.addEventListener('change', () => {
-      const value = hex.value.trim().toLowerCase();
-
-      if (value !== '' && !HEX_COLOR.test(value)) {
-        this.renderProperties();
-
-        return;
-      }
-
-      this.updatePlot(plot, (draft) => {
-        draft.color = value || undefined;
-      });
+        apply(roundPoint([x, y]));
+      },
     });
-    this.properties.appendChild(propertyField(t('drawings_plots_prop_hex'), hex));
-  }
+    const [x, y] = row.querySelectorAll('input');
 
-  private appendText(label: string, value: string, apply: (value: string) => void, autofocus = false): HTMLInputElement {
-    const input = el('input', { class: 'rte-input', attrs: { type: 'text', value, 'data-autofocus': autofocus } });
+    this.properties.appendChild(row);
 
-    input.addEventListener('change', () => apply(input.value.trim()));
-    this.properties.appendChild(propertyField(label, input));
-
-    return input;
-  }
-
-  private appendCheckbox(label: string, checked: boolean, apply: (checked: boolean) => void): void {
-    const input = el('input', { attrs: { type: 'checkbox' } });
-
-    input.checked = checked;
-    input.addEventListener('change', () => apply(input.checked));
-    this.properties.appendChild(
-      el('label', { class: 'rte-builder__prop rte-plots__check', children: [input, el('span', { class: 'rte-builder__prop-label', text: label })] }),
-    );
-  }
-
-  /** Два числовых поля в строку: координаты точки или границы области. */
-  private appendPair(label: string, values: [string, string], apply: (values: [string, string]) => void): [HTMLInputElement, HTMLInputElement] {
-    const input = (value: string): HTMLInputElement => el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value } });
-    const inputs: [HTMLInputElement, HTMLInputElement] = [input(values[0]), input(values[1])];
-    const [first, second] = inputs;
-
-    inputs.forEach((field) => field.addEventListener('change', () => apply([first.value, second.value])));
-    this.properties.appendChild(propertyField(label, el('div', { class: 'rte-plots__pair', children: inputs })));
-
-    return inputs;
-  }
-
-  private appendPoint(label: string, point: Vec2, apply: (point: Vec2) => void): [HTMLInputElement, HTMLInputElement] {
-    return this.appendPair(label, [String(point[0]), String(point[1])], ([x, y]) => {
-      const next: Vec2 = [Number(x), Number(y)];
-
-      if (x.trim() === '' || y.trim() === '' || !next.every(Number.isFinite)) {
-        this.renderProperties();
-
-        return;
-      }
-
-      apply(roundPoint(next));
-    });
+    return x && y ? [x, y] : null;
   }
 
   /** Область по x: пустое поле — граница в бесконечности, оба пустые — без ограничения. */
   private appendDomain(plot: DomainPlot): void {
-    const show = (value: number | undefined): string => (value === undefined || !Number.isFinite(value) ? '' : String(value));
-    const bound = (text: string, open: number): number => {
-      const value = Number(text);
+    const shown = (value: number | undefined): number | null => (value === undefined || !Number.isFinite(value) ? null : value);
+    const bound = (value: number | null, open: number): number => (value === null ? open : roundTo(value));
 
-      return text.trim() === '' || !Number.isFinite(value) ? open : roundTo(value);
-    };
+    this.properties.appendChild(
+      pairField({
+        label: this.t('drawings_plots_prop_domain'),
+        values: [shown(plot.domain?.[0]), shown(plot.domain?.[1])],
+        step: GRID_STEP,
+        onChange: ([low, high]) => {
+          const from = bound(low, -Infinity);
+          const to = bound(high, Infinity);
+          const domain: [number, number] | undefined = from === -Infinity && to === Infinity ? undefined : [Math.min(from, to), Math.max(from, to)];
 
-    this.appendPair(this.t('drawings_plots_prop_domain'), [show(plot.domain?.[0]), show(plot.domain?.[1])], ([low, high]) => {
-      const from = bound(low, -Infinity);
-      const to = bound(high, Infinity);
-      const domain: [number, number] | undefined = from === -Infinity && to === Infinity ? undefined : [Math.min(from, to), Math.max(from, to)];
-
-      this.updatePlot(plot, (draft) => {
-        draft.domain = domain;
-      });
-    });
+          this.updatePlot(plot, (draft) => {
+            draft.domain = domain;
+          });
+        },
+      }),
+    );
   }
 }
 

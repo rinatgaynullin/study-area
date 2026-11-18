@@ -1,5 +1,6 @@
 import { el, type Translate } from '@rich-editor/core';
 import type { Plot } from '../scene/types';
+import { checkField, sliderField, type SliderField } from './fields';
 import {
   applyFunctionParam,
   canLabelWithFormula,
@@ -26,10 +27,12 @@ export interface FunctionPanelOptions {
   onForm(form: ParabolaForm): void;
 }
 
-/** Строка параметра: ползунок и число — обновляются на месте, без пересоздания. */
-interface ParamRow {
-  range: HTMLInputElement;
-  number: HTMLInputElement;
+/** Идущий жест ползунка: параметр, кривая на его начало и последнее значение. */
+interface Gesture {
+  id: FunctionParamId;
+  /** Параметр применяется к кривой на начало жеста, а не к уже изменённой, — сдвиг не копится. */
+  base: Plot;
+  value: number;
 }
 
 /** Пояснения к параметрам простыми словами; `m` и `n` везде — сдвиги, у окружности `a`, `b` — сдвиги центра. */
@@ -85,9 +88,6 @@ const formulaNodes = (parts: FormulaPart[]): Array<Node | string> =>
     }
   });
 
-/** Значение для `input type="number"`: точка, без лишних нулей. */
-const numberValue = (value: number): string => String(value);
-
 /**
  * Блок «Функция» панели свойств: формула выделенной кривой, параметры
  * ползунком и числом, вид записи параболы, ветвь корня, подпись формулой.
@@ -103,17 +103,18 @@ export class FunctionPanel {
 
   private parabolaForm: ParabolaForm = 'vertex';
 
-  /** Ползунок, который сейчас тянут: `input` уже был, `change` ещё нет. */
-  private gesture: HTMLInputElement | null = null;
-
-  /** Кривая на начало жеста: параметр применяется к ней, а не к уже изменённой, — сдвиг не копится. */
-  private gestureBase: Plot | null = null;
+  /**
+   * Жест ползунка: начинается первым движением и закрывается, когда ползунок
+   * отпустили, — даже если его вернули на прежнее значение и `change` не пришёл.
+   */
+  private gesture: Gesture | null = null;
 
   private formulaLabel = false;
 
   private readonly card: HTMLElement;
 
-  private readonly rows = new Map<FunctionParamId, ParamRow>();
+  /** Строки параметров: ползунок и число обновляются на месте, без пересоздания. */
+  private readonly rows = new Map<FunctionParamId, SliderField>();
 
   private labelCheckbox: HTMLInputElement | null = null;
 
@@ -127,6 +128,11 @@ export class FunctionPanel {
     return this.parabolaForm;
   }
 
+  /** Вид записи от конструктора (подпись-формула выделенной параболы); блок покажет его при следующей сборке. */
+  set form(form: ParabolaForm) {
+    this.parabolaForm = form;
+  }
+
   /** Собирает блок для кривой заново. */
   show(plot: Plot, formulaLabel: boolean): HTMLElement {
     const { t } = this.options;
@@ -134,7 +140,6 @@ export class FunctionPanel {
     this.plot = plot;
     this.formulaLabel = formulaLabel;
     this.gesture = null;
-    this.gestureBase = null;
     this.rows.clear();
     this.labelCheckbox = null;
     this.element.replaceChildren(el('h5', { class: 'rte-plots-fn__title', text: t('drawings_plots_fn_title') }), this.card);
@@ -170,13 +175,8 @@ export class FunctionPanel {
     this.formulaLabel = formulaLabel;
     this.renderCard();
     params.forEach((param) => {
-      const row = this.rows.get(param.id);
-
-      if (!row) return;
-
-      if (row.range !== this.gesture) row.range.value = numberValue(param.value);
-
-      row.number.value = numberValue(param.value);
+      // Строку тянутого ползунка не трогают: число в ней уже ведёт сам ползунок.
+      if (param.id !== this.gesture?.id) this.rows.get(param.id)?.setValue(param.value);
     });
 
     if (this.labelCheckbox) this.labelCheckbox.checked = formulaLabel;
@@ -262,81 +262,71 @@ export class FunctionPanel {
 
   private paramRow(plot: Plot, param: FunctionParam): HTMLElement {
     const { t } = this.options;
-    const attrs = { min: param.min, max: param.max, step: param.step, value: numberValue(param.value), 'data-param': param.id };
-    const range = el('input', { class: 'rte-plots-fn__range', attrs: { ...attrs, type: 'range', 'aria-label': `${t('drawings_plots_fn_slider')} ${param.id}` } });
-    const number = el('input', {
-      class: 'rte-input rte-plots-fn__number',
-      attrs: { ...attrs, type: 'number', min: null, max: null, 'aria-label': `${t('drawings_plots_fn_value')} ${param.id}` },
-    });
     const key = hintKey(plot.type, param.id);
-
-    range.addEventListener('input', () => {
-      const first = this.gesture === null;
-
-      if (first) this.gestureBase = this.plot;
-
-      this.gesture = range;
-      this.preview(param.id, Number(range.value), first);
+    const row = sliderField({
+      label: param.id,
+      value: param.value,
+      min: param.min,
+      max: param.max,
+      step: param.step,
+      prop: param.id,
+      rangeProp: param.id,
+      rangeLabel: `${t('drawings_plots_fn_slider')} ${param.id}`,
+      inputLabel: `${t('drawings_plots_fn_value')} ${param.id}`,
+      hint: key ? t(key) : undefined,
+      onSlide: (value) => this.slide(param.id, value),
+      onRelease: () => this.release(param.id),
+      onChange: (value) => this.edit(param.id, value),
     });
-    range.addEventListener('change', () => {
-      const inGesture = this.gesture !== null;
 
-      this.gesture = null;
-      this.commit(param.id, Number(range.value), inGesture);
-      this.gestureBase = null;
-    });
-    number.addEventListener('change', () => {
-      const value = Number(number.value);
+    this.rows.set(param.id, row);
 
-      if (number.value.trim() === '' || !Number.isFinite(value)) {
-        if (this.plot) this.update(this.plot, this.formulaLabel);
-
-        return;
-      }
-
-      this.commit(param.id, value, false);
-    });
-    this.rows.set(param.id, { range, number });
-
-    return el('div', {
-      class: 'rte-plots-fn__param',
-      children: [
-        el('div', {
-          class: 'rte-plots-fn__controls',
-          children: [el('i', { class: 'rte-plots-fn__var rte-plots-fn__letter', text: param.id, attrs: { 'aria-hidden': 'true' } }), range, number],
-        }),
-        key ? el('p', { class: 'rte-plots-fn__hint', text: t(key) }) : null,
-      ],
-    });
+    return row.element;
   }
 
   private labelToggle(): HTMLElement {
-    const input = el('input', { attrs: { type: 'checkbox', 'data-formula-label': true } });
-
-    input.checked = this.formulaLabel;
-    input.addEventListener('change', () => this.options.onFormulaLabel(input.checked));
-    this.labelCheckbox = input;
-
-    return el('label', {
-      class: 'rte-builder__prop rte-plots__check',
-      children: [input, el('span', { class: 'rte-builder__prop-label', text: this.options.t('drawings_plots_fn_label') })],
+    const field = checkField({
+      label: this.options.t('drawings_plots_fn_label'),
+      checked: this.formulaLabel,
+      prop: 'formula-label',
+      onChange: (checked) => this.options.onFormulaLabel(checked),
     });
+
+    this.labelCheckbox = field.querySelector('input');
+
+    return field;
   }
 
-  /** Кривая, к которой применяется параметр: снимок на начало жеста или текущая. */
-  private get base(): Plot | null {
-    return this.gestureBase ?? this.plot;
+  /** Движение ползунка: первое начинает жест — снимок кривой и шаг истории. */
+  private slide(id: FunctionParamId, value: number): void {
+    // Другой ползунок, пока прежний жест не закрыт, — прежний сначала закрывается.
+    if (this.gesture && this.gesture.id !== id) this.release(this.gesture.id);
+
+    const first = this.gesture === null;
+    const base = this.gesture?.base ?? this.plot;
+
+    if (!base) return;
+
+    this.gesture = { id, base, value };
+    this.options.onPreview(applyFunctionParam(base, this.parabolaForm, id, value), first);
   }
 
-  private preview(id: FunctionParamId, value: number, first: boolean): void {
-    const { base } = this;
+  /** Ползунок отпустили: окончательное значение жеста, снимок больше не нужен. */
+  private release(id: FunctionParamId): void {
+    const { gesture } = this;
 
-    if (base) this.options.onPreview(applyFunctionParam(base, this.parabolaForm, id, value), first);
+    if (!gesture || gesture.id !== id) return;
+
+    this.gesture = null;
+    this.options.onCommit(applyFunctionParam(gesture.base, this.parabolaForm, id, gesture.value), true);
   }
 
-  private commit(id: FunctionParamId, value: number, gesture: boolean): void {
-    const { base } = this;
+  /** Число в поле — одна правка текущей кривой; незакрытый жест закрывается раньше неё. */
+  private edit(id: FunctionParamId, value: number): void {
+    if (this.gesture) this.release(this.gesture.id);
 
-    if (base) this.options.onCommit(applyFunctionParam(base, this.parabolaForm, id, value), gesture);
+    const { plot } = this;
+
+    if (plot) this.options.onCommit(applyFunctionParam(plot, this.parabolaForm, id, value), false);
   }
 }

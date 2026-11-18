@@ -34,7 +34,7 @@ test('шаблон параболы: блок «Функция» с формул
   await expect(page.locator(FORMULA)).toHaveText('y = x2');
 
   const before = await curvePaths(page);
-  const slider = page.locator(`${BLOCK} input[type="range"][data-param="a"]`);
+  const slider = page.locator(`${BLOCK} input[type="range"][data-prop="a"]`);
 
   await slider.focus();
   await page.keyboard.press('ArrowRight');

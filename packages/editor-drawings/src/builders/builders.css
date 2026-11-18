@@ -462,5 +462,14 @@
       text-align: center;
       line-height: 1.2;
     }
+
+    /* Графики с выделенной функцией: шаблоны одной строкой значков — место блоку «Функция». */
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-builder__palette.rte-plots__palette--compact {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-plots__palette--compact .rte-builder__tool {
+      padding: 0;
+    }
   }
 }

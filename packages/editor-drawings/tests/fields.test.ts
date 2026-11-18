@@ -250,6 +250,32 @@ describe('общие поля панели свойств', () => {
     expect(range.value).toBe('5');
   });
 
+  it('строка-ползунок: свои имена для скринридера; введённое число показывается таким, каким его приняли', () => {
+    const slider = sliderField({
+      label: 'k',
+      value: 1,
+      min: -5,
+      max: 5,
+      step: 0.1,
+      rangeLabel: 'Ползунок k',
+      inputLabel: 'Значение k',
+      onSlide: () => undefined,
+      onRelease: () => undefined,
+      // Ноль не годится: сцена принимает 0,1 и возвращает его в строку.
+      onChange: (value) => slider.setValue(value === 0 ? 0.1 : value),
+    });
+    const row = mount(slider.element);
+    const number = input(row, 'input[type="number"]');
+
+    expect(input(row, 'input[type="range"]').getAttribute('aria-label')).toBe('Ползунок k');
+    expect(number.getAttribute('aria-label')).toBe('Значение k');
+
+    number.focus();
+    change(number, '0');
+    expect(number.value).toBe('0.1');
+    expect(input(row, 'input[type="range"]').value).toBe('0.1');
+  });
+
   it('цвет — палитра плиток с подписью', () => {
     const values: string[] = [];
     const row = mount(colorField({ t, label: 'Цвет', value: '', allowDefault: true, onChange: (value) => values.push(value) }));

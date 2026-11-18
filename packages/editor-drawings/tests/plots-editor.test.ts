@@ -110,9 +110,18 @@ const change = (control: HTMLInputElement | HTMLSelectElement, value: string): v
 
 const plotsOf = (editor: SceneEditor): Array<Record<string, unknown>> => editor.getScene().plots as Array<Record<string, unknown>>;
 
+/** Плитка палитры цвета (`data-color` — id цвета, `other` или `default`). */
+const colorTile = (editor: SceneEditor, color: string): HTMLButtonElement => {
+  const tile = editor.element.querySelector<HTMLButtonElement>(`.rte-builder__props [data-color="${color}"]`);
+
+  if (!tile) throw new Error(`Нет плитки «${color}»`);
+
+  return tile;
+};
+
 /** Ползунок или числовое поле параметра блока «Функция». */
 const paramControl = (editor: SceneEditor, id: string, kind: 'range' | 'number'): HTMLInputElement => {
-  const input = editor.element.querySelector<HTMLInputElement>(`.rte-plots-fn input[type="${kind}"][data-param="${id}"]`);
+  const input = editor.element.querySelector<HTMLInputElement>(`.rte-plots-fn input[type="${kind}"][data-prop="${id}"]`);
 
   if (!input) throw new Error(`Нет поля параметра ${id}`);
 
@@ -120,7 +129,7 @@ const paramControl = (editor: SceneEditor, id: string, kind: 'range' | 'number')
 };
 
 const paramIds = (editor: SceneEditor): string[] =>
-  [...editor.element.querySelectorAll<HTMLInputElement>('.rte-plots-fn input[type="range"]')].map((input) => input.dataset.param ?? '');
+  [...editor.element.querySelectorAll<HTMLInputElement>('.rte-plots-fn input[type="range"]')].map((input) => input.dataset.prop ?? '');
 
 const formulaOf = (editor: SceneEditor): string | null | undefined =>
   editor.element.querySelector('.rte-plots-fn__formula[role="img"]')?.getAttribute('aria-label');
@@ -169,7 +178,7 @@ const clickCircle = (editor: SceneEditor, color: string): void => {
   canvasOf(editor).dispatchEvent(new PointerEvent('pointerup', init));
 };
 
-const formulaLabelToggle = (editor: SceneEditor): HTMLInputElement | null => editor.element.querySelector<HTMLInputElement>('.rte-plots-fn input[data-formula-label]');
+const formulaLabelToggle = (editor: SceneEditor): HTMLInputElement | null => editor.element.querySelector<HTMLInputElement>('.rte-plots-fn input[data-prop="formula-label"]');
 
 /** Сцена графика из README PinQueen: парабола с вершиной в A и сама точка A. */
 const README_SCENE = {
@@ -310,7 +319,7 @@ describe('конструктор графиков', () => {
     const canvas = canvasOf(plots);
 
     pickTemplate(plots, 'parabola');
-    expect(plotsOf(plots)[0]).toMatchObject({ type: 'parabola', vertex: [0, 0], stretchX: 1, stretchY: 1, color: '#3b82f6' });
+    expect(plotsOf(plots)[0]).toMatchObject({ type: 'parabola', vertex: [0, 0], stretchX: 1, stretchY: 1, color: '#2563eb' });
     expect(propsTitle(plots)).toBe('Парабола');
 
     pickTool(plots, 'select');
@@ -341,12 +350,21 @@ describe('конструктор графиков', () => {
     pickTemplate(plots, 'hyperbola');
     expect(propsTitle(plots)).toBe('Гипербола');
 
-    change(controlOf<HTMLSelectElement>(plots, 'Цвет'), '#ef4444');
-    expect(plotsOf(plots)[0]).toMatchObject({ type: 'hyperbola', k: 1, color: '#ef4444' });
+    // Шаблон гиперболы — зелёный из палитры.
+    expect(colorTile(plots, 'green').getAttribute('aria-checked')).toBe('true');
+    colorTile(plots, 'red').click();
+    expect(plotsOf(plots)[0]).toMatchObject({ type: 'hyperbola', k: 1, color: '#dc2626' });
+    expect(colorTile(plots, 'red').getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(colorTile(plots, 'red'));
 
-    change(controlOf<HTMLInputElement>(plots, 'Цвет (hex)'), '#123456');
-    expect(plotsOf(plots)[0].color).toBe('#123456');
-    expect(controlOf<HTMLSelectElement>(plots, 'Цвет').value).toBe('#123456');
+    // «Обычный цвет» убирает цвет кривой, как прежде пустое поле hex; поля hex больше нет.
+    colorTile(plots, 'default').click();
+    expect(plotsOf(plots)[0]).not.toHaveProperty('color');
+    expect(colorTile(plots, 'default').getAttribute('aria-pressed')).toBe('true');
+    expect(plots.element.querySelectorAll('.rte-builder__props .rte-builder__colors [role="radio"][aria-checked="true"]')).toHaveLength(0);
+    expect([...plots.element.querySelectorAll('.rte-builder__props .rte-builder__prop-label')].map((label) => label.textContent)).not.toContain('Цвет (hex)');
+    expect(plots.element.querySelector('.rte-builder__props input[maxlength="7"]')).toBeNull();
+    colorTile(plots, 'red').click();
 
     const dashed = controlOf<HTMLInputElement>(plots, 'Пунктир');
 
@@ -400,6 +418,43 @@ describe('конструктор графиков', () => {
     // Знак a заменяет «Направление по y».
     change(paramControl(plots, 'a', 'number'), '-2');
     expect(plotsOf(plots)[3]).toMatchObject({ directionX: 'left', directionY: 'down', stretch: 2 });
+  });
+
+  it('цвет из чертежа: чужой цвет — одиннадцатая плитка, синоним — плитка палитры; сцена без действий не переписывается', () => {
+    const plots = create();
+    let changes = 0;
+
+    plots.onChange(() => {
+      changes += 1;
+    });
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'p', type: 'parabola', vertex: [0, 0], direction: 'up', stretchX: 1, stretchY: 1, color: '#ABCDEF' },
+        { id: 'q', type: 'parabola', vertex: [0, -4], direction: 'up', stretchX: 1, stretchY: 1, color: '#3b82f6' },
+      ],
+    });
+    pickTool(plots, 'select');
+
+    clickCurve(plots, '#ABCDEF');
+    expect(propsTitle(plots)).toBe('Парабола');
+    expect(colorTile(plots, 'other').getAttribute('aria-checked')).toBe('true');
+    expect(colorTile(plots, 'other').getAttribute('aria-label')).toBe('Цвет из чертежа');
+    expect(plots.element.querySelectorAll('.rte-builder__props .rte-builder__colors [role="radio"]')).toHaveLength(11);
+
+    // Синоним прежней палитры — с плиткой «Синий», значение в сцене прежнее.
+    clickCurve(plots, '#3b82f6');
+    expect(colorTile(plots, 'blue').getAttribute('aria-checked')).toBe('true');
+    expect(plots.element.querySelector('.rte-builder__props [data-color="other"]')).toBeNull();
+    expect(plotsOf(plots).map((plot) => plot.color)).toEqual(['#ABCDEF', '#3b82f6']);
+    expect(changes).toBe(0);
+
+    // Выбор плитки палитры — правка; плитка «Цвет из чертежа» исчезает.
+    clickCurve(plots, '#ABCDEF');
+    colorTile(plots, 'purple').click();
+    expect(plotsOf(plots)[0].color).toBe('#8b5cf6');
+    expect(changes).toBe(1);
+    expect(plots.element.querySelector('.rte-builder__props [data-color="other"]')).toBeNull();
   });
 
   it('без выделения панель правит подписи осей и числа на них; кнопка сетки выключает сетку', () => {
@@ -755,19 +810,20 @@ describe('блок «Функция»', () => {
     expect(formulaLabelToggle(plots)?.checked).toBe(false);
     expect(labels()).toContain('Заливка');
     expect(labels()).not.toContain('Радиус');
-    expect(plots.element.querySelector('.rte-plots__fn-hint')?.textContent).toBe('Двигай ползунки или тащи график — формула меняется вместе с ним');
+    // Подсказка под панелью — о блоке «Функция», а не общая подсказка инструмента «Выбрать».
+    expect(plots.element.querySelector('.rte-builder__hint')?.textContent).toBe('Двигай ползунки или тащи график — формула меняется вместе с ним');
 
     // У точки блока нет.
     pickTool(plots, 'point');
     click(canvasOf(plots), [5, 5]);
     expect(plots.element.querySelector('.rte-plots-fn')).toBeNull();
-    expect(plots.element.querySelector('.rte-plots__fn-hint')).toBeNull();
+    expect(plots.element.querySelector('.rte-builder__hint')?.textContent).toBe('Нажми на полотно — появится точка на сетке');
   });
 
   it('окружность: центр a, b и радиус r ползунками с пояснениями; r меньше 0,5 — 0,5', () => {
     const plots = create();
     const canvas = canvasOf(plots);
-    const hints = (): string[] => [...plots.element.querySelectorAll('.rte-plots-fn .rte-plots-fn__hint')].map((hint) => hint.textContent ?? '');
+    const hints = (): string[] => [...plots.element.querySelectorAll('.rte-plots-fn .rte-builder__prop-hint')].map((hint) => hint.textContent ?? '');
 
     pickTemplate(plots, 'circle');
     expect(hints()).toEqual(['Сдвиг центра влево-вправо', 'Сдвиг центра вверх-вниз', 'Радиус']);
@@ -977,6 +1033,102 @@ describe('блок «Функция»', () => {
     expect(formulaOf(plots)).toBe('y = 3x² + x + 2');
   });
 
+  it('ползунок увели и вернули без change: снимок жеста сброшен отпусканием, числа m и n оба применяются', () => {
+    const plots = create();
+
+    pickTemplate(plots, 'parabola');
+
+    const a = paramControl(plots, 'a', 'range');
+
+    // Жест без итогового `change`: значение вернулось к исходному.
+    slide(a, '1.5');
+    slide(a, '1');
+    a.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    change(paramControl(plots, 'm', 'number'), '2');
+    change(paramControl(plots, 'n', 'number'), '3');
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [2, 3], stretchY: 1 });
+    expect(formulaOf(plots)).toBe('y = (x − 2)² + 3');
+
+    // Отпускание не пришло вовсе: число всё равно правит текущую кривую, а не снимок жеста.
+    slide(a, '2');
+    change(paramControl(plots, 'm', 'number'), '-1');
+    change(paramControl(plots, 'n', 'number'), '1');
+    expect(plotsOf(plots)[0]).toMatchObject({ vertex: [-1, 1], stretchY: 2 });
+  });
+
+  it('вид записи и отмена: после отмены переключатель и подпись снова «через вершину»', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+
+    pickTemplate(plots, 'parabola');
+    change(paramControl(plots, 'm', 'number'), '1');
+
+    const toggle = formulaLabelToggle(plots);
+
+    if (!toggle) throw new Error('Нет флажка подписи-формулы');
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(option(plots, 'vertex').getAttribute('aria-checked')).toBe('true');
+    expect(plotsOf(plots)[0].label).toBe('y = (x - 1)^2');
+
+    option(plots, 'standard').click();
+    expect(option(plots, 'standard').getAttribute('aria-checked')).toBe('true');
+    expect(plotsOf(plots)[0].label).toBe('y = x^2 - 2x + 1');
+
+    key(canvas, 'z', { ctrlKey: true });
+    expect(plotsOf(plots)[0].label).toBe('y = (x - 1)^2');
+    expect(option(plots, 'vertex').getAttribute('aria-checked')).toBe('true');
+    expect(formulaOf(plots)).toBe('y = (x − 1)²');
+    // Правка после отмены пишет подпись в том же виде.
+    change(paramControl(plots, 'n', 'number'), '2');
+    expect(plotsOf(plots)[0].label).toBe('y = (x - 1)^2 + 2');
+
+    key(canvas, 'z', { ctrlKey: true });
+    key(canvas, 'z', { shiftKey: true, ctrlKey: true });
+    expect(option(plots, 'vertex').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('отрезок по двум точкам: правка b двигает точки по точному k', () => {
+    const plots = create();
+
+    plots.load({ type: 'plot_2d', plots: [{ id: 's', type: 'line', p1: [0, 0], p2: [3, 1], color: '#16a34a' }] });
+    pickTool(plots, 'select');
+    click(canvasOf(plots), [1.5, 0.5]);
+    expect(propsTitle(plots)).toBe('Прямая');
+    change(paramControl(plots, 'b', 'number'), '1');
+    expect(plotsOf(plots)[0]).toMatchObject({ p1: [0, 1], p2: [3, 2] });
+    expect(controlsOf<HTMLInputElement>(plots, 'Вторая точка (x, y)').map((input) => input.value)).toEqual(['3', '2']);
+  });
+
+  it('при выделенной функции палитра шаблонов — строка значков с именами, подсказка — о блоке «Функция»', () => {
+    const plots = create();
+    const palette = plots.element.querySelector('.rte-plots__palette');
+    const hint = (): string | null | undefined => plots.element.querySelector('.rte-builder__hint')?.textContent;
+
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
+    expect(hint()).toBe('Нажми на график, чтобы выбрать, и тащи, чтобы подвинуть. С Shift — без прилипания к сетке');
+    [...(palette?.querySelectorAll('button') ?? [])].forEach((button) => {
+      expect(button.getAttribute('aria-label')).toBe(button.getAttribute('title'));
+    });
+
+    pickTemplate(plots, 'parabola');
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(true);
+    expect(hint()).toBe('Двигай ползунки или тащи график — формула меняется вместе с ним');
+
+    // Точка — не функция: палитра с подписями, подсказка инструмента.
+    pickTool(plots, 'point');
+    click(canvasOf(plots), [5, 5]);
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
+
+    // Escape снимает выделение: обычная палитра и подсказка «Выбрать».
+    pickTemplate(plots, 'line');
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(true);
+    plots.cancel();
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
+    expect(hint()).toBe('Нажми на график, чтобы выбрать, и тащи, чтобы подвинуть. С Shift — без прилипания к сетке');
+  });
+
   it('подписи-формулы чужих кривых не переписываются; каждая следует за своей кривой в своём виде записи', () => {
     const plots = create();
     const labels = (): unknown[] => plotsOf(plots).map((plot) => plot.label);
@@ -1002,7 +1154,7 @@ describe('блок «Функция»', () => {
     expect(labels()).toEqual(['y = 2x^2 - 8x + 11', 'y=0.5x^2-1']);
 
     // Правка, которая не меняет формулу, подпись не трогает.
-    change(controlOf<HTMLSelectElement>(plots, 'Цвет'), '#ef4444');
+    colorTile(plots, 'red').click();
     expect(labels()).toEqual(['y = 2x^2 - 8x + 11', 'y=0.5x^2-1']);
 
     // Переключатель вида записи меняет подпись только у выделенной кривой.

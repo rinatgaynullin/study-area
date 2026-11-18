@@ -223,6 +223,9 @@ export interface SliderFieldOptions {
   prop?: string;
   /** `data-prop` ползунка. */
   rangeProp?: string;
+  /** Имена ползунка и числового поля для скринридера, если подпись — одна буква (блок «Функция»). */
+  rangeLabel?: string;
+  inputLabel?: string;
   /** Пояснение под строкой. */
   hint?: string;
   /** Ползунок двигают: значение на каждом шаге жеста. */
@@ -238,7 +241,11 @@ export interface SliderFieldOptions {
 
 export interface SliderField {
   element: HTMLElement;
-  /** Новое значение без пересоздания строки; поле в фокусе не трогается — его правят. */
+  /**
+   * Новое значение без пересоздания строки; поле в фокусе не трогается — его
+   * правят. Исключение — число, только что введённое в само поле: оно
+   * показывается таким, каким его приняла сцена (ноль у гиперболы → 0,1).
+   */
   setValue(value: number): void;
 }
 
@@ -249,15 +256,33 @@ export const sliderField = (options: SliderFieldOptions): SliderField => {
   const value = String(options.value);
   const range = el('input', {
     class: 'rte-builder__range',
-    attrs: { type: 'range', min, max, step: String(options.step), value, 'aria-label': options.label, 'data-prop': options.rangeProp },
+    attrs: {
+      type: 'range',
+      min,
+      max,
+      step: String(options.step),
+      value,
+      'aria-label': options.rangeLabel ?? options.label,
+      'data-prop': options.rangeProp,
+    },
   });
   const input = el('input', {
     class: 'rte-input',
-    attrs: { type: 'number', min, max, step: String(options.inputStep ?? options.step), value, 'aria-label': options.label, 'data-prop': options.prop },
+    attrs: {
+      type: 'number',
+      min,
+      max,
+      step: String(options.inputStep ?? options.step),
+      value,
+      'aria-label': options.inputLabel ?? options.label,
+      'data-prop': options.prop,
+    },
   });
+  /** Идёт обработка числа из поля: сцена может принять его другим — поле покажет принятое. */
+  let committing = false;
   const setValue = (next: number): void => {
     [range, input].forEach((control) => {
-      if (control !== document.activeElement) control.value = String(next);
+      if (control !== document.activeElement || (control === input && committing)) control.value = String(next);
     });
   };
   const slide = (): void => {
@@ -287,7 +312,13 @@ export const sliderField = (options: SliderFieldOptions): SliderField => {
     }
 
     range.value = String(next);
-    options.onChange(next);
+    committing = true;
+
+    try {
+      options.onChange(next);
+    } finally {
+      committing = false;
+    }
   });
 
   const element = el('div', {

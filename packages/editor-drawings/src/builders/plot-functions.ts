@@ -71,14 +71,27 @@ const fine = (value: number): number => roundTo(value, FINE_DIGITS);
 
 const finePoint = ([x, y]: Vec2): Vec2 => [fine(x), fine(y)];
 
+/** Больше знаков после запятой множитель не показывает: иначе `String` даст запись `1e-7`. */
+const TINY_DIGITS = 6;
+
+/** Наименьший по модулю множитель для показа. */
+const TINY = 10 ** -TINY_DIGITS;
+
 /**
  * Множитель для показа: два знака, но ненулевой множитель, который при
- * округлении стал бы нулём (`a = 0,002`), — двумя значащими цифрами.
+ * округлении стал бы нулём (`a = 0,002`), — двумя значащими цифрами. Если и
+ * их не видно в `TINY_DIGITS` знаках, — `TINY` с его знаком (`0,000001`).
  */
 const multiplier = (value: number): number => {
   const rounded = round(value);
 
-  return rounded !== 0 || value === 0 ? rounded : Number(value.toPrecision(2));
+  if (rounded !== 0 || value === 0) return rounded;
+
+  const significant = Number(value.toPrecision(2));
+
+  if (roundTo(significant, TINY_DIGITS) === significant) return significant;
+
+  return value < 0 ? -TINY : TINY;
 };
 
 const param = (id: FunctionParamId, value: number, range: { min: number; max: number; step: number }, shown = round): FunctionParam => ({
@@ -224,12 +237,12 @@ const applyLine = (plot: LinePlot, id: FunctionParamId, value: number): LinePlot
 
   if (id !== 'k' && id !== 'b') return plot;
 
-  // Нетронутый коэффициент — такой, как его видно в блоке.
-  const k = id === 'k' ? value : round(line.k);
-  const b = id === 'b' ? value : round(line.b);
+  // Запись `k`/`b`: нетронутый коэффициент — такой, как его видно в блоке (он и хранится с двумя знаками).
+  if (!stored.p1 || !stored.p2) return { ...plot, k: id === 'k' ? value : round(line.k), b: id === 'b' ? value : round(line.b) };
 
-  if (!stored.p1 || !stored.p2) return { ...plot, k, b };
-
+  // Отрезок: нетронутый коэффициент — точный, из точек; округлённый сдвинул бы дальнюю точку: (3; 1,99) вместо (3; 2).
+  const k = id === 'k' ? value : line.k;
+  const b = id === 'b' ? value : line.b;
   const onLine = ([x]: Vec2): Vec2 => [x, fine(k * x + b)];
 
   return { ...plot, p1: onLine(stored.p1), p2: onLine(stored.p2) };

@@ -187,6 +187,15 @@ describe('правка параметра', () => {
     expect(applyFunctionParam(next, 'vertex', 'b', 0)).toEqual(next);
   });
 
+  it('отрезок: при правке b нетронутый k — точный, из точек, а не округлённый до двух знаков', () => {
+    const segment: LinePlot = { type: 'line', p1: [0, 0], p2: [3, 1] };
+
+    // k = 1/3: с округлённым 0,33 дальняя точка встала бы в (3; 1,99).
+    expect(applyFunctionParam(segment, 'vertex', 'b', 1)).toEqual({ type: 'line', p1: [0, 1], p2: [3, 2] });
+    // И наоборот: правка k оставляет b точным (2/3), а не 0,67.
+    expect(applyFunctionParam({ type: 'line', p1: [1, 1], p2: [4, 2] }, 'vertex', 'k', 1)).toEqual({ type: 'line', p1: [1, 1.6667], p2: [4, 4.6667] });
+  });
+
   it('общий вид ↔ вершина: туда и обратно, когда вершина не укладывается в два знака', () => {
     // c = am² + n = 0,875 — в блоке два знака.
     expect(values(parabola({ vertex: [-1.5, 2], stretchY: 0.5, direction: 'down' }), 'standard')).toEqual({ a: -0.5, b: -1.5, c: 0.88 });
@@ -224,6 +233,20 @@ describe('правка параметра', () => {
     expect(functionText(parabola({ stretchX: 4, stretchY: 0.05, direction: 'down' }), 'vertex', ',')).toBe('y = −0,0031x²');
     // То, что округляется не в ноль, — по-прежнему два знака.
     expect(values(parabola({ stretchX: 4, stretchY: 0.1 })).a).toBe(0.01);
+  });
+
+  it('очень малый множитель не печатается в экспоненциальной записи: наименьшее видимое число со своим знаком', () => {
+    // a = 0,000012: две значащие цифры видны в шести знаках — пишутся как есть.
+    expect(functionText(parabola({ stretchX: 100, stretchY: 0.12 }), 'vertex', ',')).toBe('y = 0,000012x²');
+    // a = 1e-8 и −1,5e-9: в шести знаках не видно — 0,000001 со знаком.
+    expect(functionText(parabola({ stretchX: 100, stretchY: 0.0001 }), 'vertex', ',')).toBe('y = 0,000001x²');
+    expect(functionText(parabola({ stretchX: 1000, stretchY: 0.0015, direction: 'down' }), 'standard', '.')).toBe('y = −0.000001x²');
+    expect(functionLabel(parabola({ stretchX: 100, stretchY: 0.0001, direction: 'down' }), 'vertex', ',')).toBe('y = -0,000001x^2');
+    expect(values(parabola({ stretchX: 100, stretchY: 0.0001 })).a).toBe(0.000001);
+    [parabola({ stretchX: 100, stretchY: 0.0001 }), parabola({ stretchX: 1000, stretchY: 0.0015 })].forEach((plot) => {
+      expect(functionText(plot, 'vertex', ',')).not.toMatch(/e/);
+      expect(functionText(plot, 'standard', ',')).not.toMatch(/e/);
+    });
   });
 
   it('ноль для a и k гиперболы заменяется наименьшим допустимым со знаком прежнего значения', () => {
