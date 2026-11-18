@@ -90,18 +90,37 @@ test.describe('структурные формулы', () => {
     await page.locator(`${EDITOR} p`).first().click();
     await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').click();
 
-    await page.locator(`${OPEN_MODAL} .rte-chem-builder__start`).focus();
+    // Модалка ставит автофокус на полотно в следующем кадре. Пока он не
+    // случился, фокус, поставленный сценарием, он перехватит: Enter уйдёт
+    // пустому полотну, а Escape без выделения закроет окно. Ждём автофокус.
+    await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__stage`)).toBeFocused();
+
+    const start = page.locator(`${OPEN_MODAL} .rte-chem-builder__start`);
+
+    await start.focus();
+    await expect(start).toBeFocused();
     await page.keyboard.press('Enter');
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(page.locator(MODAL_PANEL)).toBeVisible();
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toHaveAttribute('aria-pressed', 'false');
 
     await page.locator(`${OPEN_MODAL} [data-atom="0"]`).focus();
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toHaveAttribute('aria-pressed', 'true');
 
-    await page.locator(`${OPEN_MODAL} button[data-group="OH"]`).focus();
+    const oh = page.locator(`${OPEN_MODAL} button[data-group="OH"]`);
+
+    await oh.focus();
+    await expect(oh).toBeFocused();
     await page.keyboard.press('Enter');
-    await page.locator(`${OPEN_MODAL} [data-plus][aria-label="Присоединить группу: вправо"]`).focus();
+    await expect(oh).toHaveAttribute('aria-pressed', 'true');
+
+    const plus = page.locator(`${OPEN_MODAL} [data-plus][aria-label="Присоединить группу: вправо"]`);
+
+    await plus.focus();
+    await expect(plus).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator(`${OPEN_MODAL} [data-atom="1"]`)).toBeFocused();
 
