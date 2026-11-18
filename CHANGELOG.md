@@ -7,6 +7,48 @@ The packages are not published yet; everything below lands in the first release.
 
 ### Added
 
+- `@rich-editor/chemistry`: the structure dialog is a visual constructor — a
+  canvas with «plus» buttons around the selected atom, a palette of groups, a
+  custom group field, bond types, rings (benzene, hexagon, pentagon), ready-made
+  formulas, undo, redo and clear. It builds one chain with branches or one ring
+  with substituents.
+- `@rich-editor/chemistry`: the `code?: boolean` option of
+  `createChemistryFeature` (off by default); only with it the dialog has the
+  chemfig code field.
+- `@rich-editor/chemistry`: `serializeChemfig` and `layoutChemistry`, exported
+  from `.`; the `chemistry_builder_*` and `chemistry_unreadable`
+  message keys.
+- Demo: the «Код chemfig в диалоге структуры» checkbox.
+- `createModal({ fill })` in `@rich-editor/core`: a panel almost the full screen
+  (`.rte-modal__panel--fill`, token `--rte-modal-width-fill`, 1280px; the whole
+  screen on a phone).
+- `@rich-editor/drawings`: the `json?: boolean` option of `createDrawingsFeature`
+  and `DrawingDialogOptions` (off by default). Only with it the dialog has the
+  JSON tab, the sample scenes, the preview and the TikZ field (in a collapsible
+  block); without it the user works in the constructors only.
+- `@rich-editor/drawings`: the `builders/builder-icons` module — `BUILDER_ICONS`,
+  `createBuilderIcon(id, size = 20)` and the `BuilderIconId` type; an optional
+  `icon` on `SceneEditorFactory`; the `rte-builder__tool--icon` modifier for
+  square icon buttons; the `--rte-builder-side` token (280px).
+- `@rich-editor/core`: the «Частые» formula category (`id: 'popular'`, key
+  `formula_categories_popular`) with 17 templates; `'popular'` joins
+  `TemplateCategoryId`.
+- `@rich-editor/core`: the formula dialog turns on the MathLive on-screen
+  keyboard on `pointer: coarse` devices; the window lifts above it and restores
+  on close. Checked in phone emulation (Chromium) only.
+- `@rich-editor/core`: separate formula errors — `formula_load_failed`,
+  `formula_unreadable`, `formula_invalid`.
+- Demo: the «JSON в диалоге чертежа» checkbox.
+- `@rich-editor/drawings`: sheet panning in every constructor — dragging an
+  empty spot moves the view (below 4 px it is still a click; an object or a
+  handle under the pointer is dragged instead; the pencil in plots keeps
+  drawing). Two-finger pinch zooms around the midpoint and panning with both
+  fingers moves the sheet. The arrow keys pan the view when nothing is selected
+  (planimetry, plots, physics). `SketchCanvasOptions.canPanFrom` / `grabOnHover`,
+  `SketchCanvas.panByKey`, `cancelPan`, `resetGestures`, `HistoryStack.discard()`;
+  the `rte-sketch--grab` and `rte-sketch--panning` cursor classes. Two-finger
+  and touch panning are checked on synthetic events in phone emulation
+  (Chromium) only.
 - `@rich-editor/drawings`: cones and spheres in the 3D scene format and in the
   stereometry constructor. `cones: [{ base, apex, radius }]` is a right circular
   cone (the base circle is centred at `base`, perpendicular to the axis
@@ -250,9 +292,118 @@ The packages are not published yet; everything below lands in the first release.
   empty so screen readers announce what appears in it.
 - The toolbar measures itself above `collapseBelow` and folds groups one by
   one into the `⋯` menu instead of wrapping.
+- `closeOnEscape?: boolean` in `ModalOptions` (default `true`): with `false` the
+  modal does not handle Escape, neither closing nor stopping the event.
+- `@rich-editor/drawings`: the optional `SceneEditor.cancel()`; the four
+  built-in constructors drop an unfinished construction, return to the Select
+  tool and clear the selection without changing the scene.
+- `@rich-editor/chemistry`: `renderChemistry` (SVG and layout in one pass),
+  `ChemBond.spec`, `ChemChain.startSpec`, `ChemRing.startSpec`, `lossy`; the
+  `chemistry_readonly` message key.
+- `@rich-editor/chemistry`: read-only mode for structures the model cannot
+  rewrite without loss; the builder is locked and the code is not changed (with
+  `code: true` the fixed code unlocks it).
+
+- `@rich-editor/drawings`: typed function input in the plots constructor. The
+  «+ Функция» button adds a `y =` field; the graph is drawn while typing, with a
+  formula card (fractions, powers, root, modulus) above the field and insert
+  buttons (`x²`, power, `√`, `|x|`, brackets, `π`, `sin`, `cos`, `tg`, `ln`)
+  below it. A syntax error is shown under the field, the canvas keeps the last
+  correct graph and the scene gets the last correct expression.
+- `@rich-editor/drawings`: an own expression parser, with no `eval` or
+  `new Function` (`parseFunction`, `evaluateFunction`, `functionParts`,
+  `functionText`, `functionLabelText` and the related types). It reads
+  `y = …` / `f(x) = …`, a decimal point or comma, `+ - − * · × / : ^`, round,
+  square and curly brackets, implicit multiplication (`2x`, `2(x+1)`), powers
+  (`x^2`, `x²`, `2^x`), `|x|` and `abs`, `sqrt`, `√`, `cbrt`, `sin`, `cos`,
+  `tg`, `ctg` and the inverse ones, `ln`, `lg`, `log(a; x)`, `log₂ x`, `exp`,
+  `pi`, `e`, and the Cyrillic «х» and «у». Hyperbolic functions, `sgn` and
+  `log(x)` without a base are not understood. The expression is at most 300
+  characters long and 50 levels deep.
+- `@rich-editor/drawings`: letter parameters. Every single Latin letter other
+  than `x`, `y`, `e` gets a slider (−10 to 10, step 0.1) and a number field; one
+  slider gesture is one undo step, and a letter that left the expression is
+  forgotten.
+- `@rich-editor/drawings`: a typed function is stored as ordinary `freehand`
+  polylines, so every renderer, including a third-party server, draws it. Such
+  a polyline has the optional fields `expr`, `params`, `fn` (branches of one
+  function share it) and `domain`; there are no new curve types, a polyline
+  without `expr` is a plain freehand line, and a broken or too long `expr` makes
+  the branch a plain polyline on load.
+- `@rich-editor/drawings`: `sampleFunction` — points computed for the visible
+  canvas window. A branch ends at non-numeric values, at leaving the window
+  vertically and at discontinuities (asymptotes are not joined, checked by
+  refinement between neighbouring points); collinear points are dropped; one
+  call is limited to 60 000 evaluations and 12 000 points. Points are
+  recomputed on an edit and on a view change; an untouched function at an
+  unchanged view is returned from `getScene()` verbatim.
+- `@rich-editor/drawings`: a function outside the sheet gets a hint under the
+  field, and the scene gets the piece of the graph nearest to the sheet (a band
+  three window heights high; the x range is widened if needed). «Показать
+  целиком» takes typed functions into account. A function with no points is not
+  written to the scene.
+- `@rich-editor/drawings`: a typed function is not dragged (the formula sets its
+  place), is selected by pressing any branch, and is deleted, copied and pasted
+  as one object.
+- `@rich-editor/drawings`: the «Парабола», «Гипербола», «Прямая» and «Корень»
+  templates create a typed function; new «Синус» and «Модуль» templates;
+  «Окружность» stays a ready curve, and the pencil still recognizes a line and
+  a parabola as ready curves.
+- `@rich-editor/drawings`: the ready curves of old scenes (`line`, `parabola`,
+  `hyperbola`, `sqrt`) stay as they are and are draggable; their properties have
+  the same expression field, and once the expression is changed and parses the
+  curve becomes a typed function (same colour, dash, label). `isReadyFunction`
+  and `plotExpression` (two decimals) are exported. A vertical line and a
+  two-point segment have no «Функция» block; a circle has centre and radius
+  fields.
+- `@rich-editor/drawings`: the «Подписать график формулой» checkbox keeps the
+  label of a function equal to its expression on one line (`y = x^2 - 3x + 1`)
+  and follows its edits; a polyline label is drawn in SVG. In TikZ
+  (`toLatexMath`) function names become LaTeX commands, the modulus becomes
+  `\left|…\right|` and `π` becomes `\pi`.
+- `@rich-editor/drawings`: plot axes draw ticks, numbers and the grid only on the
+  visible part of the sheet; the step is chosen from 1, 2, 5, 10, 20, 50… so
+  that an axis has no more than about 40 ticks (the usual view is unchanged).
+  Hyperbola sampling is bounded, so a far view does not hang the render.
+- `@rich-editor/drawings`: a shared colour palette (`DRAWING_COLORS`,
+  `findDrawingColor`, `ColorPicker`, `colorField`) and the `drawings_color_*`
+  message keys.
+- `@rich-editor/drawings`: the shared property fields module
+  `builders/fields.ts` (`propsTitle`, `propsEmpty`, `textField`, `numberField`,
+  `checkField`, `selectField`, `pairField`, `sliderField`, `colorField`) used
+  by all four constructors.
 
 ### Changed
 
+- `@rich-editor/chemistry`: the dialog no longer asks for chemfig code by
+  default. Saving without edits keeps the original code byte for byte; after an
+  edit the normalized code is written. Code that cannot be parsed cannot be
+  saved (with `code: true` while it is in the field; without it the canvas is
+  empty and the formula must be rebuilt).
+- `@rich-editor/drawings`: the drawing dialog is one row of tabs «Планиметрия /
+  Стереометрия / Графики / Физика» instead of the view switch and separate tabs;
+  a new drawing takes its kind from the selected tab, an existing one shows only
+  the tabs of its kind. Each constructor tab keeps its own draft while the
+  window is open, and the active tab's drawing is inserted. The dialog opens
+  with `fill: true`.
+- `@rich-editor/drawings`: the JSON tab and the preview are shown only with
+  `json: true`. Editing a node whose scene has no constructor shows
+  `drawings_unavailable` and cannot be saved; an unreadable scene gives a blank
+  canvas and `drawings_unreadable` (with `json: true` both open the JSON tab).
+- `@rich-editor/drawings`: the constructor layout — the canvas on the left, a
+  `--rte-builder-side` column with the palette, properties and hint on the
+  right (under the canvas on narrow screens); buttons are 40px high; hints are
+  written in plain language.
+- `@rich-editor/drawings` (breaking): `ToolButton.glyph: string` is replaced by
+  `icon: BuilderIconId`; `actionButton(label, icon, onClick)` takes an icon id.
+  The physics palette still uses symbols.
+- `@rich-editor/core`: `TEMPLATE_CATEGORIES` now contains the `popular`
+  category; its templates are the same objects as in their own categories, so
+  they appear twice. `findTemplate(id)` works as before.
+- `@rich-editor/core`: the formula dialog shows categories in one horizontally
+  scrolling row, template buttons are at least 48×48 (five per row on a phone),
+  the input field is larger, and the MathLive menu («≡» and the context menu) is
+  disabled.
 - `@rich-editor/drawings`: a click on a drawing opens its editor, instead of the
   press as before — the press now goes to the editor so the node can be dragged.
 - `@rich-editor/drawings`: in the stereometry constructor dragging empty space
@@ -291,9 +442,58 @@ The packages are not published yet; everything below lands in the first release.
 - Dropdown panels are `position: fixed` popovers (`.rte-popover.rte-dropdown__panel`).
 - The size-limit error of the recorder uses `error_audio_too_large` with the
   byte limit instead of the duration message.
+- The drawing and structure dialogs no longer close on Escape (they open with
+  `closeOnEscape: false`); the cross and «Отмена» close them. In the drawing
+  dialog Escape calls `SceneEditor.cancel()` of the active tab, in the structure
+  dialog it clears the selection.
+- `@rich-editor/drawings`: a cancelled gesture (`pointercancel`, a lost pointer
+  capture, a second finger, Escape) leaves no result: the pencil stroke is
+  dropped, the dragged object and the stereometry view angles are restored and
+  no history step remains. Actions that write history during an unfinished drag
+  (Delete, paste, a rotation key) finish the drag first. This replaces the
+  earlier behaviour where Escape completed the drag. Stereometry uses the shared
+  canvas gesture for panning; the select-tool hint of planimetry, plots and
+  physics mentions moving the sheet.
+- `@rich-editor/chemistry`: bond options the model does not store (`[::30]`,
+  `[:30,1.5]`) are kept verbatim and written back unchanged after an edit.
+- `@rich-editor/chemistry`: a chain before a ring (`CH_3-CH_2-*6(…)`) is parsed
+  in the right order, the last prefix atom touches the ring; it is written as
+  `*6((-CH_2-CH_3)------)`.
+- `@rich-editor/chemistry`: in the «Своя группа» field a number of two or more
+  digits is written in braces (`C6H12O6` → `C_6H_{12}O_6`); with `code: true`
+  and a broken code the «Код chemfig» block is open and the field is focused.
+- `@rich-editor/drawings`: with `json: true` the kind of a new drawing on the
+  JSON tab comes from the text (`physics` or `elements` vs `2d`, `3d`, `plot_2d`,
+  vertices, edges, plots), so a physics scene pasted after the geometry tab stays
+  physics; an existing node keeps its kind; empty text takes the kind of the last
+  constructor.
+- `@rich-editor/core`: formula dialog — a template pressed before MathLive loads
+  or while a saved formula is opening is queued and inserted when the field is
+  ready (not for an unreadable formula); saving remembers the formula and
+  position before awaiting the converter and drops a stale result, the button is
+  disabled while saving; if the converter module fails to load the dialog shows
+  `formula_load_failed` (read-only field on open, instead of `formula_invalid` on
+  save); a second open during the MathLive load does not create a second field.
+
+- `@rich-editor/drawings`: a plot label (also of a polyline) draws a power
+  (`^2`, `^{…}`) as a superscript in SVG; in TikZ a decimal comma between digits in math mode is
+  wrapped as `{,}` (`toLatexMath`), for every label.
+- `@rich-editor/drawings`: the parabola vertex and stretches and the points of
+  a line segment are stored with 4 decimal places instead of 2.
+- `@rich-editor/drawings`: in the plots and physics constructors the colour is
+  chosen from ten swatches (an unknown scene colour is kept as an extra swatch);
+  the hex input and the named list are removed.
+- `@rich-editor/drawings`: the template palette of the plots constructor
+  collapses to one row of icon buttons while a function is selected.
+- `@rich-editor/drawings`: a label text is trimmed; an empty number field input
+  is ignored.
 
 ### Removed
 
+- `@rich-editor/chemistry`: the `chemistry_preview` and `chemistry_empty`
+  message keys.
+- The «Предпросмотр» block of the formula dialog and the `formula_preview`
+  message key: the formula is visible in the field itself.
 - From `@rich-editor/vue`: `EditorToolbar`, `RteModal`, `RtePopover`,
   `LinkPopover`, `FormulaDialog`, `AudioRecorderDialog`, `RteDropdown`,
   `RteToolbarButton`, `ColorPanel`, `readToolbarState`, `emptyToolbarState`,
@@ -309,9 +509,17 @@ The packages are not published yet; everything below lands in the first release.
   `error_formula_render_failed`, `common_delete`, `common_ok`.
   Added: `toolbar_label`, `upload_image`, `upload_audio`, `upload_file`,
   `error_audio_too_large`.
+- `@rich-editor/drawings`: the `drawings_plots_color_*`,
+  `drawings_physics_color_*`, `drawings_plots_prop_hex` and
+  `drawings_physics_prop_color_custom` message keys; the «Направление» and
+  «Растяжение…» fields of plot curves (replaced by the «Функция» block).
 
 ### Fixed
 
+- `@rich-editor/core`: the modal autofocus no longer steals focus that was
+  already placed inside the dialog during the frame.
+- `@rich-editor/core`: the formula dialog no longer keeps the previous formula
+  in the field while a new one is converted to LaTeX.
 - `@rich-editor/drawings`: in the pyramid sample (the JSON tab and the demo) the
   dashes were on the wrong edges.
 - `@rich-editor/ocr`: scene JSON from recognition text keeps its LaTeX.

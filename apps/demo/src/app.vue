@@ -30,6 +30,10 @@ const uploadMode = ref<UploadMode>('local');
 const editable = ref(true);
 const mobilePreview = ref(false);
 const isLegacyEnabled = ref(false);
+/** Вкладка JSON, образцы и TikZ в диалоге чертежа — инструменты разработчика. */
+const isDrawingJsonEnabled = ref(false);
+/** Поле кода chemfig в диалоге структуры — тоже инструмент разработчика. */
+const isChemistryCodeEnabled = ref(false);
 const toolbarPreset = ref<'full' | 'standard' | 'minimal'>('full');
 /** Тема редактора — проп; страница демо красится под неё своим классом. */
 const theme = ref<'light' | 'dark' | 'auto'>('light');
@@ -66,8 +70,16 @@ const recognizePhotos: RecognizeAdapter = async (files, { signal }) => {
 
 const ocrFeature = createOcrFeature({ recognize: recognizePhotos, subject: () => ocrSubject.value });
 
-/** Возможности поверх встроенных; читаются один раз при создании редактора. */
-const features = [createChemistryFeature(), createDrawingsFeature({ scans: ocrFeature.scans }), ocrFeature];
+/**
+ * Возможности поверх встроенных; читаются один раз при создании редактора,
+ * поэтому флажки «JSON» и «Код chemfig» пересоздают и возможность, и редактор
+ * (см. `:key`).
+ */
+const features = computed(() => [
+  createChemistryFeature({ code: isChemistryCodeEnabled.value }),
+  createDrawingsFeature({ scans: ocrFeature.scans, json: isDrawingJsonEnabled.value }),
+  ocrFeature,
+]);
 const contentFeatures = [chemistryContent, drawingsContent];
 
 const limits = {
@@ -278,6 +290,16 @@ async function reloadSample(): Promise<void> {
         Legacy-контент (Froala)
       </label>
 
+      <label class="demo__check">
+        <input v-model="isDrawingJsonEnabled" type="checkbox" />
+        JSON в диалоге чертежа
+      </label>
+
+      <label class="demo__check">
+        <input v-model="isChemistryCodeEnabled" type="checkbox" />
+        Код chemfig в диалоге структуры
+      </label>
+
       <button type="button" @click="reloadSample">Пример</button>
       <button type="button" @click="clearContent">Очистить</button>
     </section>
@@ -292,7 +314,7 @@ async function reloadSample(): Promise<void> {
       <RichEditor
         v-if="ready"
         ref="editorRef"
-        :key="isLegacyEnabled ? 'legacy' : 'default'"
+        :key="`${isLegacyEnabled ? 'legacy' : 'default'}-${isDrawingJsonEnabled ? 'json' : 'plain'}-${isChemistryCodeEnabled ? 'chemfig' : 'builder'}`"
         v-model="html"
         :locale="locale"
         :messages="messages"

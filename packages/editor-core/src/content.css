@@ -497,6 +497,7 @@
   /* Модалки, поповеры, меню */
   --rte-modal-width: 480px;
   --rte-modal-width-wide: 860px;
+  --rte-modal-width-fill: 1280px;
   --rte-modal-padding-x: 32px;
   --rte-modal-padding-y: 16px;
   --rte-popover-padding: 12px;

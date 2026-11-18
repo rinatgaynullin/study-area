@@ -9,9 +9,15 @@ import {
   repairMathML,
 } from '../src';
 
-const ALL_TEMPLATES = TEMPLATE_CATEGORIES.flatMap((category) =>
-  category.templates.map((template) => ({ ...template, type: category.type })),
-);
+// «Частые» ссылаются на шаблоны других категорий, а не копируют их: каталог —
+// это множество объектов, и каждый проверяется один раз.
+const ALL_TEMPLATES = [
+  ...new Map(
+    TEMPLATE_CATEGORIES.flatMap((category) =>
+      category.templates.map((template) => [template, { ...template, type: category.type }]),
+    ),
+  ).values(),
+];
 
 describe('template catalog', () => {
   it('covers the required math and chemistry categories', () => {
@@ -39,11 +45,53 @@ describe('template catalog', () => {
     expect(getTemplateCategories('chem').length).toBe(4);
   });
 
+  it('opens math with «Popular» built from existing templates; chemistry has none', () => {
+    const [popular] = getTemplateCategories('math');
+
+    expect(popular?.id).toBe('popular');
+    expect(popular?.labelKey).toBe('formula_categories_popular');
+    expect(popular?.templates.map((template) => template.id)).toEqual([
+      'fractions.frac',
+      'scripts.square',
+      'scripts.sup',
+      'scripts.sub',
+      'roots.sqrt',
+      'roots.nthroot',
+      'basic.parens',
+      'basic.abs',
+      'basic.times',
+      'basic.div',
+      'basic.pm',
+      'basic.degree',
+      'relations.le',
+      'relations.ge',
+      'relations.ne',
+      'relations.approx',
+      'greek.pi',
+    ]);
+
+    // Те же объекты, что в исходных категориях, — не копии.
+    popular?.templates.forEach((template) => {
+      expect(findTemplate(template.id)).toBe(template);
+
+      const home = TEMPLATE_CATEGORIES.find((category) => category.id === template.category);
+
+      expect(home?.templates).toContain(template);
+    });
+
+    expect(getTemplateCategories('chem')[0]?.id).toBe('chemReactions');
+    expect(getTemplateCategories('chem').map((category) => category.id)).not.toContain('popular');
+  });
+
   it('has unique template ids and resolves them by id', () => {
     const ids = ALL_TEMPLATES.map((template) => template.id);
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect(findTemplate(ids[0])?.id).toBe(ids[0]);
+
+    ids.forEach((id) => {
+      expect(findTemplate(id)?.id).toBe(id);
+    });
+
     expect(findTemplate('does.not.exist')).toBeUndefined();
   });
 

@@ -171,7 +171,7 @@ test.describe('видимость интерфейса', () => {
 
     const dialog = page.locator('.rte-modal:not([hidden])');
     await expect(dialog.getByRole('button', { name: 'Вставить' })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Удалить формулу' })).toBeHidden();
+    await expect(dialog.getByRole('button', { name: 'Удалить', exact: true })).toBeHidden();
   });
 
   test('модалка затемняет страницу и закрывается кликом по подложке', async ({ page }) => {
@@ -351,7 +351,7 @@ test.describe('клавиатура', () => {
     const dialog = page.locator('.rte-modal:not([hidden])');
     await expect(dialog).toBeVisible();
     await expect(dialog.locator('.rte-modal__title')).toHaveText('Математическая формула');
-    await expect(dialog.getByRole('button', { name: 'Удалить формулу' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Удалить', exact: true })).toBeVisible();
   });
 
   test('Ctrl+K открывает диалог ссылки из документа', async ({ page }) => {

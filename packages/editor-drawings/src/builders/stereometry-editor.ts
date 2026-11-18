@@ -15,19 +15,20 @@ import {
   type StereoTemplateId,
   type StereoTemplateParams,
 } from './stereo-templates';
-import { ChangeEmitter, HIT_RADIUS_PX, SketchCanvas, type PointerInfo } from './sketch-canvas';
-import { ToolBar, actionButton, propertyField, selectControl, type ToolButton } from './tool-bar';
+import { ChangeEmitter, DRAG_THRESHOLD_PX, HIT_RADIUS_PX, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { checkField, numberField, propsTitle, selectField, sliderField, textField } from './fields';
+import { ToolBar, actionButton, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
 type Tool = 'select' | 'point' | 'segment' | 'section' | 'angle' | 'delete';
 
 const TOOLS: ToolButton<Tool>[] = [
-  { id: 'select', labelKey: 'drawings_tool_select', glyph: '↖' },
-  { id: 'point', labelKey: 'drawings_tool_point', glyph: '•' },
-  { id: 'segment', labelKey: 'drawings_tool_segment', glyph: '╱' },
-  { id: 'section', labelKey: 'drawings_tool_section', glyph: '◇' },
-  { id: 'angle', labelKey: 'drawings_tool_angle', glyph: '∠' },
-  { id: 'delete', labelKey: 'drawings_tool_delete', glyph: '✕' },
+  { id: 'select', labelKey: 'drawings_tool_select', icon: 'select' },
+  { id: 'point', labelKey: 'drawings_tool_point', icon: 'point' },
+  { id: 'segment', labelKey: 'drawings_tool_segment', icon: 'segment' },
+  { id: 'section', labelKey: 'drawings_tool_section', icon: 'section' },
+  { id: 'angle', labelKey: 'drawings_tool_angle', icon: 'angle' },
+  { id: 'delete', labelKey: 'drawings_tool_delete', icon: 'delete' },
 ];
 
 /** Ключи подсказок целиком, а не из префикса: проверка таблиц переводов ищет их в коде. */
@@ -53,8 +54,8 @@ const MAX_TILT = 85;
 /** Поворот вокруг вертикали — от −180° до 180°: так его показывает ползунок. */
 const MAX_TURN = 180;
 
-/** Сдвиг указателя в пикселях экрана, после которого нажатие — уже не клик, а перетаскивание. */
-const DRAG_THRESHOLD_PX = 4;
+/** `data-prop` полей координат вершины: индекс — ось. */
+const AXIS_PROPS: readonly string[] = ['x', 'y', 'z'];
 
 /** Шаг поворота стрелками: обычный и с Shift. */
 const KEY_TURN_STEP = 5;
@@ -250,10 +251,6 @@ type Selection =
  * нажатия по пустому месту и у вершины — где нажали, у вращения — последняя.
  */
 type Gesture =
-  /** Нажатие по пустому месту: клик, пока указатель не ушёл дальше порога. */
-  | { type: 'empty'; pointerId: number; x: number; y: number; info: PointerInfo }
-  /** Панорама основной кнопкой: `x`, `y` и `cx`, `cy` — указатель и центр окна там, где пройден порог. */
-  | { type: 'pan'; pointerId: number; x: number; y: number; cx: number; cy: number }
   /** Вращение сцены; `recorded` — снимок истории уже сделан. */
   | { type: 'rotate'; pointerId: number; x: number; y: number; recorded: boolean }
   /**
@@ -622,6 +619,9 @@ class StereometryEditor implements SceneEditor {
       onDoubleClick: this.onDoubleClick,
       onKeyDown: this.onKeyDown,
       onViewportChange: () => this.render(),
+      // Пустое место в любом инструменте: протяжка двигает полотно, клик — действие инструмента.
+      canPanFrom: (info) => this.hitAt(info.svg) === null,
+      grabOnHover: () => this.tool === 'select',
     });
 
     this.tools = new ToolBar<Tool>({ t: this.t, tools: TOOLS, onSelect: (tool) => this.setTool(tool) });
@@ -629,13 +629,13 @@ class StereometryEditor implements SceneEditor {
     const actions = el('div', {
       class: 'rte-builder__actions',
       children: [
-        actionButton(this.t('drawings_undo'), '↶', () => this.undo()),
-        actionButton(this.t('drawings_redo'), '↷', () => this.redo()),
-        actionButton(this.t('drawings_grid'), '#', () => this.toggleGrid()),
-        actionButton(this.t('drawings_stereo_axes'), 'xyz', () => this.toggleAxes()),
-        actionButton(this.t('drawings_zoom_in'), '+', () => this.canvas.zoomBy(1.25)),
-        actionButton(this.t('drawings_zoom_out'), '−', () => this.canvas.zoomBy(0.8)),
-        actionButton(this.t('drawings_zoom_reset'), '⌂', () => this.fitView()),
+        actionButton(this.t('drawings_undo'), 'undo', () => this.undo()),
+        actionButton(this.t('drawings_redo'), 'redo', () => this.redo()),
+        actionButton(this.t('drawings_grid'), 'grid', () => this.toggleGrid()),
+        actionButton(this.t('drawings_stereo_axes'), 'axes', () => this.toggleAxes()),
+        actionButton(this.t('drawings_zoom_in'), 'zoomIn', () => this.canvas.zoomBy(1.25)),
+        actionButton(this.t('drawings_zoom_out'), 'zoomOut', () => this.canvas.zoomBy(0.8)),
+        actionButton(this.t('drawings_zoom_reset'), 'fit', () => this.fitView()),
       ],
     });
 
@@ -648,7 +648,7 @@ class StereometryEditor implements SceneEditor {
         return el('button', {
           class: 'rte-builder__tool',
           attrs: { type: 'button', title: label, 'data-template': template.id },
-          children: [el('span', { class: 'rte-builder__tool-glyph', text: template.glyph }), el('span', { class: 'rte-builder__tool-label', text: label })],
+          children: [toolIcon(template.icon), el('span', { class: 'rte-builder__tool-label', text: label })],
         });
       }),
     });
@@ -667,12 +667,6 @@ class StereometryEditor implements SceneEditor {
         this.renderOverlay();
       }),
     );
-    // Захват отняли без отпускания кнопки: жест обрывается, отложенный клик не выполняется.
-    this.disposer.add(
-      on(this.canvas.element, 'lostpointercapture', (event) => {
-        if (this.gesture?.pointerId === event.pointerId) this.finishGesture(false);
-      }),
-    );
 
     this.hint = el('p', { class: 'rte-builder__hint', attrs: { role: 'status' } });
     this.properties = el('div', { class: 'rte-builder__props', attrs: { 'aria-live': 'polite' } });
@@ -682,7 +676,10 @@ class StereometryEditor implements SceneEditor {
       children: [
         el('div', { class: 'rte-builder__bar', children: [this.tools.element, actions] }),
         palette,
-        el('div', { class: 'rte-builder__body', children: [this.canvas.element, this.properties] }),
+        el('div', {
+          class: 'rte-builder__body',
+          children: [el('div', { class: 'rte-builder__stage', children: [this.canvas.element] }), this.properties],
+        }),
         this.hint,
       ],
     });
@@ -766,6 +763,7 @@ class StereometryEditor implements SceneEditor {
     this.selection = null;
     this.draft = [];
     this.gesture = null;
+    this.canvas.resetGestures();
     this.slideFrom = null;
     this.pointHeight = 0;
     this.element.classList.remove(ROTATING_CLASS);
@@ -815,6 +813,17 @@ class StereometryEditor implements SceneEditor {
 
   focus(): void {
     this.canvas.focus();
+  }
+
+  /** Escape: контур, стороны угла и выделение — прочь, инструмент — «Выбрать». */
+  cancel(): void {
+    // Жест указателя закрывается без клика: вращение и перетаскивание вершины,
+    // уже начатые, откатываются без шага истории; жест ползунка — так же.
+    this.cancelGesture();
+    this.canvas.cancelPan();
+    this.cancelSlide();
+    this.selection = null;
+    this.setTool('select');
   }
 
   destroy(): void {
@@ -1033,7 +1042,7 @@ class StereometryEditor implements SceneEditor {
   private changing(): boolean {
     const type = this.gesture?.type;
 
-    return type === 'rotate' || type === 'vertex' || type === 'pan' || this.slideFrom !== null;
+    return type === 'rotate' || type === 'vertex' || this.canvas.panning || this.slideFrom !== null;
   }
 
   private undo(): void {
@@ -1259,7 +1268,7 @@ class StereometryEditor implements SceneEditor {
 
   private readonly onPointerDown = (info: PointerInfo): void => {
     // Новое нажатие обрывает недоделанный жест: второй палец или потерянное отпускание.
-    this.finishGesture(false);
+    this.finishGesture();
     this.endSlide();
 
     const { pointerId, clientX: x, clientY: y } = info.event;
@@ -1272,18 +1281,12 @@ class StereometryEditor implements SceneEditor {
 
     if (info.button !== 0) return;
 
+    // Пустое место полотно придерживает само: сюда нажатие приходит, только если это клик.
     const hit = this.hitAt(info.svg);
-
-    // Пустое место: клик это или вращение, станет ясно по движению или отпусканию.
-    if (hit === null) {
-      this.gesture = { type: 'empty', pointerId, x, y, info };
-
-      return;
-    }
 
     this.applyTool(info);
 
-    if (this.tool !== 'select' || hit.type !== 'vertex') return;
+    if (this.tool !== 'select' || hit?.type !== 'vertex') return;
 
     const point = this.state.vertices[hit.id];
 
@@ -1352,8 +1355,9 @@ class StereometryEditor implements SceneEditor {
   private readonly onPointerUp = (info: PointerInfo): void => {
     if (this.gesture?.pointerId !== info.event.pointerId) return;
 
-    // SketchCanvas присылает сюда и pointercancel: отменённое нажатие — не клик.
-    this.finishGesture(info.event.type !== 'pointercancel');
+    // Вместо отпускания SketchCanvas присылает pointercancel при отмене жеста: тогда жест откатывается.
+    if (isCancelled(info)) this.cancelGesture();
+    else this.finishGesture();
   };
 
   /** Указатель ушёл от точки нажатия дальше порога? Считается в пикселях экрана. */
@@ -1365,19 +1369,6 @@ class StereometryEditor implements SceneEditor {
     const { event } = info;
 
     switch (gesture.type) {
-      case 'empty':
-        // Порог пройден — это панорама; сдвиг считается отсюда, чтобы полотно не дёрнулось.
-        if (StereometryEditor.pastThreshold(gesture, event)) {
-          const { cx, cy } = this.canvas.viewport;
-
-          this.gesture = { type: 'pan', pointerId: gesture.pointerId, x: event.clientX, y: event.clientY, cx, cy };
-          this.element.classList.add(ROTATING_CLASS);
-        }
-
-        break;
-      case 'pan':
-        this.pan(gesture, event);
-        break;
       case 'rotate':
         this.rotate(gesture, event);
         break;
@@ -1387,17 +1378,6 @@ class StereometryEditor implements SceneEditor {
       default:
         break;
     }
-  }
-
-  /**
-   * Окно просмотра едет за указателем, как у панорамы средней кнопкой: смещение
-   * в единицах полотна с учётом масштаба CSS. Ни сцена, ни история не меняются.
-   */
-  private pan(gesture: Extract<Gesture, { type: 'pan' }>, event: PointerEvent): void {
-    const from = this.canvas.clientToSvg(gesture.x, gesture.y);
-    const to = this.canvas.clientToSvg(event.clientX, event.clientY);
-
-    this.canvas.setViewport({ cx: gesture.cx + to.x - from.x, cy: gesture.cy + to.y - from.y });
   }
 
   private rotate(gesture: Extract<Gesture, { type: 'rotate' }>, event: PointerEvent): void {
@@ -1497,11 +1477,28 @@ class StereometryEditor implements SceneEditor {
   }
 
   /**
-   * Конец жеста. `click` — обычное отпускание: только тогда нажатие по
-   * пустому месту выполняет действие инструмента. Вращение и перетаскивание
-   * доводятся до конца в любом случае.
+   * Отменённый жест: вращение и перетаскивание вершины, уже менявшие сцену,
+   * откатываются к снимку начала жеста, шаг истории снимается.
    */
-  private finishGesture(click: boolean): void {
+  private cancelGesture(): void {
+    const { gesture } = this;
+
+    this.gesture = null;
+    this.element.classList.remove(ROTATING_CLASS);
+
+    const changed = gesture?.type === 'rotate' ? gesture.recorded : gesture?.moving === true;
+
+    if (!changed) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange(false);
+  }
+
+  /** Конец жеста при отпускании: вращение и перетаскивание доводятся до конца. */
+  private finishGesture(): void {
     const { gesture } = this;
 
     this.gesture = null;
@@ -1510,10 +1507,6 @@ class StereometryEditor implements SceneEditor {
     if (!gesture) return;
 
     switch (gesture.type) {
-      case 'empty':
-        if (click) this.applyTool(gesture.info);
-
-        break;
       case 'rotate':
         if (gesture.recorded) this.afterChange();
 
@@ -1540,10 +1533,10 @@ class StereometryEditor implements SceneEditor {
       angleZRange: state.angleZ,
     };
     const point = selection?.type === 'vertex' ? state.vertices[selection.id] : undefined;
-    const fields = this.properties.querySelectorAll<HTMLInputElement>('input[data-prop], input[data-axis]');
+    const fields = this.properties.querySelectorAll<HTMLInputElement>('input[data-prop]');
 
     fields.forEach((input) => {
-      const axis = ['x', 'y', 'z'].indexOf(input.dataset.axis ?? '');
+      const axis = AXIS_PROPS.indexOf(input.dataset.prop ?? '');
       const value = axis === -1 ? values[input.dataset.prop ?? ''] : point?.[axis];
 
       if (value !== undefined && input !== document.activeElement) input.value = String(roundTo(value));
@@ -1597,6 +1590,7 @@ class StereometryEditor implements SceneEditor {
     // Стрелки крутят вид, пока ничего не выбрано: шаг истории на каждое нажатие.
     if (turn && !this.selection && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
+      this.finishGesture();
 
       const step = (event.shiftKey ? KEY_TURN_STEP_LARGE : KEY_TURN_STEP) * turn.sign;
 
@@ -1610,6 +1604,7 @@ class StereometryEditor implements SceneEditor {
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selection) {
         event.preventDefault();
+        this.finishGesture();
         this.deleteSelection();
       }
 
@@ -1617,10 +1612,9 @@ class StereometryEditor implements SceneEditor {
     }
 
     if (event.key === 'Escape') {
-      this.draft = [];
-      this.selection = null;
-      this.render();
-      this.renderProperties();
+      // Отмена сделана здесь: диалог по `defaultPrevented` её не повторяет.
+      event.preventDefault();
+      this.cancel();
     }
   };
 
@@ -1866,7 +1860,7 @@ class StereometryEditor implements SceneEditor {
 
     const titleKey = selection.type === 'section' ? 'drawings_stereo_selected_section' : `drawings_selected_${selection.type}`;
 
-    this.properties.appendChild(el('h4', { class: 'rte-builder__props-title', text: t(titleKey) }));
+    this.properties.appendChild(propsTitle(t(titleKey)));
 
     if (selection.type === 'vertex') {
       this.renderVertexProperties(selection.id);
@@ -1875,25 +1869,25 @@ class StereometryEditor implements SceneEditor {
 
       if (!target) return;
 
-      const style = selectControl(
-        [
-          { value: 'solid', label: t('drawings_style_solid') },
-          { value: 'dashed', label: t('drawings_style_dashed') },
-        ],
-        target.style,
+      this.properties.appendChild(
+        selectField({
+          label: t('drawings_prop_style'),
+          options: [
+            { value: 'solid', label: t('drawings_style_solid') },
+            { value: 'dashed', label: t('drawings_style_dashed') },
+          ],
+          value: target.style,
+          onChange: (value) =>
+            this.commit((draft) => {
+              const draftEdge = draft.edges[selection.index];
+
+              // Стиль, выбранный руками, автоматический пунктир больше не трогает.
+              draft.autoHidden = false;
+
+              if (draftEdge) draftEdge.style = value === 'dashed' ? 'dashed' : 'solid';
+            }),
+        }),
       );
-
-      this.properties.appendChild(propertyField(t('drawings_prop_style'), style));
-      on(style, 'change', () => {
-        this.commit((draft) => {
-          const draftEdge = draft.edges[selection.index];
-
-          // Стиль, выбранный руками, автоматический пунктир больше не трогает.
-          draft.autoHidden = false;
-
-          if (draftEdge) draftEdge.style = style.value === 'dashed' ? 'dashed' : 'solid';
-        });
-      });
       this.renderEdgeLength(selection, target);
     } else if (selection.type === 'section') {
       const section = state.sections[selection.index];
@@ -1905,52 +1899,59 @@ class StereometryEditor implements SceneEditor {
 
       if (!SECTION_FILLS.some((fill) => fill.value === current)) options.push({ value: current, label: t('drawings_stereo_fill_custom') });
 
-      const fill = selectControl(options, current);
+      this.properties.appendChild(
+        selectField({
+          label: t('drawings_stereo_prop_fill'),
+          options,
+          value: current,
+          onChange: (value) =>
+            this.commit((draft) => {
+              const draftSection = draft.sections[selection.index];
 
-      this.properties.appendChild(propertyField(t('drawings_stereo_prop_fill'), fill));
-      on(fill, 'change', () => {
-        this.commit((draft) => {
-          const draftSection = draft.sections[selection.index];
-
-          if (draftSection) draftSection.fill = fill.value;
-        });
-      });
+              if (draftSection) draftSection.fill = value;
+            }),
+        }),
+      );
     } else if (selection.type === 'angle') {
       const angle = state.angles[selection.index];
 
       if (!angle) return;
 
-      const style = selectControl(ANGLE_STYLES.map((value) => ({ value, label: t(`drawings_angle_${value}`) })), angle.style);
-      const label = el('input', { class: 'rte-input', attrs: { type: 'text', value: angle.label ?? '', placeholder: '30°' } });
       const degrees = angleDegrees(state.vertices, angle);
 
-      // Подпись-величину ведёт конструктор: руками её правят, только выключив флажок.
-      label.disabled = angle.measured;
       this.properties.append(
-        propertyField(t('drawings_prop_style'), style),
+        selectField({
+          label: t('drawings_prop_style'),
+          options: ANGLE_STYLES.map((value) => ({ value, label: t(`drawings_angle_${value}`) })),
+          value: angle.style,
+          onChange: (value) =>
+            this.commit((draft) => {
+              const draftAngle = draft.angles[selection.index];
+
+              if (draftAngle) draftAngle.style = value as AngleStyle;
+            }),
+        }),
         ...this.angleMeasureFields(selection.index, angle, degrees),
-        propertyField(t('drawings_prop_label'), label),
+        // Подпись-величину ведёт конструктор: руками её правят, только выключив флажок.
+        textField({
+          label: t('drawings_prop_label'),
+          value: angle.label ?? '',
+          placeholder: '30°',
+          disabled: angle.measured,
+          onChange: (text) => {
+            if (angle.measured) return;
+
+            this.commit((draft) => {
+              const draftAngle = draft.angles[selection.index];
+
+              if (!draftAngle) return;
+
+              if (text) draftAngle.label = text;
+              else delete draftAngle.label;
+            });
+          },
+        }),
       );
-      on(style, 'change', () => {
-        this.commit((draft) => {
-          const draftAngle = draft.angles[selection.index];
-
-          if (draftAngle) draftAngle.style = style.value as AngleStyle;
-        });
-      });
-      on(label, 'change', () => {
-        if (angle.measured) return;
-
-        this.commit((draft) => {
-          const text = label.value.trim();
-          const draftAngle = draft.angles[selection.index];
-
-          if (!draftAngle) return;
-
-          if (text) draftAngle.label = text;
-          else delete draftAngle.label;
-        });
-      });
     }
 
     const remove = el('button', { class: 'rte-button rte-button--danger rte-builder__remove', attrs: { type: 'button' }, text: t('drawings_remove_selected') });
@@ -1966,30 +1967,31 @@ class StereometryEditor implements SceneEditor {
    */
   private angleMeasureFields(index: number, angle: StereoAngle, degrees: number | null): HTMLElement[] {
     const { t } = this;
-    const value = el('input', {
-      class: 'rte-input',
-      attrs: { type: 'text', readonly: 'true', value: degrees === null ? '' : formatAngleMeasure(degrees), 'data-prop': 'angleValue' },
-    });
-    const toggle = el('input', { attrs: { type: 'checkbox', 'data-prop': 'angleMeasure' } });
-
-    toggle.checked = angle.measured;
-    // Без вершины величины нет — и вести нечего.
-    toggle.disabled = degrees === null;
-    on(toggle, 'change', () => {
-      this.commit((draft) => {
-        const target = draft.angles[index];
-
-        if (!target) return;
-
-        target.measured = toggle.checked;
-
-        if (target.measured && degrees !== null) target.label = formatAngleMeasure(degrees);
-      });
-    });
 
     return [
-      propertyField(t('drawings_stereo_prop_angle_value'), value),
-      el('label', { class: 'rte-stereo__check', children: [toggle, el('span', { text: t('drawings_stereo_angle_measure') })] }),
+      textField({
+        label: t('drawings_stereo_prop_angle_value'),
+        value: degrees === null ? '' : formatAngleMeasure(degrees),
+        readOnly: true,
+        prop: 'angleValue',
+      }),
+      checkField({
+        label: t('drawings_stereo_angle_measure'),
+        checked: angle.measured,
+        prop: 'angleMeasure',
+        // Без вершины величины нет — и вести нечего.
+        disabled: degrees === null,
+        onChange: (checked) =>
+          this.commit((draft) => {
+            const target = draft.angles[index];
+
+            if (!target) return;
+
+            target.measured = checked;
+
+            if (target.measured && degrees !== null) target.label = formatAngleMeasure(degrees);
+          }),
+      }),
     ];
   }
 
@@ -1997,37 +1999,33 @@ class StereometryEditor implements SceneEditor {
   private renderEdgeLength(selection: EdgeSelection, target: StereoEdge): void {
     const { t } = this;
     const current = this.edgeLength(target);
-    const end = this.lengthEnd?.selection === selection ? this.lengthEnd.end : 'to';
-    const length = el('input', {
-      class: 'rte-input',
-      attrs: { type: 'number', step: '0.5', min: '0.01', value: String(roundTo(current)), 'data-prop': 'length' },
-    });
-    const moving = selectControl(
-      [
-        { value: 'from', label: target.from },
-        { value: 'to', label: target.to },
-      ],
-      end,
+    // Конец берётся в момент правки: список рядом мог его сменить.
+    const movingEnd = (): EdgeEnd => (this.lengthEnd?.selection === selection ? this.lengthEnd.end : 'to');
+
+    this.properties.append(
+      numberField({
+        label: t('drawings_stereo_prop_length'),
+        value: roundTo(current),
+        step: 0.5,
+        min: 0.01,
+        prop: 'length',
+        // Нулевое ребро не задаёт направления, длина — только положительная; подвижный конец
+        // после округления мог лечь на неподвижный — такой длины не задать.
+        onChange: (value) => value > 0 && current !== 0 && this.setEdgeLength(selection, movingEnd(), value),
+      }),
+      selectField({
+        label: t('drawings_stereo_prop_length_end'),
+        options: [
+          { value: 'from', label: target.from },
+          { value: 'to', label: target.to },
+        ],
+        value: movingEnd(),
+        prop: 'lengthEnd',
+        onChange: (value) => {
+          this.lengthEnd = { selection, end: value === 'from' ? 'from' : 'to' };
+        },
+      }),
     );
-
-    moving.dataset.prop = 'lengthEnd';
-    this.properties.append(propertyField(t('drawings_stereo_prop_length'), length), propertyField(t('drawings_stereo_prop_length_end'), moving));
-    on(moving, 'change', () => {
-      this.lengthEnd = { selection, end: moving.value === 'from' ? 'from' : 'to' };
-    });
-    on(length, 'change', () => {
-      const value = Number(length.value);
-
-      // Нулевое ребро не задаёт направления, длина — только положительная.
-      if (length.value.trim() === '' || !Number.isFinite(value) || value <= 0 || current === 0) {
-        length.value = String(roundTo(current));
-
-        return;
-      }
-
-      // Подвижный конец после округления совпал с неподвижным: такой длины не задать.
-      if (!this.setEdgeLength(selection, moving.value === 'from' ? 'from' : 'to', value)) length.value = String(roundTo(current));
-    });
   }
 
   /** Длина ребра в пространстве; 0, если конца нет в сцене. */
@@ -2089,18 +2087,19 @@ class StereometryEditor implements SceneEditor {
   private renderPointHeight(): void {
     if (!HEIGHT_TOOLS.has(this.tool)) return;
 
-    const height = el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.5', value: String(roundTo(this.pointHeight)), 'data-prop': 'pointHeight' } });
-
-    this.properties.appendChild(propertyField(this.t('drawings_stereo_prop_point_height'), height));
-    // Высота — настройка инструмента, а не правка сцены: в историю не пишется.
-    on(height, 'change', () => {
-      const value = Number(height.value);
-
-      if (!Number.isFinite(value) || height.value.trim() === '') return;
-
-      this.pointHeight = roundTo(value);
-      this.renderOverlay();
-    });
+    this.properties.appendChild(
+      numberField({
+        label: this.t('drawings_stereo_prop_point_height'),
+        value: roundTo(this.pointHeight),
+        step: 0.5,
+        prop: 'pointHeight',
+        // Высота — настройка инструмента, а не правка сцены: в историю не пишется.
+        onChange: (value) => {
+          this.pointHeight = roundTo(value);
+          this.renderOverlay();
+        },
+      }),
+    );
   }
 
   /**
@@ -2111,82 +2110,53 @@ class StereometryEditor implements SceneEditor {
     const { state, t } = this;
 
     this.renderTemplateParams();
-    this.properties.appendChild(el('h4', { class: 'rte-builder__props-title', text: t('drawings_stereo_view') }));
-
-    const tilt = el('input', {
-      class: 'rte-input',
-      attrs: { type: 'number', step: '5', min: String(-MAX_TILT), max: String(MAX_TILT), value: String(roundTo(state.angleY)), 'data-prop': 'angleY' },
-    });
-    const turn = el('input', { class: 'rte-input', attrs: { type: 'number', step: '5', value: String(roundTo(state.angleZ)), 'data-prop': 'angleZ' } });
-
     this.properties.append(
-      propertyField(t('drawings_stereo_prop_angle_y'), tilt),
-      this.viewSlider('angleY', 'angleYRange', MAX_TILT, t('drawings_stereo_prop_angle_y')),
-      propertyField(t('drawings_stereo_prop_angle_z'), turn),
-      this.viewSlider('angleZ', 'angleZRange', MAX_TURN, t('drawings_stereo_prop_angle_z')),
+      propsTitle(t('drawings_stereo_view')),
+      this.viewSlider('angleY', MAX_TILT, t('drawings_stereo_prop_angle_y')),
+      this.viewSlider('angleZ', MAX_TURN, t('drawings_stereo_prop_angle_z')),
     );
-    on(tilt, 'change', () => {
-      const value = Number(tilt.value);
 
-      if (!Number.isFinite(value)) return;
-
-      this.commit((draft) => {
-        draft.angleY = normalizeView('angleY', value);
-      });
+    const reset = el('button', {
+      class: 'rte-button rte-stereo__reset',
+      attrs: { type: 'button' },
+      children: [toolIcon('resetView'), el('span', { text: t('drawings_stereo_reset_view') })],
     });
-    on(turn, 'change', () => {
-      const value = Number(turn.value);
-
-      if (!Number.isFinite(value)) return;
-
-      this.commit((draft) => {
-        draft.angleZ = normalizeView('angleZ', value);
-      });
-    });
-
-    const reset = el('button', { class: 'rte-button rte-stereo__reset', attrs: { type: 'button' }, text: t('drawings_stereo_reset_view') });
 
     on(reset, 'click', () => this.resetView());
     this.properties.appendChild(reset);
 
-    const checkbox = (label: string, checked: boolean, toggle: () => void, prop?: string): HTMLElement => {
-      const input = el('input', { attrs: { type: 'checkbox', ...(prop ? { 'data-prop': prop } : {}) } });
-
-      input.checked = checked;
-      on(input, 'change', toggle);
-
-      return el('label', { class: 'rte-stereo__check', children: [input, el('span', { text: label })] });
-    };
-
     this.properties.append(
-      checkbox(t('drawings_grid'), state.showGrid, () => this.toggleGrid()),
-      checkbox(t('drawings_stereo_axes'), state.showAxes, () => this.toggleAxes()),
-      checkbox(t('drawings_stereo_auto_hidden'), state.autoHidden, () => this.toggleAutoHidden(), 'autoHidden'),
+      checkField({ label: t('drawings_grid'), checked: state.showGrid, onChange: () => this.toggleGrid() }),
+      checkField({ label: t('drawings_stereo_axes'), checked: state.showAxes, onChange: () => this.toggleAxes() }),
+      checkField({ label: t('drawings_stereo_auto_hidden'), checked: state.autoHidden, prop: 'autoHidden', onChange: () => this.toggleAutoHidden() }),
     );
 
     if (this.tool !== 'angle') return;
 
-    const input = el('input', {
-      class: 'rte-input rte-stereo__angle-input',
-      attrs: { type: 'text', placeholder: 'SOH', maxlength: 12, autocomplete: 'off', spellcheck: 'false' },
-    });
     const note = el('p', { class: 'rte-stereo__note', text: t('drawings_stereo_angle_input_hint') });
+    const field = textField({
+      label: t('drawings_stereo_prop_angle_input'),
+      value: '',
+      placeholder: 'SOH',
+      maxLength: 12,
+      className: 'rte-stereo__angle-input',
+      onChange: (value, input) => {
+        const points = parseAngleVertices(value, Object.keys(this.state.vertices));
 
-    this.properties.append(propertyField(t('drawings_stereo_prop_angle_input'), input), note);
-    on(input, 'change', () => {
-      const points = parseAngleVertices(input.value, Object.keys(this.state.vertices));
+        if (!points) {
+          input.setAttribute('aria-invalid', 'true');
+          note.textContent = t('drawings_stereo_angle_input_invalid');
+          note.classList.add('rte-stereo__note--error');
 
-      if (!points) {
-        input.setAttribute('aria-invalid', 'true');
-        note.textContent = t('drawings_stereo_angle_input_invalid');
-        note.classList.add('rte-stereo__note--error');
+          return;
+        }
 
-        return;
-      }
-
-      this.draft = [];
-      this.addAngle(points);
+        this.draft = [];
+        this.addAngle(points);
+      },
     });
+
+    this.properties.append(field, note);
   }
 
   /**
@@ -2200,65 +2170,49 @@ class StereometryEditor implements SceneEditor {
 
     const { template, applied } = active;
 
-    this.properties.appendChild(el('h4', { class: 'rte-builder__props-title', text: this.t('drawings_stereo_template_params') }));
+    this.properties.appendChild(propsTitle(this.t('drawings_stereo_template_params')));
     template.fields.forEach((field) => {
-      const input = el('input', {
-        class: 'rte-input',
-        attrs: {
-          type: 'number',
-          min: String(field.min),
-          max: String(field.max),
-          step: String(field.step),
-          value: String(applied.params[field.key]),
-          'data-prop': `template-${field.key}`,
-        },
-      });
-
-      this.properties.appendChild(propertyField(this.t(field.labelKey), input));
-      on(input, 'change', () => {
-        const value = Number(input.value);
-
-        if (!Number.isFinite(value) || input.value.trim() === '') {
-          input.value = String(applied.params[field.key]);
-
-          return;
-        }
-
-        this.rebuildTemplate(applied, { ...applied.params, [field.key]: value });
-      });
+      this.properties.appendChild(
+        numberField({
+          label: this.t(field.labelKey),
+          value: applied.params[field.key],
+          step: field.step,
+          min: field.min,
+          max: field.max,
+          prop: `template-${field.key}`,
+          onChange: (value) => this.rebuildTemplate(applied, { ...applied.params, [field.key]: value }),
+        }),
+      );
     });
   }
 
   /**
-   * Ползунок угла вида от −`limit` до `limit`. Пока его тянут (`input`), сцена
-   * поворачивается сразу; жест закрывается по `change`, по отпусканию
-   * указателя или клавиши на ползунке, по потере фокуса и перед любой правкой
-   * сцены — тогда история получает один снимок на жест.
+   * Строка угла вида: ползунок от −`limit` до `limit` и число. Пока ползунок
+   * тянут, сцена поворачивается сразу; жест закрывается, когда его отпустили,
+   * ушёл фокус или перед любой правкой сцены — тогда история получает один
+   * снимок на жест. Число из поля — обычная правка.
    */
-  private viewSlider(angle: ViewAngle, prop: string, limit: number, label: string): HTMLInputElement {
-    const slider = el('input', {
-      class: 'rte-stereo__range',
-      attrs: { type: 'range', min: String(-limit), max: String(limit), step: '1', value: String(roundTo(this.state[angle])), 'data-prop': prop, 'aria-label': label },
-    });
-
-    on(slider, 'input', () => this.slideView(angle, slider));
-    on(slider, 'change', () => {
-      this.slideView(angle, slider);
-      this.endSlide();
-    });
-    // Ползунок увели и вернули на место — `change` не придёт, жест закрывают эти события.
-    on(slider, 'pointerup', () => this.endSlide());
-    on(slider, 'keyup', () => this.endSlide());
-    on(slider, 'blur', () => this.endSlide());
-
-    return slider;
+  private viewSlider(angle: ViewAngle, limit: number, label: string): HTMLElement {
+    return sliderField({
+      label,
+      value: roundTo(this.state[angle]),
+      min: -limit,
+      max: limit,
+      step: 1,
+      inputStep: 5,
+      freeInput: angle === 'angleZ',
+      prop: angle,
+      rangeProp: `${angle}Range`,
+      onSlide: (value) => this.slideView(angle, value),
+      onRelease: () => this.endSlide(),
+      onChange: (value) =>
+        this.commit((draft) => {
+          draft[angle] = normalizeView(angle, value);
+        }),
+    }).element;
   }
 
-  private slideView(angle: ViewAngle, slider: HTMLInputElement): void {
-    const raw = Number(slider.value);
-
-    if (!Number.isFinite(raw)) return;
-
+  private slideView(angle: ViewAngle, raw: number): void {
     const value = normalizeView(angle, raw);
 
     if (!this.slideFrom) {
@@ -2290,6 +2244,22 @@ class StereometryEditor implements SceneEditor {
     return true;
   }
 
+  /**
+   * Отменённый жест ползунка: углы вида и пунктир — как до жеста, шага
+   * истории нет. Рисунок и панель обновляет вызывающий.
+   */
+  private cancelSlide(): void {
+    const from = this.slideFrom;
+
+    this.slideFrom = null;
+
+    if (!from) return;
+
+    this.state.angleY = from.angleY;
+    this.state.angleZ = from.angleZ;
+    this.state.edges = from.edges;
+  }
+
   /** Конец жеста ползунка от его собственных событий: о правке узнают слушатели. */
   private endSlide(): void {
     if (this.closeSlide()) this.changes.emit();
@@ -2301,44 +2271,37 @@ class StereometryEditor implements SceneEditor {
 
     if (!point) return;
 
-    const nameInput = el('input', { class: 'rte-input', attrs: { type: 'text', value: id, maxlength: 4 } });
-    const position = selectControl(
-      LABEL_POSITIONS.map((value) => ({ value, label: t(`drawings_position_${value.replace(' ', '_')}`) })),
-      state.labels[id] ?? 'above',
+    this.properties.append(
+      textField({ label: t('drawings_prop_name'), value: id, maxLength: 4, onChange: (value) => this.renameVertex(id, value) }),
+      selectField({
+        label: t('drawings_prop_position'),
+        options: LABEL_POSITIONS.map((value) => ({ value, label: t(`drawings_position_${value.replace(' ', '_')}`) })),
+        value: state.labels[id] ?? 'above',
+        onChange: (value) =>
+          this.commit((draft) => {
+            draft.labels[id] = value;
+          }),
+      }),
     );
-
-    this.properties.append(propertyField(t('drawings_prop_name'), nameInput), propertyField(t('drawings_prop_position'), position));
-    on(nameInput, 'change', () => this.renameVertex(id, nameInput.value.trim()));
-    on(position, 'change', () => {
-      this.commit((draft) => {
-        draft.labels[id] = position.value;
-      });
-    });
 
     const axisKeys = ['drawings_stereo_prop_x', 'drawings_stereo_prop_y', 'drawings_stereo_prop_z'];
     const coords = el('div', {
       class: 'rte-stereo__coords',
-      children: axisKeys.map((key, axis) => {
-        // axis — индекс одного из трёх ключей осей: у Vec3 координата по нему есть всегда.
-        const input = el('input', {
-          class: 'rte-input',
-          attrs: { type: 'number', step: '0.5', value: String(roundTo(point[axis] ?? 0)), 'data-axis': ['x', 'y', 'z'][axis] },
-        });
+      // axis — индекс одного из трёх ключей осей: у Vec3 координата по нему есть всегда.
+      children: axisKeys.map((key, axis) =>
+        numberField({
+          label: t(key),
+          value: roundTo(point[axis] ?? 0),
+          step: 0.5,
+          prop: AXIS_PROPS[axis],
+          onChange: (value) =>
+            this.commit((draft) => {
+              const target = draft.vertices[id];
 
-        on(input, 'change', () => {
-          const value = Number(input.value);
-
-          if (!Number.isFinite(value)) return;
-
-          this.commit((draft) => {
-            const target = draft.vertices[id];
-
-            if (target) target[axis] = roundTo(value);
-          });
-        });
-
-        return propertyField(t(key), input);
-      }),
+              if (target) target[axis] = roundTo(value);
+            }),
+        }),
+      ),
     });
 
     this.properties.appendChild(coords);
@@ -2352,32 +2315,32 @@ class StereometryEditor implements SceneEditor {
 
       if (!body) return;
 
-      const input = el('input', {
-        class: 'rte-input',
-        attrs: { type: 'number', step: '0.5', min: '0', value: String(roundTo(body.radius)), 'data-prop': 'radius' },
-      });
+      this.properties.appendChild(
+        numberField({
+          label: this.t('drawings_stereo_param_radius'),
+          value: roundTo(body.radius),
+          step: 0.5,
+          min: 0,
+          prop: 'radius',
+          onChange: (value) => {
+            const radius = roundTo(value);
 
-      this.properties.appendChild(propertyField(this.t('drawings_stereo_param_radius'), input));
-      on(input, 'change', () => {
-        const value = Number(input.value);
-        const radius = Number.isFinite(value) && input.value.trim() !== '' ? roundTo(value) : 0;
+            // Радиус проверяется после округления: 0,004 стал бы нулём.
+            if (radius <= 0) return false;
 
-        // Радиус проверяется после округления: 0,004 стал бы нулём.
-        if (radius <= 0) {
-          input.value = String(roundTo(body.radius));
+            this.commit((draft) => {
+              const target = draft[ref.kind][ref.index];
 
-          return;
-        }
+              if (!target) return;
 
-        this.commit((draft) => {
-          const target = draft[ref.kind][ref.index];
+              target.radius = radius;
+              target.radiusEdited = true;
+            });
 
-          if (!target) return;
-
-          target.radius = radius;
-          target.radiusEdited = true;
-        });
-      });
+            return true;
+          },
+        }),
+      );
     });
   }
 
@@ -2434,6 +2397,7 @@ export const stereometryEditorFactory: SceneEditorFactory = {
   id: 'stereometry',
   kind: 'geometry',
   labelKey: 'drawings_tab_stereometry',
+  icon: 'tabSolid',
   accepts: (scene) => normalizeGeometryScene(scene).type === '3d',
   create: (context) => new StereometryEditor(context),
 };

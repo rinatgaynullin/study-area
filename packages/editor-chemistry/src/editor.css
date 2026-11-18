@@ -5,6 +5,16 @@
   gap: 14px;
 }
 
+.rte-chemistry-dialog__summary {
+  cursor: pointer;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-chemistry-dialog__code-block[open] .rte-chemistry-dialog__summary {
+  margin-bottom: 8px;
+}
+
 .rte-chemistry-dialog__code {
   box-sizing: border-box;
   width: 100%;
@@ -23,25 +33,348 @@
   color: var(--rte-color-muted, #898794);
 }
 
-.rte-chemistry-dialog__section-title {
-  margin: 0 0 8px;
+.rte-chemistry-dialog__status {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-chemistry-dialog__status--error {
+  color: var(--rte-color-danger, #f23e3e);
+}
+
+/* Конструктор: слева полотно, справа колонка палитры и свойств. */
+
+.rte-chem-builder {
+  display: grid;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.rte-chem-builder__main,
+.rte-chem-builder__side {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rte-chem-builder__main {
+  position: relative;
+}
+
+/* Отмена, повтор и «Очистить» — поверх угла полотна: так полотно выше, а тело модалки не прокручивается. */
+.rte-chem-builder__toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+}
+
+.rte-chem-builder__toolbar,
+.rte-chem-builder__row,
+.rte-chem-builder__palette,
+.rte-chem-builder__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rte-chem-builder__row--nowrap {
+  flex-wrap: nowrap;
+}
+
+/*
+ * Палитра групп — сетка из шести равных ячеек. Число строк не должно зависеть
+ * от шрифта: с переносом по ширине подписей на широкой гарнитуре появлялась
+ * лишняя строка, и тело окна на 1280×720 начинало прокручиваться.
+ */
+.rte-chem-builder__palette {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.rte-chem-builder__palette > .rte-chem-builder__button {
+  min-width: 0;
+  padding: 0 2px;
+}
+
+/*
+ * «Связь» и «Кольца» — три кнопки в одну строку всегда. Подпись, которая на
+ * широкой гарнитуре не помещается в ячейку, обрезается многоточием, а не
+ * переносит кнопку на новую строку: высота колонки не зависит от шрифта.
+ */
+.rte-chem-builder__row--thirds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* «Бензол» короче двух других названий — ему ячейка у́же. */
+.rte-chem-builder__row--rings {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.15fr) minmax(0, 1.15fr);
+}
+
+.rte-chem-builder__row--thirds > .rte-chem-builder__button {
+  display: block;
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rte-chem-builder__stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 290px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-bg, #fff);
+  color: var(--rte-color-text, #221f2e);
+  overflow: hidden;
+  user-select: none;
+}
+
+.rte-chem-builder__stage:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+.rte-chem-builder__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rte-chem-builder__start {
+  width: 72px;
+  height: 72px;
+  border: 2px dashed var(--rte-color-primary, #ff892e);
+  border-radius: var(--rte-radius-pill, 999px);
+  background: var(--rte-color-primary-soft, #fff1e0);
+  color: var(--rte-color-primary, #ff892e);
+  font: inherit;
+  font-size: var(--rte-display-font-size, 24px);
+  cursor: pointer;
+}
+
+.rte-chem-builder__start:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+/* Области нажатия прозрачны, но ловят нажатия; выделенное подсвечено. */
+.rte-chem-builder__bond,
+.rte-chem-builder__atom {
+  fill: transparent;
+  stroke: transparent;
+  cursor: pointer;
+}
+
+/* Концы области нажатия связи ровные: скругление заходило бы на атомы. */
+.rte-chem-builder__bond {
+  stroke-linecap: butt;
+}
+
+.rte-chem-builder__bond:focus {
+  outline: none;
+}
+
+.rte-chem-builder__bond:focus-visible {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-opacity: 0.6;
+  stroke-dasharray: 3 2;
+}
+
+.rte-chem-builder__atom:focus {
+  outline: none;
+}
+
+/* Рамка фокуса на атоме и «плюсе»: SVG-элементы обводятся штрихом, не outline. */
+.rte-chem-builder__atom:focus-visible {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+
+.rte-chem-builder__plus:focus {
+  outline: none;
+}
+
+.rte-chem-builder__plus:focus-visible .rte-chem-builder__plus-hit {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+
+.rte-chem-builder--locked .rte-chem-builder__main,
+.rte-chem-builder--locked .rte-chem-builder__side {
+  opacity: 0.5;
+}
+
+.rte-chem-builder__bond--selected {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-opacity: 0.35;
+}
+
+.rte-chem-builder__atom--selected {
+  fill: var(--rte-color-primary, #ff892e);
+  fill-opacity: 0.18;
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-width: 2;
+}
+
+.rte-chem-builder__plus {
+  cursor: pointer;
+}
+
+.rte-chem-builder__plus circle:not(.rte-chem-builder__plus-hit) {
+  fill: var(--rte-color-primary-soft, #fff1e0);
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-width: 1.5;
+}
+
+.rte-chem-builder__plus line {
+  stroke: var(--rte-color-primary, #ff892e);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.rte-chem-builder__plus-hit {
+  fill: transparent;
+}
+
+.rte-chem-builder__plus:hover circle:not(.rte-chem-builder__plus-hit) {
+  fill: var(--rte-color-primary, #ff892e);
+}
+
+.rte-chem-builder__plus:hover line {
+  stroke: var(--rte-color-on-primary, #fff);
+}
+
+.rte-chem-builder__hint {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: var(--rte-color-muted, #898794);
+}
+
+.rte-chem-builder__status {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: var(--rte-color-danger, #f23e3e);
+}
+
+.rte-chem-builder__section {
+  display: grid;
+  gap: 6px;
+}
+
+.rte-chem-builder__title {
+  margin: 0;
   font-size: var(--rte-ui-font-size-sm, 14px);
   font-weight: var(--rte-title-font-weight, 600);
 }
 
-.rte-chemistry-dialog__templates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.rte-chem-builder__custom-input {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
 }
 
-.rte-chemistry-dialog__template {
+.rte-chem-builder__custom-input--active {
+  border-color: var(--rte-color-primary, #ff892e);
+}
+
+.rte-chem-builder__props {
+  padding: 8px 10px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+}
+
+.rte-chem-builder__props[hidden],
+.rte-chem-builder__row[hidden],
+.rte-chem-builder__button[hidden] {
+  display: none;
+}
+
+.rte-chem-builder__toggle {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  cursor: pointer;
+}
+
+.rte-chem-builder__button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
   justify-content: center;
-  min-width: 56px;
-  height: 56px;
-  padding: 4px 8px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius, 8px);
+  background: var(--rte-color-bg, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.rte-chem-builder__button--group {
+  min-width: 44px;
+  padding: 0 7px;
+  font-weight: var(--rte-title-font-weight, 600);
+}
+
+.rte-chem-builder__button--icon {
+  padding: 0;
+}
+
+.rte-chem-builder__button:hover:not(:disabled) {
+  border-color: var(--rte-color-border-hover, #afadb8);
+  background: var(--rte-color-subtle-bg, #f5f5f7);
+}
+
+.rte-chem-builder__button:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 2px;
+}
+
+.rte-chem-builder__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rte-chem-builder__button[aria-pressed='true'] {
+  border-color: var(--rte-color-primary, #ff892e);
+  background: var(--rte-btn-active-bg, #fff1e0);
+  color: var(--rte-btn-active-color, #ff892e);
+}
+
+.rte-chem-builder__button--danger {
+  color: var(--rte-color-danger, #f23e3e);
+}
+
+.rte-chem-builder__template {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 2px 4px;
   border: 1px solid var(--rte-color-border, #dedce3);
   border-radius: var(--rte-radius, 8px);
   background: transparent;
@@ -52,54 +385,83 @@
     border-color 120ms ease;
 }
 
-.rte-chemistry-dialog__template:hover {
+.rte-chem-builder__template:hover {
   border-color: var(--rte-color-border-hover, #afadb8);
   background: var(--rte-color-subtle-bg, #f5f5f7);
 }
 
-.rte-chemistry-dialog__template:focus-visible {
+.rte-chem-builder__template:focus-visible {
   outline: 2px solid var(--rte-color-primary, #ff892e);
   outline-offset: 2px;
 }
 
-.rte-chemistry-dialog__template svg {
+.rte-chem-builder__template svg {
   display: block;
-  max-height: 44px;
-  max-width: 96px;
+  max-height: 36px;
+  max-width: 56px;
   width: auto;
   height: auto;
 }
 
-.rte-chemistry-dialog__preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 96px;
-  padding: 10px 12px;
-  border: 1px dashed var(--rte-color-border, #dedce3);
-  border-radius: var(--rte-radius, 8px);
-  background: var(--rte-color-subtle-bg, #f5f5f7);
-  overflow: auto;
-}
-
-.rte-chemistry-dialog__preview svg {
-  max-height: 220px;
-  width: auto;
-  height: auto;
-}
-
-/* Подложка подписи в превью и миниатюрах — под их фон, а не под фон документа. */
-.rte-chemistry-dialog__preview .rte-chemistry__label-bg,
-.rte-chemistry-dialog__template:hover .rte-chemistry__label-bg {
+/* Подложка подписи в миниатюре под наведением — под её фон, а не под фон документа. */
+.rte-chem-builder__template:hover .rte-chemistry__label-bg {
   fill: var(--rte-color-subtle-bg, #f5f5f7);
 }
 
-.rte-chemistry-dialog__status {
-  margin: 8px 0 0;
-  font-size: var(--rte-ui-font-size-sm, 14px);
-  color: var(--rte-color-muted, #898794);
-}
+/*
+ * Узкий экран: всё в столбик. Колонки растворяются в общей сетке, порядок
+ * сверху вниз: полотно, подсказка, группы, связь, свойства, кольца, готовые
+ * формулы. Палитра и готовые формулы — одной прокручиваемой строкой.
+ */
+@media (max-width: 640px) {
+  .rte-chem-builder {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
 
-.rte-chemistry-dialog__status--error {
-  color: var(--rte-color-danger, #f23e3e);
+  .rte-chem-builder__main,
+  .rte-chem-builder__side {
+    display: contents;
+  }
+
+  .rte-chem-builder__section--groups {
+    order: 1;
+  }
+
+  .rte-chem-builder__section--bond {
+    order: 2;
+  }
+
+  .rte-chem-builder__props {
+    order: 3;
+  }
+
+  .rte-chem-builder__section--rings {
+    order: 4;
+  }
+
+  .rte-chem-builder__section--templates {
+    order: 5;
+  }
+
+  .rte-chem-builder__stage {
+    height: 260px;
+  }
+
+  .rte-chem-builder__palette,
+  .rte-chem-builder__templates {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  /* На телефоне палитра — снова одна прокручиваемая строка кнопок своей ширины. */
+  .rte-chem-builder__palette {
+    display: flex;
+  }
+
+  .rte-chem-builder__palette > .rte-chem-builder__button {
+    min-width: 40px;
+    padding: 0 8px;
+  }
 }

@@ -43,6 +43,11 @@ export interface DrawingsFeatureOptions {
   editors?: SceneEditorFactory[];
   /** Сканы работы ученика для панели рядом с полотном: адреса картинок. */
   scans?: () => string[];
+  /**
+   * Вкладка JSON, образцы сцен, предпросмотр и поле TikZ в диалоге —
+   * инструменты разработчика. По умолчанию выключены.
+   */
+  json?: boolean;
 }
 
 /**
@@ -122,6 +127,7 @@ class DrawingsFeature implements EditorFeature {
       },
       editors: this.options.editors,
       scans: this.options.scans,
+      json: this.options.json === true,
     });
 
     return [this.dialog];

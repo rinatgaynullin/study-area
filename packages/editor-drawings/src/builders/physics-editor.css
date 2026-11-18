@@ -27,13 +27,6 @@
   font-size: 13px;
 }
 
-.rte-builder__check {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--rte-color-primary, #ff892e);
-}
-
 .rte-builder__ticks {
   display: grid;
   gap: 4px;
@@ -41,7 +34,7 @@
 
 .rte-builder__tick {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
   gap: 4px;
   align-items: center;
 }
@@ -51,5 +44,5 @@
 }
 
 .rte-builder__tick-remove {
-  height: 32px;
+  height: 40px;
 }

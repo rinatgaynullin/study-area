@@ -136,6 +136,45 @@ describe('модалка и видимая область окна', () => {
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined });
   });
 
+  it('автофокус не уводит фокус, который диалог уже поставил внутрь окна', async () => {
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    const modal = createModal({ title: 'Диалог', closeLabel: 'Закрыть' });
+    const preferred = document.createElement('button');
+    const chosen = document.createElement('button');
+
+    preferred.setAttribute('data-autofocus', '');
+    modal.body.append(preferred, chosen);
+    document.body.appendChild(modal.element);
+
+    // Обычное открытие: фокус получает помеченный элемент.
+    modal.open();
+    await nextFrame();
+    expect(document.activeElement).toBe(preferred);
+    modal.close();
+
+    // Диалог сам поставил фокус сразу после открытия — автофокус его не трогает.
+    modal.open();
+    chosen.focus();
+    await nextFrame();
+    expect(document.activeElement).toBe(chosen);
+
+    modal.destroy();
+  });
+
+  it('с опцией fill панель получает класс окна на весь экран, без неё — нет', () => {
+    const filled = createModal({ title: 'Чертёж', closeLabel: 'Закрыть', fill: true });
+    const plain = createModal({ title: 'Ссылка', closeLabel: 'Закрыть' });
+
+    expect(filled.element.querySelector('.rte-modal__panel')?.classList.contains('rte-modal__panel--fill')).toBe(true);
+    expect(plain.element.querySelector('.rte-modal__panel')?.classList.contains('rte-modal__panel--fill')).toBe(false);
+
+    filled.destroy();
+    plain.destroy();
+  });
+
   it('запирает прокрутку документа, пока открыт хоть один диалог', () => {
     const html = document.documentElement;
 
@@ -223,6 +262,47 @@ describe('слушатели документа у оверлеев', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(modal.isVisible).toBe(false);
     expect(removed).toHaveBeenCalledTimes(1);
+    modal.destroy();
+  });
+
+  it('модалка с closeOnEscape: false Escape не закрывает и событие не останавливает', () => {
+    const onClose = vi.fn();
+    const outer = vi.fn();
+    const modal = createModal({ title: 'Конструктор', closeLabel: 'Закрыть', closeOnEscape: false, onClose });
+    const field = document.createElement('input');
+
+    modal.body.appendChild(field);
+    document.body.appendChild(modal.element);
+    window.addEventListener('keydown', outer);
+    modal.open();
+    field.focus();
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+    field.dispatchEvent(escape);
+    expect(modal.isVisible).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(escape.defaultPrevented).toBe(false);
+    // Событие дошло выше документа: модалка его не остановила.
+    expect(outer).toHaveBeenCalledTimes(1);
+
+    // Крестик и close() работают как раньше.
+    modal.element.querySelector<HTMLButtonElement>('.rte-modal__close')!.click();
+    expect(modal.isVisible).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    window.removeEventListener('keydown', outer);
+    modal.destroy();
+  });
+
+  it('модалка без опции закрывается по Escape и зовёт onClose', () => {
+    const onClose = vi.fn();
+    const modal = createModal({ title: 'Ссылка', closeLabel: 'Закрыть', onClose });
+
+    document.body.appendChild(modal.element);
+    modal.open();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(modal.isVisible).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
     modal.destroy();
   });
 

@@ -389,7 +389,7 @@ describe('formula dialog', () => {
 
     expect(document.querySelector('.rte-modal:not([hidden]) .rte-modal__panel')).not.toBeNull();
     // The dialog is bound to the clicked node, so saving updates it in place.
-    expect(openDialogText('.rte-button--danger')).toContain('Удалить формулу');
+    expect(openDialogText('.rte-button--danger')).toBe('Удалить');
   });
 });
 

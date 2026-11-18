@@ -32,7 +32,7 @@
 | Типографика | `--rte-font-*`, `--rte-ui-font-*`, `--rte-title-*` |
 | Форма и слои | `--rte-radius*`, `--rte-shadow*`, `--rte-focus-ring`, `--rte-z-modal` |
 | Тулбар и контролы | `--rte-toolbar-*`, `--rte-btn-*`, `--rte-input-*`, `--rte-button-*` |
-| Диалоги и меню | `--rte-modal-*`, `--rte-popover-padding`, `--rte-menu-*` |
+| Диалоги и меню | `--rte-modal-*` (включая `--rte-modal-width-fill`), `--rte-popover-padding`, `--rte-menu-*`; у диалога чертежа ещё `--rte-builder-side` ([THEMING.md](../../THEMING.md)) |
 | Контент и медиа | `--rte-content-padding`, `--rte-block-gap`, `--rte-formula-padding`, `--rte-audio-*` |
 | Legacy (Froala) | `--rte-legacy-*` в `legacy.css`; выводятся из базовых токенов |
 

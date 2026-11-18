@@ -1,14 +1,17 @@
 import { createRichEditor, type RichEditorUi, type Translate } from '@rich-editor/core';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_SCENE_EDITORS,
   DRAWINGS_MESSAGES,
   HistoryStack,
   createDrawingsFeature,
   fitCircle,
   fitLine,
   fitParabola,
+  physicsEditorFactory,
   planimetryEditorFactory,
   recognizeStroke,
+  stereometryEditorFactory,
   type SceneEditor,
 } from '../src';
 import { worldToSvg } from '../src/render/coords';
@@ -580,14 +583,14 @@ describe('диалог с конструктором', () => {
   };
 
   it('новый чертёж открывается на вкладке планиметрии; шаблон попадает в конструктор; вставка берёт его сцену', () => {
-    const editor = mountEditor();
+    const editor = mountEditor({ json: true });
 
     toolbarButton('Чертёж').click();
 
     const dialog = openDialog();
     const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[role="tab"]')].map((tab) => tab.textContent);
 
-    expect(tabs).toEqual(['Планиметрия', 'Стереометрия', 'Графики', 'JSON']);
+    expect(tabs).toEqual(['Планиметрия', 'Стереометрия', 'Графики', 'Физика', 'JSON']);
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Планиметрия');
     expect(dialog.querySelector('.rte-builder--planimetry')).not.toBeNull();
 
@@ -605,7 +608,7 @@ describe('диалог с конструктором', () => {
   });
 
   it('вкладка JSON показывает сцену конструктора, а правка JSON возвращается в конструктор', () => {
-    mountEditor();
+    mountEditor({ json: true });
     toolbarButton('Чертёж').click();
 
     const dialog = openDialog();
@@ -632,7 +635,7 @@ describe('диалог с конструктором', () => {
 
     let dialog = openDialog();
 
-    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Механика');
+    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Физика');
     expect(dialog.querySelector('.rte-builder__palette')).not.toBeNull();
     dialog.querySelector<HTMLButtonElement>('.rte-button')?.click();
 
@@ -644,6 +647,239 @@ describe('диалог с конструктором', () => {
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Стереометрия');
   });
 
+  const dialogButton = (dialog: HTMLElement, selector: string): HTMLButtonElement => {
+    const found = dialog.querySelector<HTMLButtonElement>(selector);
+
+    if (!found) throw new Error(`Нет кнопки ${selector}`);
+
+    return found;
+  };
+
+  const saveButtonOf = (dialog: HTMLElement): HTMLButtonElement => dialogButton(dialog, '.rte-button--primary');
+
+  /** Отрезок кликами на активной вкладке-конструкторе. */
+  const drawSegment = (dialog: HTMLElement): void => {
+    const canvas = dialog.querySelector<HTMLElement>('.rte-drawing-dialog__editor .rte-sketch');
+
+    if (!canvas) throw new Error('Нет полотна');
+
+    dialogButton(dialog, '.rte-drawing-dialog__editor button[data-tool="segment"]').click();
+    click(canvas, [-2, 0]);
+    click(canvas, [2, 0]);
+  };
+
+  const selectTab = (dialog: HTMLElement, id: string): void => {
+    dialogButton(dialog, `[data-tab="${id}"]`).click();
+  };
+
+  const addPhysicsElement = (dialog: HTMLElement): void => {
+    dialogButton(dialog, '.rte-builder__palette button[data-element]').click();
+  };
+
+  const codeOf = (dialog: HTMLElement): HTMLTextAreaElement => {
+    const code = dialog.querySelector<HTMLTextAreaElement>('textarea:not([readonly])');
+
+    if (!code) throw new Error('Нет поля JSON');
+
+    return code;
+  };
+
+  const editNode = (editor: RichEditorUi, html: string): HTMLElement => {
+    editor.core.setHTML(html);
+    editor.element
+      .querySelector<HTMLElement>('.rte-content .rte-drawing')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    return openDialog();
+  };
+
+  it('у каждой вкладки свой черновик: переход на «Стереометрию» и обратно рисунок не трогает', () => {
+    mountEditor();
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+
+    drawSegment(dialog);
+    expect(sceneLines(dialog)).toHaveLength(1);
+    expect(saveButtonOf(dialog).disabled).toBe(false);
+
+    selectTab(dialog, 'stereometry');
+    expect(dialog.querySelector('.rte-builder--stereometry')).not.toBeNull();
+    // Пустое полотно: вставлять нечего.
+    expect(saveButtonOf(dialog).disabled).toBe(true);
+
+    selectTab(dialog, 'planimetry');
+    expect(sceneLines(dialog)).toHaveLength(1);
+    expect(saveButtonOf(dialog).disabled).toBe(false);
+  });
+
+  it('«Вставить» берёт сцену и вид активной вкладки', () => {
+    const editor = mountEditor();
+
+    toolbarButton('Чертёж').click();
+
+    let dialog = openDialog();
+
+    drawSegment(dialog);
+    selectTab(dialog, 'physics');
+    addPhysicsElement(dialog);
+    selectTab(dialog, 'planimetry');
+    saveButtonOf(dialog).click();
+
+    expect(editor.core.getHTML()).toContain('data-geometry-data=');
+    expect(editor.core.getHTML()).not.toContain('data-physics-data=');
+
+    editor.core.setHTML('<p>привет</p>');
+    toolbarButton('Чертёж').click();
+    dialog = openDialog();
+    drawSegment(dialog);
+    selectTab(dialog, 'physics');
+    addPhysicsElement(dialog);
+    saveButtonOf(dialog).click();
+
+    expect(editor.core.getHTML()).toContain('data-physics-data=');
+    expect(editor.core.getHTML()).not.toContain('data-geometry-data=');
+  });
+
+  it('повторное открытие начинается с пустых вкладок', () => {
+    mountEditor();
+    toolbarButton('Чертёж').click();
+
+    let dialog = openDialog();
+
+    drawSegment(dialog);
+    selectTab(dialog, 'physics');
+    addPhysicsElement(dialog);
+    dialogButton(dialog, '.rte-modal__footer .rte-button:not(.rte-button--primary):not(.rte-button--danger)').click();
+
+    toolbarButton('Чертёж').click();
+    dialog = openDialog();
+
+    expect(sceneLines(dialog)).toHaveLength(0);
+    expect(saveButtonOf(dialog).disabled).toBe(true);
+
+    ['stereometry', 'plots', 'physics'].forEach((id) => {
+      selectTab(dialog, id);
+      expect(saveButtonOf(dialog).disabled, id).toBe(true);
+    });
+  });
+
+  it('узел без подходящего конструктора: правка недоступна, вид не меняется, удалить можно', () => {
+    const editor = mountEditor({ editors: [stereometryEditorFactory, physicsEditorFactory] });
+    const html = '<div data-geometry-data=\'{"type":"2d","vertices":{"A":[0,0],"B":[1,0]},"edges":[["A","B"]]}\'></div>';
+    const dialog = editNode(editor, html);
+    const status = dialog.querySelector<HTMLElement>('.rte-drawing-dialog__status');
+
+    expect(status?.textContent).toBe('Этот чертёж здесь изменить нельзя');
+    expect(status?.classList.contains('rte-drawing-dialog__status--error')).toBe(true);
+    expect(dialog.querySelector<HTMLElement>('.rte-drawing-dialog__head')?.hidden).toBe(true);
+    expect(dialog.querySelector('.rte-builder')).toBeNull();
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Изменить чертёж');
+    expect(saveButtonOf(dialog).disabled).toBe(true);
+
+    saveButtonOf(dialog).click();
+    expect(editor.core.getHTML()).toContain('data-geometry-data=');
+    expect(editor.core.getHTML()).not.toContain('data-physics-data=');
+
+    dialogButton(dialog, '.rte-button--danger').click();
+    expect(editor.core.getHTML()).not.toContain('data-geometry-data=');
+  });
+
+  it('нечитаемый узел без конструкторов его вида тоже недоступен', () => {
+    const editor = mountEditor({ editors: [physicsEditorFactory] });
+    const dialog = editNode(editor, '<div data-geometry-data="{vertices: [1,"></div>');
+
+    expect(dialog.querySelector('.rte-drawing-dialog__status')?.textContent).toBe('Этот чертёж здесь изменить нельзя');
+    expect(dialog.querySelector('.rte-builder')).toBeNull();
+    expect(saveButtonOf(dialog).disabled).toBe(true);
+  });
+
+  it('json: изменённый рисунок уходит в текст, правленный текст — в конструктор, просмотр текст не затирает', () => {
+    mountEditor({ json: true });
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+
+    drawSegment(dialog);
+    selectTab(dialog, 'json');
+
+    expect(JSON.parse(codeOf(dialog).value).edges).toHaveLength(1);
+
+    const typed = '{"type":"2d","vertices":{"P":[1,1],"Q":[3,1],"R":[1,3]},"edges":[["P","Q"],["Q","R"]]}';
+
+    codeOf(dialog).value = typed;
+    codeOf(dialog).dispatchEvent(new Event('input', { bubbles: true }));
+
+    // Стереометрия плоскую сцену не берёт: у неё остаётся свой (пустой) черновик.
+    selectTab(dialog, 'stereometry');
+    expect(saveButtonOf(dialog).disabled).toBe(true);
+    selectTab(dialog, 'json');
+    expect(codeOf(dialog).value).toBe(typed);
+
+    selectTab(dialog, 'planimetry');
+    expect(sceneLines(dialog)).toHaveLength(2);
+
+    // Конструктор только посмотрели — текст прежний.
+    selectTab(dialog, 'json');
+    expect(codeOf(dialog).value).toBe(typed);
+
+    // Физика, которую меняли, переводит текст и вид вкладки JSON в физику.
+    selectTab(dialog, 'physics');
+    addPhysicsElement(dialog);
+    selectTab(dialog, 'json');
+    expect(codeOf(dialog).value).toContain('"elements"');
+    expect(dialog.querySelector('.rte-modal__title')?.textContent).toBe('Физическая схема');
+  });
+
+  it('кнопки инструментов, действий и шаблонов — со значками; вкладки — значок и подпись', () => {
+    mountEditor({ json: true });
+    toolbarButton('Чертёж').click();
+
+    const dialog = openDialog();
+    const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+
+    tabs.forEach((tab) => {
+      const icon = tab.querySelector('svg');
+
+      expect(tab.getAttribute('aria-label'), tab.dataset.tab).toBeNull();
+
+      if (tab.dataset.tab === 'json') {
+        expect(icon).toBeNull();
+        expect(tab.textContent).toBe('JSON');
+      } else {
+        expect(icon?.getAttribute('aria-hidden'), tab.dataset.tab).toBe('true');
+        expect(icon?.classList.contains('rte-drawing-dialog__tab-icon')).toBe(true);
+      }
+    });
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Планиметрия', 'Стереометрия', 'Графики', 'Физика', 'JSON']);
+
+    DEFAULT_SCENE_EDITORS.forEach((factory) => {
+      const editor = factory.create({ t });
+      const tools = [...editor.element.querySelectorAll<HTMLButtonElement>('button[data-tool]')];
+      const actions = [...editor.element.querySelectorAll<HTMLButtonElement>('.rte-builder__actions .rte-builder__tool--action')];
+      const templates = [...editor.element.querySelectorAll<HTMLButtonElement>('.rte-builder__palette [data-template], [data-plot-template]')];
+
+      expect(tools.length, factory.id).toBeGreaterThan(0);
+      expect(actions.length, factory.id).toBeGreaterThan(0);
+
+      tools.forEach((tool) => {
+        expect(tool.querySelector('svg.rte-builder__tool-icon'), `${factory.id}: ${tool.dataset.tool}`).not.toBeNull();
+        expect(tool.querySelector('.rte-builder__tool-glyph'), `${factory.id}: ${tool.dataset.tool}`).toBeNull();
+        // Текст кнопки — только подпись, без символа-значка.
+        expect(tool.textContent, `${factory.id}: ${tool.dataset.tool}`).toBe(tool.getAttribute('aria-label'));
+      });
+      actions.forEach((action) => {
+        expect(action.classList.contains('rte-builder__tool--icon'), action.title).toBe(true);
+        expect(action.querySelector('svg.rte-builder__tool-icon'), action.title).not.toBeNull();
+        expect(action.textContent, action.title).toBe('');
+      });
+      templates.forEach((template) => {
+        expect(template.querySelector('svg.rte-builder__tool-icon'), template.title).not.toBeNull();
+      });
+      editor.destroy();
+    });
+  });
+
   it('сканы ученика показываются рядом с полотном', () => {
     mountEditor({ scans: () => ['blob:http://localhost/scan-1', 'blob:http://localhost/scan-2'] });
     toolbarButton('Чертёж').click();
@@ -652,6 +888,18 @@ describe('диалог с конструктором', () => {
 
     expect(images).toHaveLength(2);
     expect(images[0].getAttribute('src')).toBe('blob:http://localhost/scan-1');
+  });
+});
+
+describe('сцена конструкторов', () => {
+  it('у каждого встроенного конструктора полотно лежит в сцене', () => {
+    DEFAULT_SCENE_EDITORS.forEach((factory) => {
+      const editor = factory.create({ t });
+
+      document.body.appendChild(editor.element);
+      expect(editor.element.querySelector('.rte-builder__stage > .rte-sketch'), factory.id).not.toBeNull();
+      editor.destroy();
+    });
   });
 });
 

@@ -1,6 +1,7 @@
 import { project3dToPlane } from '../render/coords';
 import { circle3d } from '../render/round-bodies';
 import type { Vec3 } from '../scene/types';
+import type { BuilderIconId } from './builder-icons';
 import { roundTo } from './geometry-utils';
 
 /**
@@ -46,7 +47,8 @@ export interface StereoTemplateScene {
 export interface StereoTemplate {
   id: StereoTemplateId;
   labelKey: string;
-  glyph: string;
+  /** Значок кнопки шаблона в палитре. */
+  icon: BuilderIconId;
   /** Какие параметры показывать в панели; порядок — порядок полей. */
   fields: StereoParamField[];
   defaults: StereoTemplateParams;
@@ -298,7 +300,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'cube',
     labelKey: 'drawings_stereo_template_cube',
-    glyph: '◫',
+    icon: 'cube',
     fields: [EDGE_FIELD],
     defaults: { ...BASE_PARAMS, edge: 5 },
     build: (params) => twoRings(rectangle(params.edge, params.edge, 0), rectangle(params.edge, params.edge, params.edge)),
@@ -306,7 +308,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'parallelepiped',
     labelKey: 'drawings_stereo_template_parallelepiped',
-    glyph: '▭',
+    icon: 'box',
     fields: [DEPTH_FIELD, WIDTH_FIELD, HEIGHT_FIELD],
     defaults: { ...BASE_PARAMS, depth: 6, width: 6, height: 5 },
     build: (params) => twoRings(rectangle(params.depth, params.width, 0), rectangle(params.depth, params.width, params.height)),
@@ -314,7 +316,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'prism',
     labelKey: 'drawings_stereo_template_prism',
-    glyph: '⬡',
+    icon: 'prism',
     fields: [SIDES_FIELD, EDGE_FIELD, HEIGHT_FIELD],
     defaults: { ...BASE_PARAMS, sides: 3, edge: 5, height: 5 },
     build: buildPrism,
@@ -322,7 +324,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'pyramid',
     labelKey: 'drawings_stereo_template_pyramid',
-    glyph: '△',
+    icon: 'pyramid',
     fields: [SIDES_FIELD, EDGE_FIELD, HEIGHT_FIELD],
     defaults: { ...BASE_PARAMS, sides: 4, edge: 6, height: 5.5 },
     build: buildPyramid,
@@ -330,7 +332,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'frustum',
     labelKey: 'drawings_stereo_template_frustum',
-    glyph: '⏢',
+    icon: 'frustum',
     fields: [SIDES_FIELD, EDGE_FIELD, TOP_EDGE_FIELD, HEIGHT_FIELD],
     defaults: { ...BASE_PARAMS, sides: 4, edge: 6, topEdge: 3, height: 4 },
     build: buildFrustum,
@@ -338,7 +340,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'cylinder',
     labelKey: 'drawings_stereo_template_cylinder',
-    glyph: '⌭',
+    icon: 'cylinder',
     fields: [RADIUS_FIELD, HEIGHT_FIELD],
     defaults: { ...BASE_PARAMS, radius: 3, height: 5.5 },
     build: buildCylinder,
@@ -346,7 +348,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'cone',
     labelKey: 'drawings_stereo_template_cone',
-    glyph: '▲',
+    icon: 'cone',
     fields: [RADIUS_FIELD, HEIGHT_FIELD],
     defaults: { ...BASE_PARAMS, radius: 3, height: 5.5 },
     build: buildCone,
@@ -354,7 +356,7 @@ export const STEREO_TEMPLATES: StereoTemplate[] = [
   {
     id: 'sphere',
     labelKey: 'drawings_stereo_template_sphere',
-    glyph: '◯',
+    icon: 'sphere',
     fields: [RADIUS_FIELD],
     defaults: { ...BASE_PARAMS, radius: 3 },
     build: buildSphere,

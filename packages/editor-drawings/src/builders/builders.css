@@ -20,18 +20,23 @@
   gap: 4px;
 }
 
+/* Кнопки крупные — под палец и для младших школьников. */
 .rte-builder__tool {
   display: inline-flex;
+  flex: none;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 10px;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--rte-color-border, #dedce3);
   border-radius: var(--rte-radius, 8px);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: var(--rte-ui-font-size-xs, 13px);
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background-color 120ms ease,
@@ -56,16 +61,40 @@
 .rte-builder__tool--active {
   border-color: var(--rte-color-primary, #ff892e);
   background: var(--rte-color-primary-soft, #fff1e0);
+  box-shadow: inset 0 0 0 1px var(--rte-color-primary, #ff892e);
+  font-weight: var(--rte-title-font-weight, 600);
 }
 
+/* Действия — кнопки без режима; с подписью («+ Добавить деление») — обычной ширины. */
 .rte-builder__tool--action {
-  min-width: 32px;
-  padding: 0 8px;
+  min-height: 40px;
 }
 
+/* Кнопка из одного значка — квадрат; подпись в title и aria-label. */
+.rte-builder__tool--icon {
+  width: 40px;
+  padding: 0;
+}
+
+/* Значок в кнопке: цвет от кнопки (активная, недоступная), не сжимается подписью. */
+.rte-builder__tool-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: currentColor;
+}
+
+/* Символы палитры физики: для её элементов значков нет. */
 .rte-builder__tool-glyph {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
+}
+
+/* Палитры с собственными размерами кнопок (графики, физика) — тоже 40px. */
+.rte-builder .rte-builder__palette .rte-builder__tool,
+.rte-builder .rte-builder__sections .rte-builder__tool {
+  height: 40px;
+  padding: 0 12px;
 }
 
 .rte-builder__body {
@@ -86,6 +115,16 @@
   touch-action: none;
   user-select: none;
   cursor: crosshair;
+}
+
+/* Пустое место в «Выбрать»: лист можно взять и подвинуть. */
+.rte-sketch--grab {
+  cursor: grab;
+}
+
+/* Пока вид двигают, курсор — «схваченная рука» на всём полотне. */
+.rte-sketch--panning {
+  cursor: grabbing;
 }
 
 .rte-sketch:focus-visible {
@@ -147,8 +186,120 @@
 .rte-builder__select {
   width: 100%;
   box-sizing: border-box;
-  height: 32px;
-  padding: 0 8px;
+  height: 40px;
+  padding: 0 10px;
+}
+
+/* Поля панели свойств — той же высоты, что кнопки, где бы они ни лежали. */
+.rte-builder__props .rte-input,
+.rte-builder__props .rte-builder__tick-remove {
+  box-sizing: border-box;
+  height: 40px;
+}
+
+/* Общие поля (fields.ts): флажок в строку с подписью, а не подпись над ним. */
+.rte-builder__prop--check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.rte-builder__prop--check .rte-builder__prop-label {
+  font-size: var(--rte-ui-font-size-sm, 14px);
+  color: inherit;
+}
+
+.rte-builder__check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--rte-color-primary, #ff892e);
+}
+
+.rte-builder__check:disabled + .rte-builder__prop-label {
+  color: var(--rte-color-muted, #898794);
+}
+
+/* Пара чисел: точка (x, y), область (от, до). */
+.rte-builder__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+}
+
+/* Строка-ползунок: ползунок и число рядом, пояснение под ними. */
+.rte-builder__slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 8px;
+}
+
+.rte-builder__range {
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  accent-color: var(--rte-color-primary, #ff892e);
+}
+
+.rte-builder__prop-hint {
+  margin: 0;
+  font-size: var(--rte-ui-font-size-xs, 13px);
+  color: var(--rte-color-muted, #898794);
+}
+
+/*
+ * Палитра цвета (color-picker.ts): пять плиток в ряд. Фон плитки задаёт код
+ * из константы палитры; выбранная отмечена кольцом и галочкой, не только цветом.
+ */
+.rte-builder__colors {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 40px));
+  gap: 8px;
+  padding: 2px;
+}
+
+.rte-builder__color {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--rte-color-border, #dedce3);
+  border-radius: var(--rte-radius-sm, 6px);
+  cursor: pointer;
+}
+
+.rte-builder__color[aria-checked='true'] {
+  box-shadow:
+    inset 0 0 0 2px var(--rte-color-bg, #fff),
+    0 0 0 2px var(--rte-color-text, #221f2e);
+}
+
+.rte-builder__color:focus-visible {
+  outline: 2px solid var(--rte-color-primary, #ff892e);
+  outline-offset: 3px;
+}
+
+.rte-builder__color-check {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.5;
+  pointer-events: none;
+}
+
+.rte-builder__color-default {
+  justify-self: start;
+}
+
+.rte-builder__color-default[aria-pressed='true'] {
+  border-color: var(--rte-color-primary, #ff892e);
+  background: var(--rte-color-primary-soft, #fff1e0);
+  box-shadow: inset 0 0 0 1px var(--rte-color-primary, #ff892e);
 }
 
 .rte-builder__remove {
@@ -175,5 +326,160 @@
 @media (max-width: 720px) {
   .rte-builder__body {
     grid-template-columns: 1fr;
+  }
+}
+
+/*
+ * Конструктор в диалоге чертежа. Вне диалога (хост встроил конструктор сам)
+ * действуют только правила выше.
+ *
+ * Узкое окно: одна колонка; инструменты, действия, разделы и палитра — по
+ * строке с горизонтальной прокруткой, чтобы полотно было ближе к верху.
+ */
+@media (max-width: 860px) {
+  .rte-drawing-dialog__editor .rte-builder__bar {
+    display: grid;
+    gap: 6px;
+  }
+
+  .rte-drawing-dialog__editor .rte-builder__tools,
+  .rte-drawing-dialog__editor .rte-builder__actions,
+  .rte-drawing-dialog__editor .rte-builder__sections,
+  .rte-drawing-dialog__editor .rte-builder__palette {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .rte-drawing-dialog__editor .rte-builder__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/*
+ * Широкое окно: конструктор растянут диалогом на всю высоту. Сверху одна
+ * строка инструментов и действий, справа колонка (палитра, свойства,
+ * подсказка), остальное — сцена, в которую вписывается полотно нужной
+ * пропорции. Нужны контейнерные единицы; без них — раскладка выше.
+ */
+@media (min-width: 861px) {
+  @supports (width: 1cqw) {
+    .rte-drawing-dialog__editor .rte-builder {
+      grid-template-columns: minmax(0, 1fr) var(--rte-builder-side, 280px);
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        'bar bar'
+        'stage props'
+        'stage hint';
+      gap: 10px 12px;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder--stereometry,
+    .rte-drawing-dialog__editor .rte-builder--plots {
+      grid-template-rows: auto fit-content(40%) minmax(0, 1fr) auto;
+      grid-template-areas:
+        'bar bar'
+        'stage palette'
+        'stage props'
+        'stage hint';
+    }
+
+    .rte-drawing-dialog__editor .rte-builder--physics {
+      grid-template-rows: auto auto fit-content(40%) minmax(0, 1fr) auto;
+      grid-template-areas:
+        'bar bar'
+        'stage sections'
+        'stage palette'
+        'stage props'
+        'stage hint';
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__bar {
+      grid-area: bar;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__tools,
+    .rte-drawing-dialog__editor .rte-builder__actions {
+      flex: none;
+      flex-wrap: nowrap;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__actions {
+      margin-left: auto;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__body {
+      display: contents;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__stage {
+      grid-area: stage;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      min-height: 0;
+      container-type: size;
+    }
+
+    /* Наибольшая рамка нужной пропорции; логический размер полотна прежний. */
+    .rte-drawing-dialog__editor .rte-sketch {
+      width: min(100cqw, calc(100cqh * (var(--rte-sketch-ratio, 4 / 3))));
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__sections {
+      grid-area: sections;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__palette {
+      grid-area: palette;
+      align-content: start;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__props {
+      grid-area: props;
+      align-content: start;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder__hint {
+      grid-area: hint;
+    }
+
+    /* Шаблоны стереометрии и графиков: сетка в два столбца, значок над подписью. */
+    .rte-drawing-dialog__editor .rte-builder--stereometry .rte-builder__palette,
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-builder__palette {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .rte-drawing-dialog__editor .rte-builder--stereometry .rte-builder__palette .rte-builder__tool,
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-builder__palette .rte-builder__tool {
+      flex-direction: column;
+      gap: 4px;
+      height: auto;
+      min-height: 40px;
+      padding: 6px 8px;
+      white-space: normal;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    /* Графики с выделенной функцией: шаблоны одной строкой значков — место блоку «Функция». */
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-builder__palette.rte-plots__palette--compact {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .rte-drawing-dialog__editor .rte-builder--plots .rte-plots__palette--compact .rte-builder__tool {
+      padding: 0;
+    }
   }
 }

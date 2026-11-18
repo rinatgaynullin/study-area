@@ -144,11 +144,17 @@ the link dialog, the colour input, scrollbars — follow.
 | --- | --- | --- |
 | `--rte-modal-width` | `480px` | Link, table and recorder dialogs |
 | `--rte-modal-width-wide` | `860px` | The formula dialog |
+| `--rte-modal-width-fill` | `1280px` | Full-screen dialogs (the drawing editor); full width and height on screens up to 640 px |
 | `--rte-modal-padding-x` | `32px` | Horizontal padding of dialog header, body and footer; `20px` on screens up to 640 px |
 | `--rte-modal-padding-y` | `16px` | Vertical padding of dialog header, body and footer |
 | `--rte-popover-padding` | `12px` | Link popover padding |
 | `--rte-menu-item-padding` | `8px 12px` | Menu items in dropdowns |
 | `--rte-menu-min-width` | `180px` | Minimum width of dropdown menus |
+
+The drawing editor (`@rich-editor/drawings`) also reads `--rte-builder-side`
+(default `280px`): the width of the right column with the palette and
+properties next to the canvas, on screens wider than 860 px (below that the
+column goes under the canvas). It is set on the package's own elements, so it is not declared with the core tokens above.
 
 ## Content and media
 

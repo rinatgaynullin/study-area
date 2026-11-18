@@ -33,6 +33,14 @@ export class HistoryStack<T> {
     this.redoStack.length = 0;
   }
 
+  /**
+   * Снимает последний записанный снимок и отдаёт его: жест отменили — шага
+   * не остаётся, а сцена возвращается к снимку. Повтор не трогает.
+   */
+  discard(): T | null {
+    return this.undoStack.pop() ?? null;
+  }
+
   /** Возвращает предыдущее состояние, текущее кладёт в повтор; `null`, если отменять нечего. */
   undo(current: T): T | null {
     const previous = this.undoStack.pop();

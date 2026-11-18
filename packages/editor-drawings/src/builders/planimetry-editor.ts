@@ -16,21 +16,22 @@ import {
   snapToGrid,
 } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
-import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
-import { ToolBar, actionButton, propertyField, selectControl, type ToolButton } from './tool-bar';
+import { ChangeEmitter, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { checkField, numberField, propsEmpty, propsTitle, selectField, textField } from './fields';
+import { ToolBar, actionButton, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
 type Tool = 'select' | 'point' | 'segment' | 'circle' | 'angle' | 'ticks' | 'text' | 'delete';
 
 const TOOLS: ToolButton<Tool>[] = [
-  { id: 'select', labelKey: 'drawings_tool_select', glyph: '↖' },
-  { id: 'point', labelKey: 'drawings_tool_point', glyph: '•' },
-  { id: 'segment', labelKey: 'drawings_tool_segment', glyph: '╱' },
-  { id: 'circle', labelKey: 'drawings_tool_circle', glyph: '○' },
-  { id: 'angle', labelKey: 'drawings_tool_angle', glyph: '∠' },
-  { id: 'ticks', labelKey: 'drawings_tool_ticks', glyph: '╫' },
-  { id: 'text', labelKey: 'drawings_tool_text', glyph: 'T' },
-  { id: 'delete', labelKey: 'drawings_tool_delete', glyph: '✕' },
+  { id: 'select', labelKey: 'drawings_tool_select', icon: 'select' },
+  { id: 'point', labelKey: 'drawings_tool_point', icon: 'point' },
+  { id: 'segment', labelKey: 'drawings_tool_segment', icon: 'segment' },
+  { id: 'circle', labelKey: 'drawings_tool_circle', icon: 'circle' },
+  { id: 'angle', labelKey: 'drawings_tool_angle', icon: 'angle' },
+  { id: 'ticks', labelKey: 'drawings_tool_ticks', icon: 'ticks' },
+  { id: 'text', labelKey: 'drawings_tool_text', icon: 'text' },
+  { id: 'delete', labelKey: 'drawings_tool_delete', icon: 'delete' },
 ];
 
 const CANVAS_WIDTH = 560;
@@ -168,6 +169,8 @@ class PlanimetryEditor implements SceneEditor {
       onDoubleClick: this.onDoubleClick,
       onKeyDown: this.onKeyDown,
       onViewportChange: () => this.render(),
+      canPanFrom: this.canPanFrom,
+      grabOnHover: () => this.tool === 'select',
     });
 
     this.tools = new ToolBar<Tool>({ t: this.t, tools: TOOLS, onSelect: (tool) => this.setTool(tool) });
@@ -175,12 +178,12 @@ class PlanimetryEditor implements SceneEditor {
     const actions = el('div', {
       class: 'rte-builder__actions',
       children: [
-        actionButton(this.t('drawings_undo'), '↶', () => this.undo()),
-        actionButton(this.t('drawings_redo'), '↷', () => this.redo()),
-        actionButton(this.t('drawings_grid'), '#', () => this.toggleGrid()),
-        actionButton(this.t('drawings_zoom_in'), '+', () => this.canvas.zoomBy(1.25)),
-        actionButton(this.t('drawings_zoom_out'), '−', () => this.canvas.zoomBy(0.8)),
-        actionButton(this.t('drawings_zoom_reset'), '⌂', () => this.fitView()),
+        actionButton(this.t('drawings_undo'), 'undo', () => this.undo()),
+        actionButton(this.t('drawings_redo'), 'redo', () => this.redo()),
+        actionButton(this.t('drawings_grid'), 'grid', () => this.toggleGrid()),
+        actionButton(this.t('drawings_zoom_in'), 'zoomIn', () => this.canvas.zoomBy(1.25)),
+        actionButton(this.t('drawings_zoom_out'), 'zoomOut', () => this.canvas.zoomBy(0.8)),
+        actionButton(this.t('drawings_zoom_reset'), 'fit', () => this.fitView()),
       ],
     });
 
@@ -191,7 +194,10 @@ class PlanimetryEditor implements SceneEditor {
       class: 'rte-builder rte-builder--planimetry',
       children: [
         el('div', { class: 'rte-builder__bar', children: [this.tools.element, actions] }),
-        el('div', { class: 'rte-builder__body', children: [this.canvas.element, this.properties] }),
+        el('div', {
+          class: 'rte-builder__body',
+          children: [el('div', { class: 'rte-builder__stage', children: [this.canvas.element] }), this.properties],
+        }),
         this.hint,
       ],
     });
@@ -264,6 +270,9 @@ class PlanimetryEditor implements SceneEditor {
     this.history.clear();
     this.selection = null;
     this.draft = [];
+    this.drag = null;
+    // Жест, начатый над прежней сценой, в новую не переходит.
+    this.canvas.resetGestures();
     this.fitView();
   }
 
@@ -314,6 +323,17 @@ class PlanimetryEditor implements SceneEditor {
 
   focus(): void {
     this.canvas.focus();
+  }
+
+  /** Escape: черновик и выделение — прочь, инструмент — «Выбрать». */
+  cancel(): void {
+    // Перетаскивание, уже сдвинувшее точку, откатывается: точка — на прежнем месте, шага истории нет.
+    this.cancelDrag();
+    this.canvas.cancelPan();
+    this.selection = null;
+    this.setTool('select');
+    this.render();
+    this.renderProperties();
   }
 
   destroy(): void {
@@ -452,6 +472,8 @@ class PlanimetryEditor implements SceneEditor {
 
     if (!previous) return;
 
+    // Отмена посреди перетаскивания его заканчивает: снимок жеста уже ушёл в повтор.
+    this.drag = null;
     this.state = previous;
     this.selection = null;
     this.afterChange();
@@ -462,6 +484,7 @@ class PlanimetryEditor implements SceneEditor {
 
     if (!next) return;
 
+    this.drag = null;
     this.state = next;
     this.selection = null;
     this.afterChange();
@@ -607,6 +630,10 @@ class PlanimetryEditor implements SceneEditor {
 
   // ------------------------------------------------------------- указатель
 
+  /** С пустого места протяжка двигает лист в любом инструменте: ни один не рисует протяжкой. */
+  private readonly canPanFrom = (info: PointerInfo): boolean =>
+    this.vertexAt(info.world) === null && this.angleAt(info.world) === null && this.edgeAt(info.world) === null && this.circleAt(info.world) === null;
+
   private readonly onPointerDown = (info: PointerInfo): void => {
     if (info.button !== 0) return;
 
@@ -662,11 +689,41 @@ class PlanimetryEditor implements SceneEditor {
     if (this.draft.length > 0) this.renderOverlay();
   };
 
-  private readonly onPointerUp = (): void => {
+  private readonly onPointerUp = (info: PointerInfo): void => {
+    if (isCancelled(info)) {
+      this.cancelDrag();
+
+      return;
+    }
+
+    this.finishDrag();
+  };
+
+  /**
+   * Конец перетаскивания, как при отпускании кнопки: объект остаётся там, куда
+   * дотащили, его шаг истории остаётся. Зовётся перед клавишей, пишущей свой шаг,
+   * чтобы последующий Escape не снял чужой.
+   */
+  private finishDrag(): void {
     if (this.drag?.moved) this.afterChange();
 
     this.drag = null;
-  };
+  }
+
+  /** Отменённое перетаскивание: сцена — из снимка его начала, шаг истории снимается. */
+  private cancelDrag(): void {
+    const moved = this.drag?.moved === true;
+
+    this.drag = null;
+
+    if (!moved) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange();
+  }
 
   private readonly onDoubleClick = (info: PointerInfo): void => {
     const vertex = this.vertexAt(info.world);
@@ -695,9 +752,17 @@ class PlanimetryEditor implements SceneEditor {
       return;
     }
 
+    // Стрелки без выделения двигают лист на шаг сетки.
+    if (!this.selection && !this.drag && !event.ctrlKey && !event.metaKey && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
+      event.preventDefault();
+
+      return;
+    }
+
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selection) {
         event.preventDefault();
+        this.finishDrag();
         this.deleteSelection();
       }
 
@@ -705,10 +770,9 @@ class PlanimetryEditor implements SceneEditor {
     }
 
     if (event.key === 'Escape') {
-      this.draft = [];
-      this.selection = null;
-      this.render();
-      this.renderProperties();
+      // Отмена сделана здесь: диалог по `defaultPrevented` её не повторяет.
+      event.preventDefault();
+      this.cancel();
     }
   };
 
@@ -921,8 +985,8 @@ class PlanimetryEditor implements SceneEditor {
     this.render();
   }
 
-  /** Тянет подвижный конец ребра вдоль отрезка до длины `value`; неверное значение сцену не меняет. */
-  private resizeEdge(index: number, value: number, input: HTMLInputElement): void {
+  /** Тянет подвижный конец ребра вдоль отрезка до длины `value`; неверное значение сцену не меняет — `false`. */
+  private resizeEdge(index: number, value: number): boolean {
     const edge = this.state.edges[index];
     const fixedName = this.lengthEnd === 'from' ? edge?.to : edge?.from;
     const movingName = this.lengthEnd === 'from' ? edge?.from : edge?.to;
@@ -930,17 +994,15 @@ class PlanimetryEditor implements SceneEditor {
     const moving = movingName ? this.state.vertices[movingName] : undefined;
     const current = fixed && moving ? distance(fixed, moving) : 0;
 
-    if (!fixed || !moving || !movingName || !Number.isFinite(value) || value <= 0 || current === 0) {
-      input.value = String(roundTo(current));
-
-      return;
-    }
+    if (!fixed || !moving || !movingName || !Number.isFinite(value) || value <= 0 || current === 0) return false;
 
     const factor = value / current;
 
     this.commit((draft) => {
       draft.vertices[movingName] = [roundTo(fixed[0] + (moving[0] - fixed[0]) * factor), roundTo(fixed[1] + (moving[1] - fixed[1]) * factor)];
     });
+
+    return true;
   }
 
   // --------------------------------------------------------- панель свойств
@@ -951,29 +1013,24 @@ class PlanimetryEditor implements SceneEditor {
     this.properties.replaceChildren();
 
     if (!selection) {
-      this.properties.appendChild(el('p', { class: 'rte-builder__props-empty', text: t('drawings_nothing_selected') }));
+      this.properties.appendChild(propsEmpty(t('drawings_nothing_selected')));
 
       return;
     }
 
-    const title = el('h4', { class: 'rte-builder__props-title', text: t(`drawings_selected_${selection.type}`) });
-
-    this.properties.appendChild(title);
+    this.properties.appendChild(propsTitle(t(`drawings_selected_${selection.type}`)));
 
     if (selection.type === 'vertex') {
-      const nameInput = el('input', { class: 'rte-input', attrs: { type: 'text', value: selection.id, maxlength: 4 } });
-      const position = selectControl(
-        LABEL_POSITIONS.map((value) => ({ value, label: t(`drawings_position_${value.replace(' ', '_')}`) })),
-        state.labels[selection.id] ?? 'above',
-      );
-
-      this.properties.append(propertyField(t('drawings_prop_name'), nameInput), propertyField(t('drawings_prop_position'), position));
-      this.disposer.add(on(nameInput, 'change', () => this.renameVertex(selection.id, nameInput.value.trim())));
-      this.disposer.add(
-        on(position, 'change', () => {
-          this.commit((draft) => {
-            draft.labels[selection.id] = position.value;
-          });
+      this.properties.append(
+        textField({ label: t('drawings_prop_name'), value: selection.id, maxLength: 4, onChange: (value) => this.renameVertex(selection.id, value) }),
+        selectField({
+          label: t('drawings_prop_position'),
+          options: LABEL_POSITIONS.map((value) => ({ value, label: t(`drawings_position_${value.replace(' ', '_')}`) })),
+          value: state.labels[selection.id] ?? 'above',
+          onChange: (value) =>
+            this.commit((draft) => {
+              draft.labels[selection.id] = value;
+            }),
         }),
       );
     } else if (selection.type === 'edge') {
@@ -981,60 +1038,57 @@ class PlanimetryEditor implements SceneEditor {
 
       if (!edge) return;
 
-      const style = selectControl(
-        [
-          { value: 'solid', label: t('drawings_style_solid') },
-          { value: 'dashed', label: t('drawings_style_dashed') },
-        ],
-        edge.style,
-      );
-      const ticks = selectControl([0, 1, 2, 3, 4].map((value) => ({ value: String(value), label: String(value) })), String(edge.ticks ?? 0));
-
       const fromPoint = state.vertices[edge.from];
       const toPoint = state.vertices[edge.to];
       const currentLength = fromPoint && toPoint ? distance(fromPoint, toPoint) : 0;
-      const length = el('input', {
-        class: 'rte-input',
-        attrs: { type: 'number', step: '0.5', min: '0.01', value: String(roundTo(currentLength)), 'data-prop': 'length' },
-      });
-      const lengthEnd = selectControl(
-        [
-          { value: 'from', label: edge.from },
-          { value: 'to', label: edge.to },
-        ],
-        this.lengthEnd,
-      );
+      const updateEdge = (mutate: (draftEdge: PlanimetryState['edges'][number]) => void): void =>
+        this.commit((draft) => {
+          const draftEdge = draft.edges[selection.index];
 
-      lengthEnd.dataset.prop = 'lengthEnd';
+          if (draftEdge) mutate(draftEdge);
+        });
 
       this.properties.append(
-        propertyField(t('drawings_prop_style'), style),
-        propertyField(t('drawings_prop_ticks'), ticks),
-        propertyField(t('drawings_prop_length'), length),
-        propertyField(t('drawings_prop_length_end'), lengthEnd),
-      );
-      this.disposer.add(
-        on(lengthEnd, 'change', () => {
-          this.lengthEnd = lengthEnd.value === 'from' ? 'from' : 'to';
+        selectField({
+          label: t('drawings_prop_style'),
+          options: [
+            { value: 'solid', label: t('drawings_style_solid') },
+            { value: 'dashed', label: t('drawings_style_dashed') },
+          ],
+          value: edge.style,
+          onChange: (value) =>
+            updateEdge((draftEdge) => {
+              draftEdge.style = value === 'dashed' ? 'dashed' : 'solid';
+            }),
         }),
-      );
-      this.disposer.add(on(length, 'change', () => this.resizeEdge(selection.index, Number(length.value), length)));
-      this.disposer.add(
-        on(style, 'change', () => {
-          this.commit((draft) => {
-            const draftEdge = draft.edges[selection.index];
-
-            if (draftEdge) draftEdge.style = style.value === 'dashed' ? 'dashed' : 'solid';
-          });
+        selectField({
+          label: t('drawings_prop_ticks'),
+          options: [0, 1, 2, 3, 4].map((value) => ({ value: String(value), label: String(value) })),
+          value: String(edge.ticks ?? 0),
+          onChange: (value) =>
+            updateEdge((draftEdge) => {
+              draftEdge.ticks = Number(value) || undefined;
+            }),
         }),
-      );
-      this.disposer.add(
-        on(ticks, 'change', () => {
-          this.commit((draft) => {
-            const draftEdge = draft.edges[selection.index];
-
-            if (draftEdge) draftEdge.ticks = Number(ticks.value) || undefined;
-          });
+        numberField({
+          label: t('drawings_prop_length'),
+          value: roundTo(currentLength),
+          step: 0.5,
+          min: 0.01,
+          prop: 'length',
+          onChange: (value) => this.resizeEdge(selection.index, value),
+        }),
+        selectField({
+          label: t('drawings_prop_length_end'),
+          options: [
+            { value: 'from', label: edge.from },
+            { value: 'to', label: edge.to },
+          ],
+          value: this.lengthEnd,
+          prop: 'lengthEnd',
+          onChange: (value) => {
+            this.lengthEnd = value === 'from' ? 'from' : 'to';
+          },
         }),
       );
     } else if (selection.type === 'angle') {
@@ -1043,53 +1097,50 @@ class PlanimetryEditor implements SceneEditor {
       if (!angle) return;
 
       const degrees = angleMeasure(angle.points, state.vertices);
-      const style = selectControl(ANGLE_STYLES.map((value) => ({ value, label: t(`drawings_angle_${value}`) })), angle.style);
-      const measure = el('input', {
-        class: 'rte-input',
-        attrs: { type: 'text', value: degrees === null ? '' : formatAngleMeasure(degrees), readonly: true, 'data-prop': 'angleValue' },
-      });
-      const measured = el('input', { class: 'rte-builder__check', attrs: { type: 'checkbox', 'data-prop': 'angleMeasure' } });
-      // Пока подпись ведётся сама, руками её не правят.
-      const label = el('input', {
-        class: 'rte-input',
-        attrs: { type: 'text', value: angle.label ?? '', placeholder: '30°', disabled: angle.measured, 'data-prop': 'angleLabel' },
-      });
+      const updateAngle = (mutate: (draftAngle: PlanimetryAngle) => void): void =>
+        this.commit((draft) => {
+          const draftAngle = draft.angles[selection.index];
 
-      measured.checked = angle.measured;
+          if (draftAngle) mutate(draftAngle);
+        });
+
       this.properties.append(
-        propertyField(t('drawings_prop_style'), style),
-        propertyField(t('drawings_prop_angle_value'), measure),
-        propertyField(t('drawings_prop_angle_measure'), measured),
-        propertyField(t('drawings_prop_label'), label),
-      );
-      // Включение пишет величину в подпись (это делает `measureAngles`), выключение оставляет подпись текстом.
-      this.disposer.add(
-        on(measured, 'change', () => {
-          const { checked } = measured;
-
-          this.commit((draft) => {
-            const draftAngle = draft.angles[selection.index];
-
-            if (draftAngle) draftAngle.measured = checked;
-          });
+        selectField({
+          label: t('drawings_prop_style'),
+          options: ANGLE_STYLES.map((value) => ({ value, label: t(`drawings_angle_${value}`) })),
+          value: angle.style,
+          onChange: (value) =>
+            updateAngle((draftAngle) => {
+              draftAngle.style = value as AngleStyle;
+            }),
         }),
-      );
-      this.disposer.add(
-        on(style, 'change', () => {
-          this.commit((draft) => {
-            const draftAngle = draft.angles[selection.index];
-
-            if (draftAngle) draftAngle.style = style.value as AngleStyle;
-          });
+        textField({
+          label: t('drawings_prop_angle_value'),
+          value: degrees === null ? '' : formatAngleMeasure(degrees),
+          readOnly: true,
+          prop: 'angleValue',
         }),
-      );
-      this.disposer.add(
-        on(label, 'change', () => {
-          this.commit((draft) => {
-            const draftAngle = draft.angles[selection.index];
-
-            if (draftAngle) draftAngle.label = label.value.trim() || undefined;
-          });
+        // Включение пишет величину в подпись (это делает `measureAngles`), выключение оставляет подпись текстом.
+        checkField({
+          label: t('drawings_prop_angle_measure'),
+          checked: angle.measured,
+          prop: 'angleMeasure',
+          onChange: (checked) =>
+            updateAngle((draftAngle) => {
+              draftAngle.measured = checked;
+            }),
+        }),
+        // Пока подпись ведётся сама, руками её не правят.
+        textField({
+          label: t('drawings_prop_label'),
+          value: angle.label ?? '',
+          placeholder: '30°',
+          disabled: angle.measured,
+          prop: 'angleLabel',
+          onChange: (value) =>
+            updateAngle((draftAngle) => {
+              draftAngle.label = value || undefined;
+            }),
         }),
       );
     } else if (selection.type === 'circle') {
@@ -1097,30 +1148,36 @@ class PlanimetryEditor implements SceneEditor {
 
       if (!circle) return;
 
-      const radius = el('input', { class: 'rte-input', attrs: { type: 'number', step: '0.25', min: '0.25', value: String(circle.radius) } });
-      const label = el('input', { class: 'rte-input', attrs: { type: 'text', value: circle.label ?? '' } });
+      const updateCircle = (mutate: (draftCircle: Circle) => void): void =>
+        this.commit((draft) => {
+          const draftCircle = draft.circles[selection.index];
 
-      this.properties.append(propertyField(t('drawings_prop_radius'), radius), propertyField(t('drawings_prop_label'), label));
-      this.disposer.add(
-        on(radius, 'change', () => {
-          const value = Number(radius.value);
+          if (draftCircle) mutate(draftCircle);
+        });
 
-          if (!Number.isFinite(value) || value <= 0) return;
+      this.properties.append(
+        numberField({
+          label: t('drawings_prop_radius'),
+          value: circle.radius,
+          step: 0.25,
+          min: 0.25,
+          onChange: (value) => {
+            if (value <= 0) return false;
 
-          this.commit((draft) => {
-            const draftCircle = draft.circles[selection.index];
+            updateCircle((draftCircle) => {
+              draftCircle.radius = roundTo(value);
+            });
 
-            if (draftCircle) draftCircle.radius = roundTo(value);
-          });
+            return true;
+          },
         }),
-      );
-      this.disposer.add(
-        on(label, 'change', () => {
-          this.commit((draft) => {
-            const draftCircle = draft.circles[selection.index];
-
-            if (draftCircle) draftCircle.label = label.value.trim() || undefined;
-          });
+        textField({
+          label: t('drawings_prop_label'),
+          value: circle.label ?? '',
+          onChange: (value) =>
+            updateCircle((draftCircle) => {
+              draftCircle.label = value || undefined;
+            }),
         }),
       );
     } else if (selection.type === 'text') {
@@ -1128,19 +1185,20 @@ class PlanimetryEditor implements SceneEditor {
 
       if (!textLabel) return;
 
-      const text = el('input', { class: 'rte-input', attrs: { type: 'text', value: textLabel.text, 'data-autofocus': true } });
-
-      this.properties.append(propertyField(t('drawings_prop_text'), text));
-      this.disposer.add(
-        on(text, 'change', () => {
+      const text = textField({
+        label: t('drawings_prop_text'),
+        value: textLabel.text,
+        autofocus: true,
+        onChange: (value) =>
           this.commit((draft) => {
             const draftLabel = draft.textLabels[selection.index];
 
-            if (draftLabel) draftLabel.text = text.value;
-          });
-        }),
-      );
-      text.focus();
+            if (draftLabel) draftLabel.text = value;
+          }),
+      });
+
+      this.properties.append(text);
+      text.querySelector('input')?.focus();
     }
 
     const remove = el('button', { class: 'rte-button rte-button--danger rte-builder__remove', attrs: { type: 'button' }, text: t('drawings_remove_selected') });
@@ -1196,6 +1254,7 @@ export const planimetryEditorFactory: SceneEditorFactory = {
   id: 'planimetry',
   kind: 'geometry',
   labelKey: 'drawings_tab_planimetry',
+  icon: 'tabPlane',
   accepts: (scene) => {
     const normalized = normalizeGeometryScene(scene);
 

@@ -27,7 +27,7 @@ async function applySample(page: Page, name: string): Promise<void> {
 test.skip(({ isMobile }) => Boolean(isMobile), 'диалоги возможностей проверяются на десктопе');
 
 test.describe('структурные формулы', () => {
-  test('кнопка открывает диалог, шаблон даёт превью, вставка кладёт узел в документ и вьюер', async ({ page }) => {
+  test('кнопка открывает диалог, готовая формула встаёт на полотно, вставка кладёт узел в документ и вьюер', async ({ page }) => {
     await openDemo(page);
 
     await page.locator(`${EDITOR} p`).first().click();
@@ -35,7 +35,7 @@ test.describe('структурные формулы', () => {
     await expect(page.locator(MODAL_TITLE)).toHaveText('Структурная формула');
 
     await page.locator(`${OPEN_MODAL} button[data-code="**6(------)"]`).click();
-    await expect(page.locator(`${OPEN_MODAL} .rte-chemistry-dialog__preview svg`)).toBeVisible();
+    await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__canvas svg`)).toBeVisible();
 
     await page.getByRole('button', { name: 'Вставить', exact: true }).click();
     await expect(page.locator(MODAL_PANEL)).toBeHidden();
@@ -43,6 +43,119 @@ test.describe('структурные формулы', () => {
     await expect(page.locator(`${EDITOR} .rte-chemistry svg`)).toHaveCount(1);
     // Экспортированный HTML проходит через вьюер без редактора — структура дорисована по коду.
     await expect(page.locator('.demo__preview .rte-chemistry svg')).toHaveCount(1);
+  });
+
+  test('конструктор по умолчанию: CH₃–CH₂–OH тремя нажатиями, узел с SVG в документе', async ({ page }) => {
+    await openDemo(page);
+
+    await page.locator(`${EDITOR} p`).first().click();
+    await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').click();
+    await expect(page.locator(`${OPEN_MODAL} textarea`)).toHaveCount(0);
+
+    await page.locator(`${OPEN_MODAL} .rte-chem-builder__start`).click();
+    await page.locator(`${OPEN_MODAL} button[data-group="CH_2"]`).click();
+    await page.locator(`${OPEN_MODAL} [data-plus][data-angle="0"]`).click();
+    await page.locator(`${OPEN_MODAL} button[data-group="OH"]`).click();
+    await page.locator(`${OPEN_MODAL} [data-plus][data-angle="0"]`).click();
+    await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__canvas text`)).toHaveText(['CH₃', 'CH₂', 'OH']);
+
+    await page.getByRole('button', { name: 'Вставить', exact: true }).click();
+    await expect(page.locator(MODAL_PANEL)).toBeHidden();
+
+    const node = page.locator(`${EDITOR} .rte-chemistry`);
+
+    await expect(node).toHaveCount(1);
+    await expect(node.locator('svg')).toHaveCount(1);
+    await expect(node).toHaveAttribute('data-chemistry-code', 'CH_3-[:0]CH_2-[:0]OH');
+  });
+
+  test('флажок демо включает поле кода chemfig, связанное с конструктором', async ({ page }) => {
+    await openDemo(page);
+    await page.getByLabel('Код chemfig в диалоге структуры').check();
+    await page.waitForSelector(`${EDITOR} .rte-formula svg`, { timeout: 30_000 });
+
+    await page.locator(`${EDITOR} p`).first().click();
+    await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').click();
+    await page.locator(`${OPEN_MODAL} summary`, { hasText: 'Код chemfig' }).click();
+    await page.locator(`${OPEN_MODAL} textarea`).fill('CH_3-CH=CH_2');
+    await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__canvas text`)).toHaveText(['CH₃', 'CH', 'CH₂']);
+
+    await page.getByRole('button', { name: 'Вставить', exact: true }).click();
+    await expect(page.locator(`${EDITOR} .rte-chemistry`)).toHaveAttribute('data-chemistry-code', 'CH_3-CH=CH_2');
+  });
+
+  test('с клавиатуры: CH₃–OH — фокус на атом, Enter, фокус на «плюс», Enter — и вставка', async ({ page }) => {
+    await openDemo(page);
+
+    await page.locator(`${EDITOR} p`).first().click();
+    await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').click();
+
+    // Модалка ставит автофокус на полотно в следующем кадре. Пока он не
+    // случился, фокус, поставленный сценарием, он перехватит: Enter уйдёт
+    // пустому полотну. Ждём автофокус.
+    await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__stage`)).toBeFocused();
+
+    const start = page.locator(`${OPEN_MODAL} .rte-chem-builder__start`);
+
+    await start.focus();
+    await expect(start).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(MODAL_PANEL)).toBeVisible();
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toHaveAttribute('aria-pressed', 'false');
+
+    await page.locator(`${OPEN_MODAL} [data-atom="0"]`).focus();
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="0"]`)).toHaveAttribute('aria-pressed', 'true');
+
+    const oh = page.locator(`${OPEN_MODAL} button[data-group="OH"]`);
+
+    await oh.focus();
+    await expect(oh).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(oh).toHaveAttribute('aria-pressed', 'true');
+
+    const plus = page.locator(`${OPEN_MODAL} [data-plus][aria-label="Присоединить группу: вправо"]`);
+
+    await plus.focus();
+    await expect(plus).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`${OPEN_MODAL} [data-atom="1"]`)).toBeFocused();
+
+    await page.getByRole('button', { name: 'Вставить', exact: true }).click();
+    await expect(page.locator(`${EDITOR} .rte-chemistry`)).toHaveAttribute('data-chemistry-code', 'CH_3-[:0]OH');
+  });
+
+  test.describe('окно 1280×720', () => {
+    test.use({ viewport: { width: 1280, height: 720 } });
+
+    test('тело модалки конструктора не прокручивается, в том числе с выделенным атомом', async ({ page }) => {
+      await openDemo(page);
+
+      await page.locator(`${EDITOR} p`).first().click();
+      await page.locator('.rte-toolbar button[aria-label="Структурная формула"]').click();
+      await page.locator(`${OPEN_MODAL} .rte-chem-builder__start`).click();
+      await page.locator(`${OPEN_MODAL} [data-plus][data-angle="0"]`).click();
+
+      const body = page.locator(`${OPEN_MODAL} .rte-modal__body`);
+      const overflow = await body.evaluate((element) => element.scrollHeight - element.clientHeight);
+
+      expect(overflow).toBeLessThanOrEqual(0);
+      await expect(page.locator(`${OPEN_MODAL} .rte-chem-builder__section--templates`)).toBeInViewport();
+
+      // Высота колонки не зависит от шрифта: палитра групп — всегда три строки,
+      // «Связь» и «Кольца» — по одной (на CI гарнитура шире, чем на macOS).
+      const rowsOf = (selector: string): Promise<number> =>
+        page
+          .locator(`${OPEN_MODAL} ${selector} > button`)
+          .evaluateAll((buttons) => new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top))).size);
+
+      expect(await rowsOf('.rte-chem-builder__palette')).toBe(3);
+      expect(await rowsOf('.rte-chem-builder__section--bond .rte-chem-builder__row')).toBe(1);
+      expect(await rowsOf('.rte-chem-builder__section--rings .rte-chem-builder__row')).toBe(1);
+    });
   });
 
   test('разметка PinQueen из образца становится структурами, код вне подмножества остаётся текстом', async ({ page }) => {
@@ -58,12 +171,16 @@ test.describe('структурные формулы', () => {
 test.describe('чертежи', () => {
   test('конструктор планиметрии: шаблон на полотне, точка кликом, карточка в документе', async ({ page }) => {
     await openDemo(page);
+    // Образцы сцен и вкладка JSON — инструменты разработчика, демо включает их флажком.
+    await page.getByRole('checkbox', { name: 'JSON в диалоге чертежа' }).check();
 
     await page.locator(`${EDITOR} p`).first().click();
     await page.locator('.rte-toolbar button[aria-label="Чертёж"]').click();
     await expect(page.locator(MODAL_TITLE)).toHaveText('Чертёж');
     await expect(page.locator(`${OPEN_MODAL} [role="tab"][aria-selected="true"]`)).toHaveText('Планиметрия');
 
+    // На вкладке конструктора образцы свёрнуты вместе с предпросмотром и TikZ.
+    await page.locator(`${OPEN_MODAL} .rte-drawing-dialog__more > summary`).click();
     await page.locator(`${OPEN_MODAL} button[data-template="triangle"]`).click();
     const canvas = page.locator(`${OPEN_MODAL} .rte-sketch`);
     await expect(canvas.locator('svg').first()).toBeVisible();

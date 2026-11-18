@@ -132,7 +132,7 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 
 | Фабрика | Что даёт |
 | --- | --- |
-| `createModal({ title, closeLabel, wide?, onClose? })` | Модалка: `body`, `footer`, `open()`, `close()`, `setTitle()`; ловушка фокуса, `Escape`, замок прокрутки |
+| `createModal({ title, closeLabel, wide?, fill?, closeOnEscape?, onClose? })` | Модалка (`fill` — почти на весь экран, на телефоне на весь; так открывается диалог чертежа): `body`, `footer`, `open()`, `close()`, `setTitle()`; ловушка фокуса, `Escape`, замок прокрутки. С `closeOnEscape: false` (по умолчанию `true`) модалка `Escape` не обрабатывает: не закрывается и событие не останавливает. Автофокус после открытия не уводит фокус, который за этот кадр уже оказался внутри окна |
 | `createPopover(options?)` | Панель у `DOMRect`: `open(anchor)`, `close(reason?)`, `reposition()`; не забирает фокус |
 | `createDropdown({ label, iconName?, text?, renderPanel })` | Кнопка с меню; `renderPanel` вызывается при каждом открытии |
 | `createMenuItem(options)`, `createMenuSeparator()` | Пункт меню с ролью `menuitem` / `menuitemradio` / `menuitemcheckbox` и разделитель |
@@ -145,7 +145,7 @@ Vue-компонент `RichEditor` — ровно этот вызов, обёр
 | Документ | `Alt+F10` — фокус в тулбар; `Mod-K` — диалог ссылки; `Enter` на выделенной формуле — её редактор; `Alt+↑` / `Alt+↓` — выделенный блочный узел (чертёж, картинка, аудио, вложение) на один блок выше или ниже |
 | Тулбар | Одна остановка `Tab`; стрелки, `Home`/`End`, `Enter`/`Space`, `Escape` — назад в документ |
 | Меню | Стрелки, `Home`/`End`, `Enter`, `Escape`; палитра — сетка |
-| Диалог | `Tab` по кольцу, `Escape`, `Enter` в поле применяет |
+| Диалог | `Tab` по кольцу, `Escape`, `Enter` в поле применяет; окна чертежа и структурной формулы `Escape` не закрывает ([16](16-chemistry.md), [17](17-drawings.md)) |
 
 ## Пример
 

@@ -1,5 +1,6 @@
 import type { Translate } from '@rich-editor/core';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { BUILDER_MESSAGES } from '../src/builders/messages';
 import { plotsEditorFactory } from '../src/builders/plots-editor';
 import { PLOTS_MESSAGES } from '../src/builders/plots-messages';
 import type { SceneEditor } from '../src/builders/types';
@@ -21,7 +22,8 @@ beforeAll(() => {
   }
 });
 
-const t: Translate = (key) => PLOTS_MESSAGES.ru[key] ?? DRAWINGS_MESSAGES.ru[key] ?? key;
+const t: Translate = (key, params = {}) =>
+  (PLOTS_MESSAGES.ru?.[key] ?? DRAWINGS_MESSAGES.ru?.[key] ?? key).replace(/\{(\w+)\}/g, (match, name: string) => String(params[name] ?? match));
 
 /** Полотно 560×420 при масштабе 30: начало координат мира в (280, 210), ось y вверх. */
 const CX = 280;
@@ -108,6 +110,136 @@ const change = (control: HTMLInputElement | HTMLSelectElement, value: string): v
 };
 
 const plotsOf = (editor: SceneEditor): Array<Record<string, unknown>> => editor.getScene().plots as Array<Record<string, unknown>>;
+
+/** Плитка палитры цвета (`data-color` — id цвета, `other` или `default`). */
+const colorTile = (editor: SceneEditor, color: string): HTMLButtonElement => {
+  const tile = editor.element.querySelector<HTMLButtonElement>(`.rte-builder__props [data-color="${color}"]`);
+
+  if (!tile) throw new Error(`Нет плитки «${color}»`);
+
+  return tile;
+};
+
+/** Ползунок или числовое поле параметра блока «Функция». */
+const paramControl = (editor: SceneEditor, id: string, kind: 'range' | 'number'): HTMLInputElement => {
+  const input = editor.element.querySelector<HTMLInputElement>(`.rte-plots-fn input[type="${kind}"][data-prop="${id}"]`);
+
+  if (!input) throw new Error(`Нет поля параметра ${id}`);
+
+  return input;
+};
+
+const paramIds = (editor: SceneEditor): string[] =>
+  [...editor.element.querySelectorAll<HTMLInputElement>('.rte-plots-fn input[type="range"]')].map((input) => input.dataset.prop ?? '');
+
+const formulaOf = (editor: SceneEditor): string | null | undefined =>
+  editor.element.querySelector('.rte-plots-fn__formula[role="img"]')?.getAttribute('aria-label');
+
+/** Поле записи функции. */
+const exprOf = (editor: SceneEditor): HTMLInputElement => {
+  const input = editor.element.querySelector<HTMLInputElement>('.rte-plots-fn input[data-prop="expr"]');
+
+  if (!input) throw new Error('Нет поля записи');
+
+  return input;
+};
+
+/** Набор в поле записи: событие `input` на каждое значение, как при печати. */
+const typeExpr = (editor: SceneEditor, ...values: string[]): void => {
+  const input = exprOf(editor);
+
+  values.forEach((value) => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+};
+
+/** Правка поля записи закончена: `change`, как при Enter или потере фокуса. */
+const commitExpr = (editor: SceneEditor): void => {
+  exprOf(editor).dispatchEvent(new Event('change', { bubbles: true }));
+};
+
+const errorOf = (editor: SceneEditor): string | null => {
+  const error = editor.element.querySelector<HTMLElement>('.rte-plots-fn__error');
+
+  return error && !error.hidden ? error.textContent : null;
+};
+
+/** Сообщение под полем записи о графике: точек нет или график за краем листа. */
+const noticeOf = (editor: SceneEditor): string | null => {
+  const notice = editor.element.querySelector<HTMLElement>('.rte-plots-fn__notice');
+
+  return notice && !notice.hidden ? notice.textContent : null;
+};
+
+/** Сколько точек пути кривой данного цвета внутри полотна 560×420. */
+const visiblePointsOf = (editor: SceneEditor, color: string): number => {
+  const layer = canvasOf(editor).querySelector('.rte-sketch__layer');
+  const d = layer?.querySelector(`path[stroke="${color}"]`)?.getAttribute('d') ?? layer?.querySelector(`polyline[stroke="${color}"]`)?.getAttribute('points') ?? '';
+  const numbers = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  const pairs = numbers.flatMap((value, index) => (index % 2 === 0 ? [[value, numbers[index + 1] ?? NaN]] : []));
+
+  return pairs.filter(([x, y]) => x >= 0 && x <= 560 && y >= 0 && y <= 420).length;
+};
+
+/** Доли отрезка, по которым `visibleSamplesOf` проверяет его видимость. */
+const SEGMENT_SAMPLES = Array.from({ length: 8 }, (_, index) => index / 8);
+
+/**
+ * Видимые на полотне точки кривой цвета `color` с промежуточными точками
+ * отрезков: у горизонтальной прямой оба конца за краями листа, а середина — на нём.
+ */
+const visibleSamplesOf = (editor: SceneEditor, color: string): number => {
+  const layer = canvasOf(editor).querySelector('.rte-sketch__layer');
+  const d = layer?.querySelector(`path[stroke="${color}"]`)?.getAttribute('d') ?? layer?.querySelector(`polyline[stroke="${color}"]`)?.getAttribute('points') ?? '';
+  const runs = d.split('M').map((run) => {
+    const numbers = (run.match(/-?[\d.]+/g) ?? []).map(Number);
+
+    return numbers.flatMap((value, index) => (index % 2 === 0 ? [[value, numbers[index + 1] ?? NaN] as const] : []));
+  });
+  const samples = runs.flatMap((run) =>
+    run.flatMap(([x, y], index) => {
+      const next = run[index + 1];
+
+      if (!next) return [[x, y] as const];
+
+      return SEGMENT_SAMPLES.map((share) => [x + (next[0] - x) * share, y + (next[1] - y) * share] as const);
+    }),
+  );
+
+  return samples.filter(([x, y]) => x >= 0 && x <= 560 && y >= 0 && y <= 420).length;
+};
+
+/** Движение ползунка: событие `input`, а `change` — когда отпустили. */
+const slide = (input: HTMLInputElement, value: string): void => {
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+const release = (input: HTMLInputElement): void => {
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
+/** Клик по первой точке пути кривой данного цвета: после загрузки окно просмотра подогнано под сцену. */
+const clickCurve = (editor: SceneEditor, color: string): void => {
+  const layer = canvasOf(editor).querySelector('.rte-sketch__layer');
+  const d = layer?.querySelector(`path[stroke="${color}"]`)?.getAttribute('d') ?? '';
+  const points = layer?.querySelector(`polyline[stroke="${color}"]`)?.getAttribute('points') ?? '';
+  const [, x, y] = /M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(d) ?? /^\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(points) ?? [];
+
+  if (x === undefined || y === undefined) throw new Error(`Нет кривой цвета ${color}`);
+
+  const init = { bubbles: true, cancelable: true, button: 0, clientX: Number(x), clientY: Number(y), pointerId: 1 };
+
+  canvasOf(editor).dispatchEvent(new PointerEvent('pointerdown', init));
+  canvasOf(editor).dispatchEvent(new PointerEvent('pointerup', init));
+};
+
+const formulaLabelToggle = (editor: SceneEditor): HTMLInputElement | null => editor.element.querySelector<HTMLInputElement>('.rte-plots-fn input[data-prop="formula-label"]');
+
+const addFunction = (editor: SceneEditor): void => {
+  editor.element.querySelector<HTMLButtonElement>('button[data-plot-add="function"]')?.click();
+};
 
 /** Сцена графика из README PinQueen: парабола с вершиной в A и сама точка A. */
 const README_SCENE = {
@@ -243,14 +375,21 @@ describe('конструктор графиков', () => {
     expect(plotsOf(plots)[1]).toMatchObject({ type: 'shading', points: [[-1, -1], [-3, -1], [-3, -3]] });
   });
 
-  it('парабола из шаблона выбирается кликом по ветви и перетаскивается за вершину', () => {
+  it('готовая парабола выбирается кликом по ветви и перетаскивается за вершину', () => {
     const plots = create();
     const canvas = canvasOf(plots);
 
-    pickTemplate(plots, 'parabola');
-    expect(plotsOf(plots)[0]).toMatchObject({ type: 'parabola', vertex: [0, 0], stretchX: 1, stretchY: 1, color: '#3b82f6' });
-    expect(propsTitle(plots)).toBe('Парабола');
+    // Карандаш по параболе — готовая кривая `parabola`.
+    pickTool(plots, 'pencil');
+    stroke(
+      canvas,
+      Array.from({ length: 17 }, (_, i) => {
+        const x = -2 + i / 4;
 
+        return [x, x * x] as Point;
+      }),
+    );
+    expect(plotsOf(plots)[0]).toMatchObject({ type: 'parabola', vertex: [0, 0], stretchY: 1 });
     pickTool(plots, 'select');
     click(canvas, [4, 0]);
     expect(propsTitle(plots)).toBe('Оси');
@@ -258,12 +397,14 @@ describe('конструктор графиков', () => {
     click(canvas, [2, 4]);
     expect(propsTitle(plots)).toBe('Парабола');
     expect(canvas.querySelector('.rte-sketch__layer path[stroke="#ec4899"]')).not.toBeNull();
+    expect(exprOf(plots).value).toBe('x^2');
 
     pointer(canvas, 'pointerdown', [0, 0]);
     pointer(canvas, 'pointermove', [0.4, -0.6]);
     pointer(canvas, 'pointermove', [1.1, -0.9]);
     pointer(canvas, 'pointerup', [1.1, -0.9]);
     expect(plotsOf(plots)[0]).toMatchObject({ vertex: [1, -1] });
+    expect(exprOf(plots).value).toBe('(x-1)^2-1');
 
     // Точка на кривой выбирается раньше кривой.
     pickTool(plots, 'point');
@@ -273,60 +414,98 @@ describe('конструктор графиков', () => {
     expect(propsTitle(plots)).toBe('Точка');
   });
 
-  it('панель свойств меняет цвет, пунктир, подпись, k гиперболы и область', () => {
+  it('панель свойств меняет цвет, пунктир, подпись и область функции; у окружности — центр, радиус и заливка', () => {
     const plots = create();
 
     pickTemplate(plots, 'hyperbola');
-    expect(propsTitle(plots)).toBe('Гипербола');
+    expect(propsTitle(plots)).toBe('Функция');
+    expect(exprOf(plots).value).toBe('1/x');
 
-    change(controlOf<HTMLSelectElement>(plots, 'Цвет'), '#ef4444');
-    expect(plotsOf(plots)[0]).toMatchObject({ type: 'hyperbola', k: 1, color: '#ef4444' });
+    // Шаблон гиперболы — зелёный из палитры.
+    expect(colorTile(plots, 'green').getAttribute('aria-checked')).toBe('true');
+    colorTile(plots, 'red').click();
+    expect(plotsOf(plots).map((plot) => plot.color)).toEqual(['#dc2626', '#dc2626']);
+    expect(colorTile(plots, 'red').getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(colorTile(plots, 'red'));
 
-    change(controlOf<HTMLInputElement>(plots, 'Цвет (hex)'), '#123456');
-    expect(plotsOf(plots)[0].color).toBe('#123456');
-    expect(controlOf<HTMLSelectElement>(plots, 'Цвет').value).toBe('#123456');
+    // «Обычный цвет» убирает цвет кривой, как прежде пустое поле hex; поля hex больше нет.
+    colorTile(plots, 'default').click();
+    expect(plotsOf(plots)[0]).not.toHaveProperty('color');
+    expect(colorTile(plots, 'default').getAttribute('aria-pressed')).toBe('true');
+    expect(plots.element.querySelector('.rte-builder__props input[maxlength="7"]')).toBeNull();
+    colorTile(plots, 'red').click();
 
     const dashed = controlOf<HTMLInputElement>(plots, 'Пунктир');
 
     dashed.checked = true;
     dashed.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(plotsOf(plots)[0].style).toBe('dashed');
+    expect(plotsOf(plots).map((plot) => plot.style)).toEqual(['dashed', 'dashed']);
 
-    change(controlOf<HTMLInputElement>(plots, 'Метка'), 'y = 2/x');
-    expect(plotsOf(plots)[0].label).toBe('y = 2/x');
+    // Подпись — только у первой ветви.
+    change(controlOf<HTMLInputElement>(plots, 'Метка'), 'y = 1/x');
+    expect(plotsOf(plots).map((plot) => plot.label)).toEqual(['y = 1/x', undefined]);
 
-    change(controlOf<HTMLInputElement>(plots, 'Коэффициент k'), '2');
-    expect(plotsOf(plots)[0].k).toBe(2);
-
-    // Ноль для гиперболы не годится — значение остаётся прежним.
-    change(controlOf<HTMLInputElement>(plots, 'Коэффициент k'), '0');
-    expect(plotsOf(plots)[0].k).toBe(2);
-
-    // Одна граница — полуоткрытая область: бесконечный конец в JSON становится `null`.
+    // Одна граница — полуоткрытая область: бесконечный конец в JSON становится `null`; ветвь левее нуля пропадает.
     change(controlsOf<HTMLInputElement>(plots, 'Область по x (от, до)')[0], '0.5');
+    expect(plotsOf(plots)).toHaveLength(1);
     expect(plotsOf(plots)[0].domain).toEqual([0.5, null]);
+    expect((plotsOf(plots)[0].points as Point[])[0]?.[0]).toBe(0.5);
     change(controlsOf<HTMLInputElement>(plots, 'Область по x (от, до)')[1], '4');
     expect(plotsOf(plots)[0].domain).toEqual([0.5, 4]);
     change(controlsOf<HTMLInputElement>(plots, 'Область по x (от, до)')[0], '');
     change(controlsOf<HTMLInputElement>(plots, 'Область по x (от, до)')[1], '');
     expect(plotsOf(plots)[0].domain).toBeUndefined();
+    expect(plotsOf(plots)).toHaveLength(2);
 
+    // Окружность — готовая кривая: блока «Функция» нет, центр и радиус — числами.
     pickTemplate(plots, 'circle');
+    expect(plots.element.querySelector('.rte-plots-fn')).toBeNull();
+    change(controlsOf<HTMLInputElement>(plots, 'Центр (x, y)')[0], '1');
     change(controlOf<HTMLInputElement>(plots, 'Радиус'), '1.5');
+    change(controlOf<HTMLInputElement>(plots, 'Радиус'), '0.2');
 
     const fill = controlOf<HTMLInputElement>(plots, 'Заливка');
 
     fill.checked = true;
     fill.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(plotsOf(plots)[1]).toMatchObject({ type: 'circle', radius: 1.5, fill: true });
+    expect(plotsOf(plots)[2]).toMatchObject({ type: 'circle', center: [1, 0], radius: 0.5, fill: true });
+  });
 
-    pickTemplate(plots, 'line');
-    change(controlOf<HTMLInputElement>(plots, 'Сдвиг b'), '-1');
-    expect(plotsOf(plots)[2]).toMatchObject({ type: 'line', k: 1, b: -1 });
+  it('цвет из чертежа: чужой цвет — одиннадцатая плитка, синоним — плитка палитры; сцена без действий не переписывается', () => {
+    const plots = create();
+    let changes = 0;
 
-    pickTemplate(plots, 'sqrt');
-    change(controlOf<HTMLSelectElement>(plots, 'Направление по x'), 'left');
-    expect(plotsOf(plots)[3]).toMatchObject({ type: 'sqrt', directionX: 'left', directionY: 'up', stretch: 1 });
+    plots.onChange(() => {
+      changes += 1;
+    });
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'p', type: 'parabola', vertex: [0, 0], direction: 'up', stretchX: 1, stretchY: 1, color: '#ABCDEF' },
+        { id: 'q', type: 'parabola', vertex: [0, -4], direction: 'up', stretchX: 1, stretchY: 1, color: '#3b82f6' },
+      ],
+    });
+    pickTool(plots, 'select');
+
+    clickCurve(plots, '#ABCDEF');
+    expect(propsTitle(plots)).toBe('Парабола');
+    expect(colorTile(plots, 'other').getAttribute('aria-checked')).toBe('true');
+    expect(colorTile(plots, 'other').getAttribute('aria-label')).toBe('Цвет из чертежа');
+    expect(plots.element.querySelectorAll('.rte-builder__props .rte-builder__colors [role="radio"]')).toHaveLength(11);
+
+    // Синоним прежней палитры — с плиткой «Синий», значение в сцене прежнее.
+    clickCurve(plots, '#3b82f6');
+    expect(colorTile(plots, 'blue').getAttribute('aria-checked')).toBe('true');
+    expect(plots.element.querySelector('.rte-builder__props [data-color="other"]')).toBeNull();
+    expect(plotsOf(plots).map((plot) => plot.color)).toEqual(['#ABCDEF', '#3b82f6']);
+    expect(changes).toBe(0);
+
+    // Выбор плитки палитры — правка; плитка «Цвет из чертежа» исчезает.
+    clickCurve(plots, '#ABCDEF');
+    colorTile(plots, 'purple').click();
+    expect(plotsOf(plots)[0].color).toBe('#8b5cf6');
+    expect(changes).toBe(1);
+    expect(plots.element.querySelector('.rte-builder__props [data-color="other"]')).toBeNull();
   });
 
   it('без выделения панель правит подписи осей и числа на них; кнопка сетки выключает сетку', () => {
@@ -384,11 +563,21 @@ describe('конструктор графиков', () => {
     key(canvas, 'v', { ctrlKey: true });
     expect(plotsOf(plots)[2]).toMatchObject({ id: 'plot_3', center: [1, -1] });
 
-    // Прямая `y = kx + b` сдвигается через `b`: вправо на 0,5 и вниз на 0,5 при k = 1 даёт b = −1.
-    pickTemplate(plots, 'line');
+    // Набранная функция копируется целиком, со своим `fn`; её место задаёт запись — копия на том же месте.
+    pickTemplate(plots, 'hyperbola');
     actionButton(plots, 'Копировать график').click();
     actionButton(plots, 'Вставить график').click();
-    expect(plotsOf(plots)[4]).toMatchObject({ type: 'line', k: 1, b: -1 });
+
+    const branches = plotsOf(plots).slice(3);
+
+    expect(branches.map((plot) => [plot.expr, plot.fn])).toEqual([
+      ['1/x', 'plot_4'],
+      ['1/x', 'plot_4'],
+      ['1/x', 'plot_5'],
+      ['1/x', 'plot_5'],
+    ]);
+    expect(branches[2]?.points).toEqual(branches[0]?.points);
+    expect(propsTitle(plots)).toBe('Функция');
   });
 
   it('отмена возвращает сцену, повтор — снова меняет; перетаскивание отменяется одним шагом', () => {
@@ -487,12 +676,804 @@ describe('конструктор графиков', () => {
   });
 });
 
+describe('набранная функция', () => {
+  let editor: SceneEditor | undefined;
+
+  afterEach(() => {
+    editor?.destroy();
+    editor = undefined;
+  });
+
+  const create = (): SceneEditor => {
+    editor = plotsEditorFactory.create({ t });
+    document.body.appendChild(editor.element);
+
+    return editor;
+  };
+
+  it('«+ Функция» → набор x^2-1 → ветви freehand с expr и fn; загрузка собирает одну функцию; нетронутая отдаётся дословно', () => {
+    const plots = create();
+    let changes = 0;
+
+    plots.onChange(() => {
+      changes += 1;
+    });
+
+    addFunction(plots);
+    expect(propsTitle(plots)).toBe('Функция');
+    expect(document.activeElement).toBe(exprOf(plots));
+    expect(exprOf(plots).getAttribute('inputmode')).toBe('text');
+    expect(exprOf(plots).getAttribute('autocapitalize')).toBe('off');
+    expect(exprOf(plots).getAttribute('spellcheck')).toBe('false');
+    // Пустая функция в сцену не попадает.
+    expect(plotsOf(plots)).toEqual([]);
+    expect(changes).toBe(0);
+
+    typeExpr(plots, 'x', 'x^', 'x^2', 'x^2-', 'x^2-1');
+    commitExpr(plots);
+    expect(changes).toBe(1);
+    expect(formulaOf(plots)).toBe('y = x² − 1');
+
+    const scene = plots.getScene();
+    const branches = scene.plots as Array<Record<string, unknown>>;
+
+    expect(branches).toHaveLength(1);
+    expect(branches[0]).toMatchObject({ id: 'plot_1', type: 'freehand', expr: 'x^2-1', fn: 'plot_1', style: 'solid', color: '#2563eb' });
+    expect(branches[0]).not.toHaveProperty('params');
+    expect((branches[0]?.points as Point[]).length).toBeGreaterThan(10);
+
+    // Загрузка: одна функция с той же записью; сцена без правок — дословно такая же.
+    const saved = JSON.parse(JSON.stringify({ ...scene, plots: [{ ...branches[0], note: 'keep' }] })) as Record<string, unknown>;
+
+    plots.load(saved);
+    expect(plots.getScene()).toEqual(saved);
+    clickCurve(plots, '#2563eb');
+    expect(propsTitle(plots)).toBe('Функция');
+    expect(exprOf(plots).value).toBe('x^2-1');
+    // Выделение и показ блока сцену не меняют.
+    expect(plots.getScene()).toEqual(saved);
+
+    // Правка — ветви заново, чужое поле первой ветви остаётся.
+    typeExpr(plots, 'x^2-2');
+    commitExpr(plots);
+    expect(plotsOf(plots)[0]).toMatchObject({ expr: 'x^2-2', note: 'keep' });
+    expect(plotsOf(plots)[0]?.points).not.toEqual((saved.plots as Array<Record<string, unknown>>)[0]?.points);
+  });
+
+  it('ветви одной функции собираются по fn и записи; обычная ломаная без expr остаётся ломаной', () => {
+    const plots = create();
+    const scene = {
+      type: 'plot_2d',
+      plots: [
+        { id: 'a', type: 'freehand', points: [[-3, -0.333], [-0.1, -10]], expr: '1/x', fn: 'f', color: '#16a34a', label: 'y = 1/x' },
+        { id: 'z', type: 'freehand', points: [[0, 0], [1, 2], [2, -1]] },
+        { id: 'b', type: 'freehand', points: [[0.1, 10], [3, 0.333]], expr: '1/x', fn: 'f', color: '#16a34a' },
+      ],
+    };
+
+    plots.load(scene);
+    // Ветви дословно, функция — на месте первой ветви.
+    expect(plotsOf(plots)).toEqual([scene.plots[0], scene.plots[2], { ...scene.plots[1], style: 'solid' }]);
+    pickTool(plots, 'select');
+    clickCurve(plots, '#16a34a');
+    expect(propsTitle(plots)).toBe('Функция');
+    // Подпись, равная записи, — признак подписи формулой.
+    expect(formulaLabelToggle(plots)?.checked).toBe(true);
+
+    // Обе ветви — один объект: одна команда удаляет обе.
+    key(canvasOf(plots), 'Delete');
+    expect(plotsOf(plots).map((plot) => plot.id)).toEqual(['z']);
+    key(canvasOf(plots), 'z', { ctrlKey: true });
+    expect(plotsOf(plots).map((plot) => plot.id)).toEqual(['a', 'b', 'z']);
+  });
+
+  it('правка записи — один шаг истории; неправильная запись показывает ошибку и не меняет сцену; Escape возвращает прежнюю', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+
+    pickTemplate(plots, 'parabola');
+    expect(exprOf(plots).value).toBe('x^2');
+    expect(document.activeElement).toBe(exprOf(plots));
+
+    const before = JSON.stringify(plots.getScene());
+
+    typeExpr(plots, 'x^2 ', 'x^2 -', 'x^2 - 4');
+    expect(formulaOf(plots)).toBe('y = x² − 4');
+    commitExpr(plots);
+    expect(plotsOf(plots)[0]?.expr).toBe('x^2 - 4');
+
+    const edited = JSON.stringify(plots.getScene());
+
+    // Неправильная запись: ошибка под полем, на полотне и в сцене — последняя правильная.
+    typeExpr(plots, 'x^2 - 4)');
+    expect(errorOf(plots)).toBe('Лишняя закрывающая скобка');
+    expect(exprOf(plots).getAttribute('aria-invalid')).toBe('true');
+    expect(formulaOf(plots)).toBe('y = x² − 4');
+    commitExpr(plots);
+    expect(JSON.stringify(plots.getScene())).toBe(edited);
+
+    typeExpr(plots, 'x^');
+    expect(errorOf(plots)).toBe('Здесь должно быть число или x');
+    typeExpr(plots, 'foo');
+    expect(errorOf(plots)).toBe('Не понимаю «foo»');
+
+    // Escape — запись на начало правки, сцена прежняя, окно не закрывается (событие обработано).
+    typeExpr(plots, 'x^3');
+    expect(plotsOf(plots)[0]?.expr).toBe('x^3');
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+    exprOf(plots).dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+    expect(exprOf(plots).value).toBe('x^2 - 4');
+    expect(errorOf(plots)).toBeNull();
+    expect(JSON.stringify(plots.getScene())).toBe(edited);
+
+    // Отмена: правка записи была одним шагом.
+    key(canvas, 'z', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(before);
+    key(canvas, 'y', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(edited);
+  });
+
+  it('правка, вернувшая ту же запись и те же параметры, шага истории не оставляет и сцену не трогает', () => {
+    const plots = create();
+    const saved = {
+      type: 'plot_2d',
+      plots: [
+        { id: 'f', type: 'freehand', points: [[-2, 8.1], [0, 0.1], [2, 8.1]], expr: 'a*x^2+0.1', params: { a: 2 }, fn: 'f', color: '#16a34a', style: 'solid' },
+        { id: 'p', type: 'parabola', vertex: [1, -3], direction: 'up', stretchX: 1, stretchY: 2, color: '#3b82f6', style: 'solid' },
+      ],
+    };
+    let changes = 0;
+
+    plots.load(JSON.parse(JSON.stringify(saved)) as Record<string, unknown>);
+    plots.onChange(() => {
+      changes += 1;
+    });
+
+    const loaded = JSON.stringify(plots.getScene());
+
+    clickCurve(plots, '#16a34a');
+    typeExpr(plots, 'a*x^2+1', 'a*x^2+0.1');
+    commitExpr(plots);
+    expect(changes).toBe(0);
+    // Загруженная функция снова отдаётся дословно.
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+
+    // Ползунок туда и обратно — тоже без шага.
+    const slider = paramControl(plots, 'a', 'range');
+
+    slide(slider, '3');
+    slide(slider, '2');
+    release(slider);
+    expect(changes).toBe(0);
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+
+    // Готовая парабола: запись изменили и вернули — она остаётся параболой.
+    clickCurve(plots, '#3b82f6');
+    typeExpr(plots, '2(x-1)^2-5', '2(x-1)^2-3');
+    commitExpr(plots);
+    expect(changes).toBe(0);
+    expect(propsTitle(plots)).toBe('Парабола');
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+
+    // Отменять нечего.
+    key(canvasOf(plots), 'z', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(loaded);
+  });
+
+  it('Escape после неправильной записи возвращает последнюю правильную, а не неправильную', () => {
+    const plots = create();
+
+    pickTemplate(plots, 'parabola');
+    typeExpr(plots, 'x^3', 'x^');
+    commitExpr(plots);
+    expect(plotsOf(plots)[0]?.expr).toBe('x^3');
+    expect(errorOf(plots)).not.toBeNull();
+
+    const committed = JSON.stringify(plots.getScene());
+    const escape = (): KeyboardEvent => {
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+      exprOf(plots).dispatchEvent(event);
+
+      return event;
+    };
+
+    expect(escape().defaultPrevented).toBe(true);
+    expect(exprOf(plots).value).toBe('x^3');
+    expect(errorOf(plots)).toBeNull();
+    expect(JSON.stringify(plots.getScene())).toBe(committed);
+
+    // Посреди правки: правильная, затем неправильная — Escape возвращает запись до начала правки.
+    typeExpr(plots, 'x^4', 'x^4+');
+    escape();
+    expect(exprOf(plots).value).toBe('x^3');
+    expect(JSON.stringify(plots.getScene())).toBe(committed);
+
+    // Правка вернулась к прежней записи и закончилась неправильной: шага нет, Escape — снова к x^3.
+    typeExpr(plots, 'x^4', 'x^3', 'x^');
+    commitExpr(plots);
+    expect(exprOf(plots).value).toBe('x^');
+    expect(escape().defaultPrevented).toBe(true);
+    expect(exprOf(plots).value).toBe('x^3');
+    expect(JSON.stringify(plots.getScene())).toBe(committed);
+  });
+
+  it('слишком длинная или глубокая запись в поле — ошибка, сцена прежняя', () => {
+    const plots = create();
+
+    pickTemplate(plots, 'line');
+
+    const before = JSON.stringify(plots.getScene());
+
+    typeExpr(plots, `x${'+x'.repeat(3000)}`);
+    expect(errorOf(plots)).toBe('Слишком длинная запись');
+    typeExpr(plots, `${'('.repeat(60)}x${')'.repeat(60)}`);
+    expect(errorOf(plots)).toBe('Слишком много вложенных скобок');
+    commitExpr(plots);
+    expect(JSON.stringify(plots.getScene())).toBe(before);
+  });
+
+  it('сцена с повреждённой или слишком длинной записью загружается: такая ветвь — обычная ломаная', () => {
+    const plots = create();
+    const points = [[0, 0], [1, 1], [2, 0]];
+    const scene = {
+      type: 'plot_2d',
+      plots: [
+        { id: 'a', type: 'freehand', points, expr: `${'('.repeat(2000)}x${')'.repeat(2000)}`, fn: 'a' },
+        { id: 'b', type: 'freehand', points, expr: `x${'+x'.repeat(20000)}`, fn: 'b' },
+        { id: 'c', type: 'freehand', points, expr: 42, fn: 'c' },
+        { id: 'd', type: 'freehand', points, expr: '((((', fn: 'd' },
+      ],
+    };
+
+    expect(() => plots.load(scene)).not.toThrow();
+    expect(() => plots.getScene()).not.toThrow();
+    expect(plotsOf(plots).map((plot) => [plot.id, plot.type, plot.expr === scene.plots.find((item) => item.id === plot.id)?.expr])).toEqual([
+      ['a', 'freehand', true],
+      ['b', 'freehand', true],
+      ['c', 'freehand', true],
+      ['d', 'freehand', true],
+    ]);
+    // Ломаная, а не функция: блока «Функция» у неё нет.
+    clickCurve(plots, '#3b82f6');
+    expect(plots.element.querySelector('.rte-plots-fn')).toBeNull();
+  });
+
+  it('ветви с одним fn, но разной записью — разные функции со своими fn', () => {
+    const plots = create();
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'a', type: 'freehand', points: [[-3, -0.333], [-0.1, -10]], expr: '1/x', fn: 'f', color: '#16a34a' },
+        { id: 'b', type: 'freehand', points: [[0.1, 10], [3, 0.333]], expr: '1/x', fn: 'f', color: '#16a34a' },
+        { id: 'c', type: 'freehand', points: [[-2, 4], [0, 0], [2, 4]], expr: 'x^2', fn: 'f', color: '#dc2626' },
+        { id: 'd', type: 'freehand', points: [[2, 4], [3, 9]], expr: 'x^2', fn: 'f', color: '#dc2626' },
+      ],
+    });
+
+    const branches = plotsOf(plots);
+    const fnOf = (expr: string): unknown[] => [...new Set(branches.filter((plot) => plot.expr === expr).map((plot) => plot.fn))];
+
+    // Первая функция — дословно, вторая — со своим fn, обе её ветви вместе.
+    expect(fnOf('1/x')).toEqual(['f']);
+    expect(fnOf('x^2')).toHaveLength(1);
+    expect(fnOf('x^2')[0]).not.toBe('f');
+    expect(branches.filter((plot) => plot.expr === 'x^2')).toHaveLength(2);
+
+    // Удаление одной функции не задевает другую.
+    clickCurve(plots, '#dc2626');
+    key(canvasOf(plots), 'Delete');
+    expect(plotsOf(plots).map((plot) => plot.id)).toEqual(['a', 'b']);
+  });
+
+  it('смена выделения посреди правки записи: правка фиксируется у своей функции или отбрасывается', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+    let changes = 0;
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'A', type: 'freehand', points: [[-2, 4], [0, 0], [2, 4]], expr: 'x^2', fn: 'A', color: '#dc2626' },
+        { id: 'B', type: 'freehand', points: [[-5, -5], [5, -5]], expr: '-5', fn: 'B', color: '#16a34a' },
+      ],
+    });
+    plots.onChange(() => {
+      changes += 1;
+    });
+
+    const initial = JSON.stringify(plots.getScene());
+    const exprById = (id: string): unknown => plotsOf(plots).find((plot) => plot.id === id)?.expr;
+
+    // Только неправильная запись — отбрасывается: A прежняя, B не тронута, шага нет.
+    clickCurve(plots, '#dc2626');
+    typeExpr(plots, 'x^');
+    clickCurve(plots, '#16a34a');
+    expect(exprOf(plots).value).toBe('-5');
+    expect(errorOf(plots)).toBeNull();
+    expect(changes).toBe(0);
+    expect(JSON.stringify(plots.getScene())).toBe(initial);
+
+    // Правильная запись — фиксируется у A одним шагом; B не меняется.
+    clickCurve(plots, '#dc2626');
+    typeExpr(plots, 'x^2+1', 'x^2+');
+    clickCurve(plots, '#16a34a');
+    expect(changes).toBe(1);
+    expect(exprById('A')).toBe('x^2+1');
+    expect(exprById('B')).toBe('-5');
+    expect(exprOf(plots).value).toBe('-5');
+
+    // Правка B — свой шаг; отмены идут по одной: сначала B, затем A.
+    typeExpr(plots, '-4');
+    commitExpr(plots);
+    expect(changes).toBe(2);
+    key(canvas, 'z', { ctrlKey: true });
+    expect([exprById('A'), exprById('B')]).toEqual(['x^2+1', '-5']);
+    key(canvas, 'z', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(initial);
+  });
+
+  it('буква a — ползунок от −10 до 10, жест — один шаг; пропавшие буквы забываются', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+
+    addFunction(plots);
+    typeExpr(plots, 'a*x^2');
+    commitExpr(plots);
+    expect(paramIds(plots)).toEqual(['a']);
+
+    const slider = paramControl(plots, 'a', 'range');
+
+    expect(slider).toMatchObject({ min: '-10', max: '10', step: '0.1', value: '1' });
+    expect(paramControl(plots, 'a', 'number').hasAttribute('min')).toBe(false);
+
+    const start = JSON.stringify(plots.getScene());
+
+    slide(slider, '1.5');
+    slide(slider, '2');
+    // Во время жеста блок не пересоздаётся.
+    expect(paramControl(plots, 'a', 'range')).toBe(slider);
+    expect(plotsOf(plots)[0]?.params).toEqual({ a: 2 });
+    release(slider);
+    key(canvas, 'z', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(start);
+    key(canvas, 'y', { ctrlKey: true });
+
+    // Число в поле — тоже шаг.
+    change(paramControl(plots, 'a', 'number'), '-3');
+    expect(plotsOf(plots)[0]?.params).toEqual({ a: -3 });
+
+    // Новая буква — со значением 1; пропавшая забывается при фиксации правки.
+    typeExpr(plots, 'a*x^2 + b');
+    expect(paramIds(plots)).toEqual(['a', 'b']);
+    typeExpr(plots, 'b');
+    commitExpr(plots);
+    expect(paramIds(plots)).toEqual(['b']);
+    expect(plotsOf(plots)[0]?.params).toEqual({ b: 1 });
+  });
+
+  it('функция выделяется нажатием на ветвь, но не перетаскивается', () => {
+    const plots = create();
+    const canvas = canvasOf(plots);
+
+    pickTemplate(plots, 'line');
+    plots.cancel();
+
+    const points = plotsOf(plots)[0]?.points;
+
+    pointer(canvas, 'pointerdown', [1, 1]);
+    expect(propsTitle(plots)).toBe('Функция');
+    pointer(canvas, 'pointermove', [2, 0]);
+    pointer(canvas, 'pointerup', [2, 0]);
+    expect(plotsOf(plots)[0]?.points).toEqual(points);
+    // Подсветка выделения — на ветви.
+    expect(canvas.querySelector('.rte-sketch__layer polyline[stroke="#ec4899"]')).not.toBeNull();
+  });
+
+  it('пустая функция исчезает, когда выделение ушло', () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'x^');
+    plots.cancel();
+    expect(plotsOf(plots)).toEqual([]);
+    expect(plots.element.querySelector('.rte-plots-fn')).toBeNull();
+
+    // Набранная остаётся.
+    addFunction(plots);
+    typeExpr(plots, 'sin x');
+    commitExpr(plots);
+    plots.cancel();
+    expect(plotsOf(plots).every((plot) => plot.expr === 'sin x')).toBe(true);
+  });
+
+  it('готовая парабола показывает запись; правка заменяет её набранной функцией с тем же цветом и местом', () => {
+    const plots = create();
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'p', type: 'parabola', vertex: [1, -3], direction: 'up', stretchX: 1, stretchY: 2, color: '#3b82f6', style: 'dashed', label: 'моя' },
+        { id: 'q', type: 'point', coords: [0, 0] },
+      ],
+    });
+    clickCurve(plots, '#3b82f6');
+    expect(propsTitle(plots)).toBe('Парабола');
+    expect(exprOf(plots).value).toBe('2(x-1)^2-3');
+    expect(formulaOf(plots)).toBe('y = 2(x − 1)² − 3');
+    // Ползунков коэффициентов нет.
+    expect(paramIds(plots)).toEqual([]);
+
+    const before = JSON.stringify(plots.getScene());
+
+    typeExpr(plots, '2(x-1)^2-5');
+    expect(propsTitle(plots)).toBe('Функция');
+    commitExpr(plots);
+    expect(plotsOf(plots)[0]).toMatchObject({ id: 'p', type: 'freehand', expr: '2(x-1)^2-5', fn: 'p', color: '#3b82f6', style: 'dashed', label: 'моя' });
+    expect(plotsOf(plots).at(-1)).toMatchObject({ id: 'q', type: 'point' });
+
+    // Один шаг истории: отмена возвращает готовую параболу.
+    key(canvasOf(plots), 'z', { ctrlKey: true });
+    expect(JSON.stringify(plots.getScene())).toBe(before);
+  });
+
+  it('у отрезка по двум точкам и окружности блока «Функция» нет', () => {
+    const plots = create();
+
+    pickTool(plots, 'pencil');
+    stroke(
+      canvasOf(plots),
+      Array.from({ length: 5 }, (_, i) => [i / 2, i / 2] as Point),
+    );
+    expect(plotsOf(plots)[0]).toMatchObject({ type: 'line', p1: [0, 0], p2: [2, 2] });
+    expect(plots.element.querySelector('.rte-plots-fn')).toBeNull();
+    expect(controlsOf<HTMLInputElement>(plots, 'Первая точка (x, y)').map((input) => input.value)).toEqual(['0', '0']);
+  });
+
+  it('подпись формулой следует за правкой записи и не трогает чужие подписи; ручная правка снимает флажок', () => {
+    const plots = create();
+    // Подписи по графикам: у функции — только у первой ветви, остальные ветви без подписи.
+    const labels = (): unknown[] => plotsOf(plots).flatMap((plot) => (plot.type === 'freehand' && plot.id !== plot.fn ? [] : [plot.label]));
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [{ id: 'q', type: 'parabola', vertex: [0, -1], direction: 'up', stretchX: 1, stretchY: 0.5, color: '#16a34a', label: 'y=0.5x^2-1' }],
+    });
+    pickTemplate(plots, 'sine');
+    expect(exprOf(plots).value).toBe('sin(x)');
+
+    const toggle = formulaLabelToggle(plots);
+
+    if (!toggle) throw new Error('Нет флажка подписи-формулы');
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(labels()[1]).toBe('y = sin(x)');
+
+    typeExpr(plots, '2sin x');
+    commitExpr(plots);
+    expect(labels()).toEqual(['y=0.5x^2-1', 'y = 2sin(x)']);
+    expect(controlOf<HTMLInputElement>(plots, 'Метка').value).toBe('y = 2sin(x)');
+
+    change(controlOf<HTMLInputElement>(plots, 'Метка'), 'синус');
+    expect(formulaLabelToggle(plots)?.checked).toBe(false);
+    typeExpr(plots, '3sin x');
+    commitExpr(plots);
+    expect(labels()[1]).toBe('синус');
+
+    // Подпись готовой кривой, равная её формуле, тоже следует за правкой.
+    clickCurve(plots, '#16a34a');
+    expect(formulaLabelToggle(plots)?.checked).toBe(true);
+    typeExpr(plots, '0,5x^2-2');
+    commitExpr(plots);
+    expect(labels()).toEqual(['y = 0,5x^2 - 2', 'синус']);
+  });
+
+  it('кнопки-подсказки вставляют текст в позицию курсора и не уводят фокус', () => {
+    const plots = create();
+    const keyButton = (text: string): HTMLButtonElement => {
+      const button = plots.element.querySelector<HTMLButtonElement>(`.rte-plots-fn__keys button[data-key="${text}"]`);
+
+      if (!button) throw new Error(`Нет кнопки ${text}`);
+
+      return button;
+    };
+
+    addFunction(plots);
+    expect([...plots.element.querySelectorAll('.rte-plots-fn__keys button')].map((button) => button.textContent)).toEqual([
+      'x²',
+      'xⁿ',
+      '√',
+      '|x|',
+      '( )',
+      'π',
+      'sin',
+      'cos',
+      'tg',
+      'ln',
+    ]);
+    expect(keyButton('√').getAttribute('aria-label')).toBe('Корень');
+
+    keyButton('x²').click();
+    expect(exprOf(plots).value).toBe('x^2');
+    keyButton('x²').click();
+    expect(exprOf(plots).value).toBe('x^2^2');
+    exprOf(plots).value = '2';
+    exprOf(plots).setSelectionRange(1, 1);
+    keyButton('sin').click();
+    expect(exprOf(plots).value).toBe('2sin()');
+    expect(exprOf(plots).selectionStart).toBe(5);
+    keyButton('π').click();
+    expect(exprOf(plots).value).toBe('2sin(π)');
+    expect(document.activeElement).toBe(exprOf(plots));
+    // Вставка — как набор: график сразу.
+    expect(plotsOf(plots)[0]?.expr).toBe('2sin(π)');
+
+    // Выделенное оказывается внутри пары.
+    exprOf(plots).value = 'x - 2';
+    exprOf(plots).setSelectionRange(0, 5);
+    keyButton('|x|').click();
+    expect(exprOf(plots).value).toBe('|x - 2|');
+    expect(plotsOf(plots)[0]?.expr).toBe('|x - 2|');
+  });
+
+  it('при выделенной функции палитра — строка значков, подсказка — о записи функции', () => {
+    const plots = create();
+    const palette = plots.element.querySelector('.rte-plots__palette');
+    const hint = (): string | null | undefined => plots.element.querySelector('.rte-builder__hint')?.textContent;
+
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
+    expect(hint()).toContain('«+ Функция»');
+    expect(palette?.querySelector('button')?.textContent).toBe('+ Функция');
+    [...(palette?.querySelectorAll('button[data-plot-template]') ?? [])].forEach((button) => {
+      expect(button.getAttribute('aria-label')).toBe(button.getAttribute('title'));
+    });
+
+    pickTemplate(plots, 'abs');
+    expect(exprOf(plots).value).toBe('|x|');
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(true);
+    expect(hint()).toBe('Напиши функцию — график построится сам. Буквы вроде a и b станут ползунками');
+
+    // Точка — не функция: палитра с подписями, подсказка инструмента.
+    pickTool(plots, 'point');
+    click(canvasOf(plots), [5, 5]);
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
+
+    plots.cancel();
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
+    expect(hint()).toContain('«+ Функция»');
+  });
+
+  it('функция за краем листа сохраняется и загружается обратно; под полем — подсказка о «Показать целиком»', () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'x^2 + 100');
+    commitExpr(plots);
+    expect(noticeOf(plots)).toBe('График сейчас за краем листа. Нажми «Показать целиком»');
+
+    const scene = plots.getScene();
+    const branches = scene.plots as Array<Record<string, unknown>>;
+
+    // Ветви — запасные: ближайший к листу кусок графика, точки — на кривой.
+    expect(branches).toHaveLength(1);
+    expect(branches[0]).toMatchObject({ type: 'freehand', expr: 'x^2 + 100', fn: 'plot_1' });
+    expect((branches[0]?.points as Point[]).every(([x, y]) => Math.abs(y - (x * x + 100)) < 0.01)).toBe(true);
+
+    const saved = JSON.parse(JSON.stringify(scene)) as Record<string, unknown>;
+
+    plots.load(saved);
+    expect(plots.getScene()).toEqual(saved);
+    clickCurve(plots, String(branches[0]?.color));
+    expect(propsTitle(plots)).toBe('Функция');
+    expect(exprOf(plots).value).toBe('x^2 + 100');
+
+    // Корень правее видимого отрезка — с отрезка, расширенного в 10 раз.
+    addFunction(plots);
+    typeExpr(plots, 'sqrt(x - 50)');
+    commitExpr(plots);
+
+    const root = plotsOf(plots).find((plot) => plot.expr === 'sqrt(x - 50)');
+
+    expect((root?.points as Point[])[0]?.[0]).toBeCloseTo(50, 2);
+  });
+
+  it('запасные ветви — ближайший к листу кусок высотой не больше трёх высот окна', () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'x^4 + 10');
+    commitExpr(plots);
+    expect(noticeOf(plots)).toBe('График сейчас за краем листа. Нажми «Показать целиком»');
+
+    const ys = plotsOf(plots).flatMap((plot) => (plot.points as Point[]).map(([, y]) => y));
+
+    // Окно полотна по умолчанию — 14 единиц в высоту.
+    expect(ys.length).toBeGreaterThan(1);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(3 * 14);
+    expect(Math.min(...ys)).toBeCloseTo(10, 1);
+  });
+
+  it.each(['20000', 'x^2 + 100000', 'sqrt(x - 1000)'])('%s далеко за краем листа: статус «за краем», в сцене — кусок у листа', (expr) => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, expr);
+    commitExpr(plots);
+    expect(noticeOf(plots)).toBe('График сейчас за краем листа. Нажми «Показать целиком»');
+
+    const scene = plots.getScene();
+    const branches = plotsOf(plots);
+
+    expect(branches.length).toBeGreaterThan(0);
+    expect(branches[0]).toMatchObject({ type: 'freehand', expr });
+
+    const ys = branches.flatMap((plot) => (plot.points as Point[]).map(([, y]) => y));
+
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(3 * 14);
+    // Сцена — та же при повторной выдаче (загрузку и вписывание далёких значений проверяет тест ниже).
+    expect(plots.getScene()).toEqual(scene);
+  });
+
+  it.each(['x^4 + 10', 'sqrt(x - 1000)'])('%s: загрузка отдаёт ту же запись, «Показать целиком» вписывает запасные ветви', async (expr) => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, expr);
+    commitExpr(plots);
+
+    const color = String(plotsOf(plots)[0]?.color);
+
+    expect(visiblePointsOf(plots, color)).toBe(0);
+
+    const saved = JSON.parse(JSON.stringify(plots.getScene())) as Record<string, unknown>;
+
+    actionButton(plots, 'Показать целиком').click();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(visiblePointsOf(plots, color)).toBeGreaterThan(1);
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)[0]).toMatchObject({ expr });
+
+    // Сохранённая сцена с запасными ветвями загружается обратно той же записью.
+    plots.load(saved);
+    expect(plots.getScene()).toEqual(saved);
+    clickCurve(plots, color);
+    expect(exprOf(plots).value).toBe(expr);
+  });
+
+  // Начало координат за сотни тысяч пикселей от листа: тики и сетка строятся только на листе, полотно не раздувается.
+  it.each(['20000', 'x^2 + 100000'])('%s: полотно лёгкое, загрузка отдаёт ту же запись, «Показать целиком» делает кривую видимой', async (expr) => {
+    const plots = create();
+    const elementCount = (): number => canvasOf(plots).querySelectorAll('.rte-sketch__layer *').length;
+
+    addFunction(plots);
+    typeExpr(plots, expr);
+    commitExpr(plots);
+
+    const color = String(plotsOf(plots)[0]?.color);
+
+    expect(visibleSamplesOf(plots, color)).toBe(0);
+    expect(elementCount()).toBeLessThan(500);
+
+    const saved = JSON.parse(JSON.stringify(plots.getScene())) as Record<string, unknown>;
+
+    actionButton(plots, 'Показать целиком').click();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(visibleSamplesOf(plots, color)).toBeGreaterThan(1);
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)[0]).toMatchObject({ expr });
+    expect(elementCount()).toBeLessThan(500);
+
+    // Сохранённая сцена загружается обратно той же записью.
+    plots.load(saved);
+    expect(plots.getScene()).toEqual(saved);
+    clickCurve(plots, color);
+    expect(exprOf(plots).value).toBe(expr);
+  });
+
+  it('функция без точек: сообщение под полем, в сцену не пишется', () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'sqrt(-1 - x^2)');
+    commitExpr(plots);
+    expect(errorOf(plots)).toBeNull();
+    expect(noticeOf(plots)).toBe('У этой функции нет точек — график нарисовать нельзя');
+    expect(plotsOf(plots)).toEqual([]);
+
+    // Запись с точками — сообщения нет.
+    typeExpr(plots, 'x');
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)).toHaveLength(1);
+  });
+
+  it('«Показать целиком» вписывает функцию за краем листа: кривая видна, подсказки нет', async () => {
+    const plots = create();
+
+    addFunction(plots);
+    typeExpr(plots, 'x^2 + 100');
+    commitExpr(plots);
+
+    const color = String(plotsOf(plots)[0]?.color);
+    const visiblePoints = (): number => visiblePointsOf(plots, color);
+
+    expect(visiblePoints()).toBe(0);
+    actionButton(plots, 'Показать целиком').click();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(visiblePoints()).toBeGreaterThan(1);
+    expect(noticeOf(plots)).toBeNull();
+    expect(plotsOf(plots)[0]).toMatchObject({ expr: 'x^2 + 100' });
+  });
+
+  it('fn уникален в сцене: замена готовой кривой и вставка копии не берут занятый fn', () => {
+    const plots = create();
+
+    plots.load({
+      type: 'plot_2d',
+      plots: [
+        { id: 'a', type: 'freehand', points: [[-3, -3], [3, 3]], expr: 'x', fn: 'p', color: '#16a34a' },
+        // Ломаная с неразобранной записью — обычная ломаная, но её fn тоже занят.
+        { id: 'b', type: 'freehand', points: [[-3, 1], [3, 1]], expr: 'x^', fn: 'plot_1', color: '#7c3aed' },
+        { id: 'p', type: 'parabola', vertex: [0, -2], direction: 'up', stretchX: 1, stretchY: 1, color: '#dc2626' },
+      ],
+    });
+    clickCurve(plots, '#dc2626');
+    typeExpr(plots, 'x^2 - 3');
+    commitExpr(plots);
+
+    const fns = (): unknown[] => plotsOf(plots).map((plot) => plot.fn);
+    const replaced = plotsOf(plots).find((plot) => plot.expr === 'x^2 - 3');
+
+    expect(replaced).toMatchObject({ id: 'p', color: '#dc2626' });
+    expect(replaced?.fn).not.toBe('p');
+    expect(replaced?.fn).not.toBe('plot_1');
+
+    actionButton(plots, 'Копировать график').click();
+    actionButton(plots, 'Вставить график').click();
+
+    const all = fns();
+
+    expect(all).toHaveLength(4);
+    expect(new Set(all).size).toBe(4);
+  });
+
+  it('вид полотна изменился — ветви пересчитываются под новое окно', async () => {
+    const plots = create();
+
+    pickTemplate(plots, 'line');
+
+    const before = plotsOf(plots)[0]?.points as Point[];
+
+    actionButton(plots, 'Мельче').click();
+    // Сцена, взятая до кадра, уже пересчитана.
+    const after = plotsOf(plots)[0]?.points as Point[];
+
+    expect(after[0]?.[0]).toBeLessThan(before[0]?.[0] ?? 0);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+    expect(plotsOf(plots)[0]?.points).toEqual(after);
+  });
+});
+
 describe('подписи конструктора графиков', () => {
   it('английская таблица повторяет набор ключей русской, все ключи с префиксом конструктора', () => {
     const ru = Object.keys(PLOTS_MESSAGES.ru);
 
     expect(Object.keys(PLOTS_MESSAGES.en).sort()).toEqual([...ru].sort());
-    expect(ru.every((key) => key.startsWith('drawings_plots_'))).toBe(true);
+    expect(ru.filter((key) => !key.startsWith('drawings_plots_'))).toEqual([]);
+    // Десятичный разделитель — общий для чертежей.
+    expect([BUILDER_MESSAGES.ru?.drawings_decimal_separator, BUILDER_MESSAGES.en?.drawings_decimal_separator]).toEqual([',', '.']);
     // Таблица вкладки влита в таблицы возможности: диалог переводит её ключи.
     expect(ru.every((key) => key in DRAWINGS_MESSAGES.ru)).toBe(true);
   });

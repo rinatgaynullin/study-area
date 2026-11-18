@@ -159,7 +159,7 @@ interface FeatureBuildOptions {
 
 ```ts
 const createModal: (options: ModalOptions) => Modal;
-interface ModalOptions { title: string; closeLabel: string; wide?: boolean; onClose?(): void }
+interface ModalOptions { title: string; closeLabel: string; wide?: boolean; fill?: boolean; closeOnEscape?: boolean; onClose?(): void }   // fill — почти весь экран (1280px), на телефоне весь; closeOnEscape: false — Escape не обрабатывается (по умолчанию true)
 interface Modal extends DialogComponent { readonly body: HTMLElement; readonly footer: HTMLElement; setTitle(title: string): void }
 const MODAL_CLOSE_EVENT = 'rte:modal-close';
 
@@ -231,11 +231,11 @@ const renderLatexPreview: (latex: string, type?: FormulaType, scale?: number) =>
 const getCachedLatexPreview: (latex: string, type?: FormulaType, scale?: number) => string | undefined;
 const clearPreviewCache: () => void;
 
-type TemplateCategoryId = 'basic' | 'fractions' | 'roots' | 'scripts' | 'sums' | 'integrals' | 'limits'
+type TemplateCategoryId = 'popular' | 'basic' | 'fractions' | 'roots' | 'scripts' | 'sums' | 'integrals' | 'limits'
   | 'matrices' | 'greek' | 'relations' | 'functions' | 'chemReactions' | 'chemStates' | 'chemIsotopes' | 'chemPatterns';
 interface FormulaTemplate { id: string; category: TemplateCategoryId; latex: string; preview: string }
 interface TemplateCategory { id: TemplateCategoryId; type: FormulaType; labelKey: string; templates: FormulaTemplate[] }
-const TEMPLATE_CATEGORIES: TemplateCategory[];
+const TEMPLATE_CATEGORIES: TemplateCategory[];   // 'popular' — первая у math; её шаблоны те же объекты, что и в исходных категориях, поэтому встречаются дважды
 const getTemplateCategories: (type: FormulaType) => TemplateCategory[];
 const findTemplate: (id: string) => FormulaTemplate | undefined;
 
@@ -365,7 +365,7 @@ Subpath-экспорты: `@rich-editor/vue/viewer` (`RichContent` и реэкс
 ```ts
 // 16-chemistry.md. Вход `.` — возможность для редактора.
 const createChemistryFeature: (options?: ChemistryFeatureOptions) => EditorFeature;
-interface ChemistryFeatureOptions { toolbarItem?: boolean }
+interface ChemistryFeatureOptions { toolbarItem?: boolean; code?: boolean }  // code: поле кода chemfig в окне, по умолчанию выключено
 const ChemistryNode: Node<ChemistryOptions>;                               // TipTap-узел `chemistry`
 interface ChemistryOptions { t: Translate | null; onEdit: ((payload: ChemistryPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
 const createChemistryDialog: (context: EditorUiContext, options: ChemistryDialogOptions) => DialogComponent<ChemistryPayload | null>;
@@ -393,14 +393,19 @@ class ChemfigSyntaxError extends Error { readonly position: number }
 const renderChemistrySvg: (structure: ChemStructure, options?: ChemistrySvgOptions) => string;
 const chemfigToSvg: (code: string, options?: ChemistrySvgOptions) => string | null;
 interface ChemistrySvgOptions { scale?: number }
+const serializeChemfig: (structure: ChemStructure) => string;               // пустая модель → ''
+const layoutChemistry: (structure: ChemStructure, options?: ChemistrySvgOptions) => ChemLayout;
+const renderChemistry: (structure: ChemStructure, options?: ChemistrySvgOptions) => RenderedChemistry;   // SVG и раскладка за один проход
+interface RenderedChemistry { svg: string; layout: ChemLayout }
+interface ChemLayout { width: number; height: number; atoms: ChemLayoutAtom[]; bonds: ChemLayoutBond[] }
 const formatChemLabel: (label: string) => string;
 const layoutChemTree: (root: ChemAtom, x: number, y: number, options: TreeLayoutOptions) => ChemTreeLayout;
 
 type ChemBondType = '-' | '=' | '~';
 interface ChemAtom { label: string; bonds: ChemBond[] }
-interface ChemBond { type: ChemBondType; angle: number | null; branch: boolean; target: ChemAtom }
-interface ChemChain { kind: 'chain'; root: ChemAtom; startAngle: number }
-interface ChemRing { kind: 'ring'; size: number; aromatic: boolean; bonds: ChemBondType[]; vertices: Array<ChemAtom | null> }
+interface ChemBond { type: ChemBondType; angle: number | null; branch: boolean; target: ChemAtom; spec?: string }   // spec — параметры в скобках, которых модель не хранит, дословно
+interface ChemChain { kind: 'chain'; root: ChemAtom; startAngle: number; startSpec?: string; lossy?: boolean }
+interface ChemRing { kind: 'ring'; size: number; aromatic: boolean; bonds: ChemBondType[]; vertices: Array<ChemAtom | null>; startSpec?: string; lossy?: boolean }
 type ChemStructure = ChemChain | ChemRing;
 ```
 
@@ -411,18 +416,18 @@ type ChemStructure = ChemChain | ChemRing;
 ```ts
 // 17-drawings.md. Вход `.` — возможность для редактора.
 const createDrawingsFeature: (options?: DrawingsFeatureOptions) => EditorFeature;
-interface DrawingsFeatureOptions { toolbarItems?: boolean; editors?: SceneEditorFactory[]; scans?: () => string[] }
+interface DrawingsFeatureOptions { toolbarItems?: boolean; editors?: SceneEditorFactory[]; scans?: () => string[]; json?: boolean }   // json: вкладка JSON, образцы, предпросмотр, TikZ; по умолчанию false
 const GeometryNode: Node<DrawingOptions>; const PhysicsNode: Node<DrawingOptions>;   // узлы `geometry`, `physics`
 const createDrawingNode: (kind: DrawingKind) => Node<DrawingOptions>;
 interface DrawingOptions { t: Translate | null; onEdit: ((payload: DrawingPayload) => void) | null; scale: number; HTMLAttributes: Record<string, unknown> }
 const createDrawingDialog: (context: EditorUiContext, options: DrawingDialogOptions) => DialogComponent<DrawingPayload | null>;
 interface DrawingDialogOptions {
-  onSave(payload: DrawingPayload): void; onRemove(pos: number): void; editors?: SceneEditorFactory[]; scans?: () => string[];
+  onSave(payload: DrawingPayload): void; onRemove(pos: number): void; editors?: SceneEditorFactory[]; scans?: () => string[]; json?: boolean;
 }
 const DEFAULT_SCENE_EDITORS: SceneEditorFactory[];                       // встроенные вкладки конструкторов
 // Конструкторы (17-drawings.md, «Конструкторы»)
-interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScene(): RawScene; onChange(listener: () => void): Unsubscribe; focus(): void }
-interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
+interface SceneEditor extends UiComponent { load(scene: RawScene): void; getScene(): RawScene; onChange(listener: () => void): Unsubscribe; focus(): void; cancel?(): void }   // cancel — Escape: бросает незаконченное построение, инструмент «Выбрать», снимает выделение; сцену не меняет
+interface SceneEditorFactory { id: string; kind: DrawingKind; labelKey: string; icon?: BuilderIconId; accepts(scene: RawScene): boolean; create(context: SceneEditorContext): SceneEditor }
 interface SceneEditorContext { t: Translate; scans?: string[] }
 type RawScene = Record<string, unknown>;
 const planimetryEditorFactory: SceneEditorFactory; const stereometryEditorFactory: SceneEditorFactory;
@@ -430,15 +435,64 @@ const plotsEditorFactory: SceneEditorFactory; const physicsEditorFactory: SceneE
 const STEREOMETRY_MESSAGES, PLOTS_MESSAGES, PHYSICS_BUILDER_MESSAGES: Record<string, Messages>;
 const projectVertex: (point: Point, angleY: number, angleZ: number, viewport: Viewport) => SvgPoint;
 const unprojectToGround: (plane: Vec2, angleY: number, angleZ: number) => Vec2;   // экран → плоскость z = 0
+// опции SketchCanvasOptions: canPanFrom?(info: PointerInfo): boolean — можно ли начать перемещение листа с этого нажатия; grabOnHover?(): boolean — курсор «рука» над пустым местом
 class SketchCanvas { constructor(options: SketchCanvasOptions); readonly element: HTMLElement; readonly viewport: Viewport; setScene(svg: string): void;
   setOverlay(markup: string): void; toSvg(point: Vec2): SvgPoint; toWorld(point: SvgPoint): Vec2; zoomAt(point: SvgPoint, factor: number): void;
-  zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void; focus(): void; destroy(): void; readonly hitRadius: number }
-class HistoryStack<T> { constructor(limit?: number); record(current: T): void; undo(current: T): T | null; redo(current: T): T | null; clear(): void }
+  zoomBy(factor: number): void; resetView(): void; setViewport(next: Partial<Viewport>): void;
+  panByKey(key: string, step: number): boolean; cancelPan(): void; resetGestures(): void; focus(): void; destroy(): void; readonly hitRadius: number }
+class HistoryStack<T> { constructor(limit?: number); record(current: T): void; undo(current: T): T | null; redo(current: T): T | null; discard(): T | null; clear(): void }   // discard — снять последний снимок, повтор не трогает
+interface ToolButton<TId extends string = string> { id: TId; labelKey: string; icon: BuilderIconId }   // раньше glyph: string
+const actionButton: (label: string, icon: BuilderIconId, onClick: () => void) => HTMLButtonElement;   // квадратная кнопка-значок
+type BuilderIconId = 'select' | …;                                       // id значков из builder-icons.ts
+const BUILDER_ICONS: Record<BuilderIconId, BuilderIconSpec>;                         // набор значков конструкторов
+const createBuilderIcon: (id: BuilderIconId, size?: number) => SVGSVGElement;   // size = 20
 class ToolBar<TId extends string> { constructor(options: ToolBarOptions<TId>); setActive(id: TId | null): void; setEnabled(id: TId, enabled: boolean): void }
 const fitLine: (points: Vec2[]) => LineFit | null; const fitCircle: (points: Vec2[]) => CircleFit | null;
 const fitParabola: (points: Vec2[]) => ParabolaFit | null; const recognizeStroke: (points: Vec2[]) => RecognizedShape;
 const distance, distanceToSegment, projectOnSegment, nearestOnCircle, snapToGrid, angleBetween, angleDegrees, roundPoint, roundTo;
 const BUILDER_MESSAGES: Record<string, Messages>;
+// Блок «Функция» (сцена не меняется по типам: набранная функция — ломаные `freehand` с необязательными полями)
+// builders/function-expr.ts: собственный разбор записи, без eval
+type FunctionName = 'sin' | 'cos' | 'tg' | 'ctg' | 'arcsin' | 'arccos' | 'arctg' | 'arcctg' | 'ln' | 'lg' | 'log' | 'exp' | 'abs' | 'sqrt' | 'cbrt';
+type FunctionNode = { kind: 'number'; value: number; text: string } | { kind: 'x' } | { kind: 'constant'; name: 'pi' | 'e' } | { kind: 'param'; name: string }
+  | { kind: 'negate'; operand: FunctionNode } | { kind: 'binary'; op: '+' | '-' | '*' | '/' | '^'; left: FunctionNode; right: FunctionNode }
+  | { kind: 'call'; fn: FunctionName; name: string; args: FunctionNode[] };
+type FunctionErrorKey = 'drawings_plots_fn_error_empty' | 'drawings_plots_fn_error_word' | …;   // ключи сообщений об ошибке разбора
+interface FunctionError { key: FunctionErrorKey; word?: string }
+type ParsedFunction = { ok: true; ast: FunctionNode; params: string[] } | { ok: false; error: FunctionError; position: number };
+type FormulaPart = { kind: 'text'; text: string } | { kind: 'var'; name: string } | { kind: 'sup' | 'sub'; body: FormulaPart[] } | { kind: 'frac'; num: FormulaPart[]; den: FormulaPart[] }
+  | { kind: 'sqrt'; body: FormulaPart[]; index?: string } | { kind: 'abs'; body: FormulaPart[] };
+const parseFunction: (text: string) => ParsedFunction;                                       // запись до 300 символов, вложенность до 50
+const evaluateFunction: (ast: FunctionNode, x: number, params?: Record<string, number>) => number;   // вне области определения — NaN
+const functionParts: (ast: FunctionNode, separator: string) => FormulaPart[];                // карточка формулы
+const functionText: (ast: FunctionNode, separator?: string) => string;                       // `y = x^2 - 3x + 1`
+const functionLabelText: (ast: FunctionNode, separator?: string) => string;                  // запись для подписи (степень — `^`, для SVG и TikZ)
+// builders/function-sampler.ts: точки под видимое окно
+interface SampleOptions { from: number; to: number; yFrom: number; yTo: number; domain?: [number, number]; step?: number; tolerance?: number }
+const sampleFunction: (ast: FunctionNode, params: Record<string, number>, options: SampleOptions) => Vec2[][];   // ветви; разрывы и асимптоты ветвь обрывают
+// builders/plot-functions.ts: готовые кривые (line, parabola, hyperbola, sqrt) как запись
+type ReadyFunctionPlot = LinePlot | ParabolaPlot | HyperbolaPlot | SqrtPlot;
+const isReadyFunction: (plot: Plot) => plot is ReadyFunctionPlot;
+const plotExpression: (plot: Plot, separator: string) => string | null;                      // запись готовой кривой, два знака после запятой
+// Необязательные поля ломаной `freehand` у набранной функции (в типе FreehandPlot их нет: их читает только конструктор)
+//   expr: string                       запись, как набрана; без неё ломаная — обычная линия от руки
+//   params: Record<string, number>     значения параметров-букв
+//   fn: string                         общий id ветвей одной функции (разрывы — несколько ломаных)
+//   domain: [number | null, number | null]   ограничение по x
+// Палитра цвета (builders/color-picker.ts): десять плиток, `radiogroup`
+type DrawingColorId = 'blue' | 'cyan' | 'green' | 'yellow' | 'orange' | 'red' | 'pink' | 'purple' | 'brown' | 'gray';
+interface DrawingColor { id: DrawingColorId; value: string; labelKey: string; synonyms: readonly string[] }   // synonyms — прежние hex того же цвета
+const DRAWING_COLORS: readonly DrawingColor[]; const findDrawingColor: (value: string) => DrawingColor | undefined;
+interface ColorPickerOptions { t: Translate; label: string; value: string; allowDefault: boolean; onChange(value: string): void }   // value '' — обычный цвет
+class ColorPicker { constructor(options: ColorPickerOptions); readonly element: HTMLElement; setValue(value: string): void }
+// Общие поля панелей свойств (builders/fields.ts)
+const propsTitle: (text: string) => HTMLElement; const propsEmpty: (text: string) => HTMLElement;
+const textField: (options: TextFieldOptions) => HTMLElement; const numberField: (options: NumberFieldOptions) => HTMLElement;
+const checkField: (options: CheckFieldOptions) => HTMLElement; const selectField: (options: SelectFieldOptions) => HTMLElement;
+const pairField: (options: PairFieldOptions) => HTMLElement;          // два числа, NumberPair = [number | null, number | null]
+const sliderField: (options: SliderFieldOptions) => SliderField;      // { element, setValue(value) }
+const colorField: (options: ColorPickerOptions) => HTMLElement;
+const propertyField: (label: string, control: HTMLElement) => HTMLElement; const selectControl: (options: FieldOption[], value: string) => HTMLSelectElement;
 interface DrawingPayload { kind: DrawingKind; data: string; tikz: string; pos: number | null }
 const DRAWINGS_MESSAGES: Record<string, Messages>;
 const DRAWING_TEMPLATES: DrawingTemplate[];
