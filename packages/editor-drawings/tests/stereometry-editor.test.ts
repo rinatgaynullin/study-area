@@ -622,13 +622,13 @@ describe('конструктор стереометрии', () => {
     pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
     // В пределах порога это ещё клик: полотно на месте.
     pointerAt(canvas, 'pointermove', { x: 8, y: 7 });
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(false);
     // Порог пройден: сдвиг считается отсюда, поэтому рывка нет.
     pointerAt(canvas, 'pointermove', { x: 16, y: 6 });
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(true);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(true);
     pointerAt(canvas, 'pointermove', { x: 26, y: 18 });
     pointerAt(canvas, 'pointerup', { x: 26, y: 18 });
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(false);
     expect(stereo.getScene()).toEqual(before);
     expect(viewField(stereo, 'angleZ').value).toBe('-30');
     expect(changes).toBe(0);
@@ -675,7 +675,7 @@ describe('конструктор стереометрии', () => {
     pointerAt(canvas, 'pointermove', { x: svgOf([1, 2, 0]).x + 30, y: svgOf([1, 2, 0]).y });
     pointerAt(canvas, 'pointercancel', { x: svgOf([1, 2, 0]).x + 30, y: svgOf([1, 2, 0]).y });
     expect(stereo.getScene().vertices).toEqual({});
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(false);
   });
 
   it('клик по пустому месту в «Выборе» снимает выделение', () => {

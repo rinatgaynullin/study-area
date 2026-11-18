@@ -6,7 +6,7 @@ import type { Messages } from '@rich-editor/core';
  */
 export const PLOTS_MESSAGES: Record<string, Messages> = {
   ru: {
-    drawings_plots_hint_select: 'Нажми на график, чтобы выбрать, и тащи, чтобы подвинуть. С Shift — без прилипания к сетке',
+    drawings_plots_hint_select: 'Нажми на график, чтобы выбрать, и тащи, чтобы подвинуть. С Shift — без прилипания к сетке. Тащи пустое место, чтобы подвинуть лист',
     drawings_plots_hint_point: 'Нажми на полотно — появится точка на сетке',
     drawings_plots_hint_pencil: 'Зажми кнопку и рисуй: линия станет прямой, окружностью или параболой',
     drawings_plots_hint_shading: 'Нажимай на углы области. Двойное нажатие завершает её',
@@ -58,7 +58,7 @@ export const PLOTS_MESSAGES: Record<string, Messages> = {
     drawings_plots_paste: 'Вставить график',
   },
   en: {
-    drawings_plots_hint_select: 'Click a plot to select it and drag to move it. Hold Shift to move it off the grid',
+    drawings_plots_hint_select: 'Click a plot to select it and drag to move it. Hold Shift to move it off the grid. Drag an empty spot to move the sheet',
     drawings_plots_hint_point: 'Click the canvas to add a point on the grid',
     drawings_plots_hint_pencil: 'Hold the button and draw: the stroke turns into a line, a circle or a parabola',
     drawings_plots_hint_shading: 'Click the corners of the region. Double-click to finish it',

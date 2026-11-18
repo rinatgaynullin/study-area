@@ -523,6 +523,8 @@ class PlotsEditor implements SceneEditor {
       onDoubleClick: this.onDoubleClick,
       onKeyDown: this.onKeyDown,
       onViewportChange: () => this.render(),
+      canPanFrom: this.canPanFrom,
+      grabOnHover: () => this.tool === 'select',
     });
 
     this.tools = new ToolBar<Tool>({ t: this.t, tools: TOOLS, onSelect: (tool) => this.setTool(tool) });
@@ -857,6 +859,9 @@ class PlotsEditor implements SceneEditor {
 
   // ------------------------------------------------------------- указатель
 
+  /** С пустого места протяжка двигает лист; карандаш рисует протяжкой, поэтому в нём — нет. */
+  private readonly canPanFrom = (info: PointerInfo): boolean => this.tool !== 'pencil' && this.plotAt(info.world) === null;
+
   private readonly onPointerDown = (info: PointerInfo): void => {
     if (info.button !== 0) return;
 
@@ -993,6 +998,13 @@ class PlotsEditor implements SceneEditor {
         event.preventDefault();
         this.paste();
       }
+
+      return;
+    }
+
+    // Стрелки без выделения двигают лист на шаг сетки.
+    if (this.selectedId === null && !ctrl && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
+      event.preventDefault();
 
       return;
     }

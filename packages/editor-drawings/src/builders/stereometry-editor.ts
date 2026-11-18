@@ -15,7 +15,7 @@ import {
   type StereoTemplateId,
   type StereoTemplateParams,
 } from './stereo-templates';
-import { ChangeEmitter, HIT_RADIUS_PX, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { ChangeEmitter, DRAG_THRESHOLD_PX, HIT_RADIUS_PX, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { ToolBar, actionButton, propertyField, selectControl, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
@@ -52,9 +52,6 @@ const MAX_TILT = 85;
 
 /** Поворот вокруг вертикали — от −180° до 180°: так его показывает ползунок. */
 const MAX_TURN = 180;
-
-/** Сдвиг указателя в пикселях экрана, после которого нажатие — уже не клик, а перетаскивание. */
-const DRAG_THRESHOLD_PX = 4;
 
 /** Шаг поворота стрелками: обычный и с Shift. */
 const KEY_TURN_STEP = 5;
@@ -250,10 +247,6 @@ type Selection =
  * нажатия по пустому месту и у вершины — где нажали, у вращения — последняя.
  */
 type Gesture =
-  /** Нажатие по пустому месту: клик, пока указатель не ушёл дальше порога. */
-  | { type: 'empty'; pointerId: number; x: number; y: number; info: PointerInfo }
-  /** Панорама основной кнопкой: `x`, `y` и `cx`, `cy` — указатель и центр окна там, где пройден порог. */
-  | { type: 'pan'; pointerId: number; x: number; y: number; cx: number; cy: number }
   /** Вращение сцены; `recorded` — снимок истории уже сделан. */
   | { type: 'rotate'; pointerId: number; x: number; y: number; recorded: boolean }
   /**
@@ -622,6 +615,9 @@ class StereometryEditor implements SceneEditor {
       onDoubleClick: this.onDoubleClick,
       onKeyDown: this.onKeyDown,
       onViewportChange: () => this.render(),
+      // Пустое место в любом инструменте: протяжка двигает полотно, клик — действие инструмента.
+      canPanFrom: (info) => this.hitAt(info.svg) === null,
+      grabOnHover: () => this.tool === 'select',
     });
 
     this.tools = new ToolBar<Tool>({ t: this.t, tools: TOOLS, onSelect: (tool) => this.setTool(tool) });
@@ -670,7 +666,7 @@ class StereometryEditor implements SceneEditor {
     // Захват отняли без отпускания кнопки: жест обрывается, отложенный клик не выполняется.
     this.disposer.add(
       on(this.canvas.element, 'lostpointercapture', (event) => {
-        if (this.gesture?.pointerId === event.pointerId) this.finishGesture(false);
+        if (this.gesture?.pointerId === event.pointerId) this.finishGesture();
       }),
     );
 
@@ -824,7 +820,8 @@ class StereometryEditor implements SceneEditor {
   cancel(): void {
     // Жест указателя закрывается без клика: вращение и перетаскивание вершины,
     // уже начатые, доводятся, как при отпускании; жест ползунка — так же.
-    this.finishGesture(false);
+    this.finishGesture();
+    this.canvas.cancelPan();
 
     if (this.closeSlide()) this.changes.emit();
 
@@ -1048,7 +1045,7 @@ class StereometryEditor implements SceneEditor {
   private changing(): boolean {
     const type = this.gesture?.type;
 
-    return type === 'rotate' || type === 'vertex' || type === 'pan' || this.slideFrom !== null;
+    return type === 'rotate' || type === 'vertex' || this.canvas.panning || this.slideFrom !== null;
   }
 
   private undo(): void {
@@ -1274,7 +1271,7 @@ class StereometryEditor implements SceneEditor {
 
   private readonly onPointerDown = (info: PointerInfo): void => {
     // Новое нажатие обрывает недоделанный жест: второй палец или потерянное отпускание.
-    this.finishGesture(false);
+    this.finishGesture();
     this.endSlide();
 
     const { pointerId, clientX: x, clientY: y } = info.event;
@@ -1287,18 +1284,12 @@ class StereometryEditor implements SceneEditor {
 
     if (info.button !== 0) return;
 
+    // Пустое место полотно придерживает само: сюда нажатие приходит, только если это клик.
     const hit = this.hitAt(info.svg);
-
-    // Пустое место: клик это или вращение, станет ясно по движению или отпусканию.
-    if (hit === null) {
-      this.gesture = { type: 'empty', pointerId, x, y, info };
-
-      return;
-    }
 
     this.applyTool(info);
 
-    if (this.tool !== 'select' || hit.type !== 'vertex') return;
+    if (this.tool !== 'select' || hit?.type !== 'vertex') return;
 
     const point = this.state.vertices[hit.id];
 
@@ -1367,8 +1358,8 @@ class StereometryEditor implements SceneEditor {
   private readonly onPointerUp = (info: PointerInfo): void => {
     if (this.gesture?.pointerId !== info.event.pointerId) return;
 
-    // SketchCanvas присылает сюда и pointercancel: отменённое нажатие — не клик.
-    this.finishGesture(info.event.type !== 'pointercancel');
+    // SketchCanvas присылает сюда и pointercancel: жест доводится до конца так же.
+    this.finishGesture();
   };
 
   /** Указатель ушёл от точки нажатия дальше порога? Считается в пикселях экрана. */
@@ -1380,19 +1371,6 @@ class StereometryEditor implements SceneEditor {
     const { event } = info;
 
     switch (gesture.type) {
-      case 'empty':
-        // Порог пройден — это панорама; сдвиг считается отсюда, чтобы полотно не дёрнулось.
-        if (StereometryEditor.pastThreshold(gesture, event)) {
-          const { cx, cy } = this.canvas.viewport;
-
-          this.gesture = { type: 'pan', pointerId: gesture.pointerId, x: event.clientX, y: event.clientY, cx, cy };
-          this.element.classList.add(ROTATING_CLASS);
-        }
-
-        break;
-      case 'pan':
-        this.pan(gesture, event);
-        break;
       case 'rotate':
         this.rotate(gesture, event);
         break;
@@ -1402,17 +1380,6 @@ class StereometryEditor implements SceneEditor {
       default:
         break;
     }
-  }
-
-  /**
-   * Окно просмотра едет за указателем, как у панорамы средней кнопкой: смещение
-   * в единицах полотна с учётом масштаба CSS. Ни сцена, ни история не меняются.
-   */
-  private pan(gesture: Extract<Gesture, { type: 'pan' }>, event: PointerEvent): void {
-    const from = this.canvas.clientToSvg(gesture.x, gesture.y);
-    const to = this.canvas.clientToSvg(event.clientX, event.clientY);
-
-    this.canvas.setViewport({ cx: gesture.cx + to.x - from.x, cy: gesture.cy + to.y - from.y });
   }
 
   private rotate(gesture: Extract<Gesture, { type: 'rotate' }>, event: PointerEvent): void {
@@ -1511,12 +1478,8 @@ class StereometryEditor implements SceneEditor {
     return [x, y, roundTo(info.shift ? z + dz : snapHeight(z + dz))];
   }
 
-  /**
-   * Конец жеста. `click` — обычное отпускание: только тогда нажатие по
-   * пустому месту выполняет действие инструмента. Вращение и перетаскивание
-   * доводятся до конца в любом случае.
-   */
-  private finishGesture(click: boolean): void {
+  /** Конец жеста: вращение и перетаскивание доводятся до конца и при отпускании, и при отмене. */
+  private finishGesture(): void {
     const { gesture } = this;
 
     this.gesture = null;
@@ -1525,10 +1488,6 @@ class StereometryEditor implements SceneEditor {
     if (!gesture) return;
 
     switch (gesture.type) {
-      case 'empty':
-        if (click) this.applyTool(gesture.info);
-
-        break;
       case 'rotate':
         if (gesture.recorded) this.afterChange();
 

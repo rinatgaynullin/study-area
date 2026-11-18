@@ -168,6 +168,8 @@ class PlanimetryEditor implements SceneEditor {
       onDoubleClick: this.onDoubleClick,
       onKeyDown: this.onKeyDown,
       onViewportChange: () => this.render(),
+      canPanFrom: this.canPanFrom,
+      grabOnHover: () => this.tool === 'select',
     });
 
     this.tools = new ToolBar<Tool>({ t: this.t, tools: TOOLS, onSelect: (tool) => this.setTool(tool) });
@@ -622,6 +624,10 @@ class PlanimetryEditor implements SceneEditor {
 
   // ------------------------------------------------------------- указатель
 
+  /** С пустого места протяжка двигает лист в любом инструменте: ни один не рисует протяжкой. */
+  private readonly canPanFrom = (info: PointerInfo): boolean =>
+    this.vertexAt(info.world) === null && this.angleAt(info.world) === null && this.edgeAt(info.world) === null && this.circleAt(info.world) === null;
+
   private readonly onPointerDown = (info: PointerInfo): void => {
     if (info.button !== 0) return;
 
@@ -706,6 +712,13 @@ class PlanimetryEditor implements SceneEditor {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
       event.preventDefault();
       this.redo();
+
+      return;
+    }
+
+    // Стрелки без выделения двигают лист на шаг сетки.
+    if (!this.selection && !event.ctrlKey && !event.metaKey && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
+      event.preventDefault();
 
       return;
     }
