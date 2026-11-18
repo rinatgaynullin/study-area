@@ -162,8 +162,6 @@ export class FunctionPanel {
 
   /** Собирает блок заново. */
   show(view: FunctionView): HTMLElement {
-    const { t } = this.options;
-
     this.view = view;
     this.editing = false;
     this.gesture = null;
@@ -176,7 +174,6 @@ export class FunctionPanel {
 
     this.ast = parsed.ok ? parsed.ast : null;
     this.element.replaceChildren(
-      el('h5', { class: 'rte-plots-fn__title', text: t('drawings_plots_fn_title') }),
       this.card,
       this.exprField(view.expr),
       this.error,

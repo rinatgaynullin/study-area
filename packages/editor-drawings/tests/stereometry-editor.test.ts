@@ -631,13 +631,13 @@ describe('конструктор стереометрии', () => {
     pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
     // В пределах порога это ещё клик: полотно на месте.
     pointerAt(canvas, 'pointermove', { x: 8, y: 7 });
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(false);
     // Порог пройден: сдвиг считается отсюда, поэтому рывка нет.
     pointerAt(canvas, 'pointermove', { x: 16, y: 6 });
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(true);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(true);
     pointerAt(canvas, 'pointermove', { x: 26, y: 18 });
     pointerAt(canvas, 'pointerup', { x: 26, y: 18 });
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(false);
     expect(stereo.getScene()).toEqual(before);
     expect(viewField(stereo, 'angleZ').value).toBe('-30');
     expect(changes).toBe(0);
@@ -684,7 +684,7 @@ describe('конструктор стереометрии', () => {
     pointerAt(canvas, 'pointermove', { x: svgOf([1, 2, 0]).x + 30, y: svgOf([1, 2, 0]).y });
     pointerAt(canvas, 'pointercancel', { x: svgOf([1, 2, 0]).x + 30, y: svgOf([1, 2, 0]).y });
     expect(stereo.getScene().vertices).toEqual({});
-    expect(stereo.element.classList.contains('rte-stereo--rotating')).toBe(false);
+    expect(canvas.classList.contains('rte-sketch--panning')).toBe(false);
   });
 
   it('клик по пустому месту в «Выборе» снимает выделение', () => {
@@ -747,6 +747,142 @@ describe('конструктор стереометрии', () => {
 
     press(canvas, 'z', { ctrlKey: true });
     expect(vertexOf(stereo, 'S')).toEqual([0, 0, 5.5]);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
+  /** Отмены жеста: `pointercancel`, второй палец и Escape; после — отпускание всех пальцев. */
+  const CANCELS: Record<string, (target: HTMLElement, at: At, init?: Partial<PointerEventInit>) => void> = {
+    pointercancel: (target, at, init) => pointerAt(target, 'pointercancel', at, init),
+    'второй палец': (target) => pointerAt(target, 'pointerdown', { x: 500, y: 60 }, { pointerId: 2 }),
+    Escape: (target) => press(target, 'Escape'),
+  };
+
+  const releaseAll = (target: HTMLElement, at: At, init: Partial<PointerEventInit> = {}): void => {
+    pointerAt(target, 'pointerup', { x: 500, y: 60 }, { pointerId: 2 });
+    pointerAt(target, 'pointerup', at, init);
+  };
+
+  it('отменённое перетаскивание вершины возвращает её на место без шага истории', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    const at = svgOf([0, 0, 5.5]);
+    const target = svgOf([1.5, -1, 5.5]);
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      changes = 0;
+      pickTool(stereo, 'select');
+      pointerAt(canvas, 'pointerdown', at);
+      pointerAt(canvas, 'pointermove', target);
+      expect(vertexOf(stereo, 'S'), name).toEqual([1.5, -1, 5.5]);
+
+      cancel(canvas, target);
+      expect(vertexOf(stereo, 'S'), name).toEqual([0, 0, 5.5]);
+      expect(changes, name).toBeLessThanOrEqual(1);
+      releaseAll(canvas, target);
+      expect(vertexOf(stereo, 'S'), name).toEqual([0, 0, 5.5]);
+    });
+
+    // Одна отмена снимает шаблон: от перетаскиваний шагов не осталось.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
+  it('отменённый поворот правой кнопкой возвращает углы без шага истории', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    Object.entries(CANCELS).forEach(([name, cancel]) => {
+      changes = 0;
+      pointerAt(canvas, 'pointerdown', EMPTY_CORNER, { button: 2 });
+      pointerAt(canvas, 'pointermove', { x: 16, y: 6 }, { button: 2 });
+      expect(stereo.getScene().angleZ, name).toBeCloseTo(-22);
+
+      cancel(canvas, { x: 16, y: 6 }, { button: 2 });
+      expect(stereo.getScene().angleZ, name).toBe(-30);
+      expect(stereo.getScene().angleY, name).toBe(15);
+      expect(viewField(stereo, 'angleZ').value, name).toBe('-30');
+      expect(changes, name).toBeLessThanOrEqual(1);
+      releaseAll(canvas, { x: 16, y: 6 }, { button: 2 });
+      expect(stereo.getScene().angleZ, name).toBe(-30);
+    });
+
+    press(canvas, 'z', { ctrlKey: true });
+    expect(stereo.getScene().vertices).toEqual({});
+  });
+
+  it('нажатие, придержанное до загрузки сцены, в новую сцену не попадает', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+
+    pickTool(stereo, 'point');
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER);
+    stereo.load({ type: '3d', vertices: { A: [0, 0, 0] }, edges: [] });
+    pointerAt(canvas, 'pointerup', EMPTY_CORNER);
+    expect(Object.keys(stereo.getScene().vertices as object)).toEqual(['A']);
+  });
+
+  it('стрелка посреди поворота завершает его, а Escape после неё ничего не откатывает', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    const angles = (): number[] => [stereo.getScene().angleY as number, stereo.getScene().angleZ as number];
+
+    pickTemplate(stereo, 'pyramid');
+    pointerAt(canvas, 'pointerdown', EMPTY_CORNER, { button: 2 });
+    pointerAt(canvas, 'pointermove', { x: 16, y: 6 }, { button: 2 });
+
+    const rotated = angles();
+
+    press(canvas, 'ArrowRight');
+
+    const turned = angles();
+
+    expect(turned).not.toEqual(rotated);
+    press(canvas, 'Escape');
+    expect(angles()).toEqual(turned);
+
+    // Шаг стрелки и шаг поворота — раздельные: первая отмена — до стрелки, вторая — до поворота.
+    press(canvas, 'z', { ctrlKey: true });
+    expect(angles()).toEqual(rotated);
+    press(canvas, 'z', { ctrlKey: true });
+    expect(angles()[1]).toBe(-30);
+  });
+
+  it('Escape посреди жеста ползунка возвращает угол без шага истории', () => {
+    const stereo = create();
+    const canvas = canvasOf(stereo);
+    let changes = 0;
+
+    pickTemplate(stereo, 'pyramid');
+    stereo.onChange(() => {
+      changes += 1;
+    });
+
+    const slider = viewField(stereo, 'angleZRange');
+
+    slider.value = '40';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(stereo.getScene().angleZ).toBe(40);
+
+    press(canvas, 'Escape');
+    expect(stereo.getScene().angleZ).toBe(-30);
+    expect(viewField(stereo, 'angleZRange').value).toBe('-30');
+    expect(viewField(stereo, 'angleZ').value).toBe('-30');
+    expect(changes).toBe(0);
+
     press(canvas, 'z', { ctrlKey: true });
     expect(stereo.getScene().vertices).toEqual({});
   });

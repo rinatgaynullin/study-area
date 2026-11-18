@@ -16,7 +16,7 @@ import {
   snapToGrid,
 } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
-import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { ChangeEmitter, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { checkField, numberField, propsEmpty, propsTitle, selectField, textField } from './fields';
 import { ToolBar, actionButton, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
@@ -169,6 +169,8 @@ class PlanimetryEditor implements SceneEditor {
       onDoubleClick: this.onDoubleClick,
       onKeyDown: this.onKeyDown,
       onViewportChange: () => this.render(),
+      canPanFrom: this.canPanFrom,
+      grabOnHover: () => this.tool === 'select',
     });
 
     this.tools = new ToolBar<Tool>({ t: this.t, tools: TOOLS, onSelect: (tool) => this.setTool(tool) });
@@ -268,6 +270,9 @@ class PlanimetryEditor implements SceneEditor {
     this.history.clear();
     this.selection = null;
     this.draft = [];
+    this.drag = null;
+    // Жест, начатый над прежней сценой, в новую не переходит.
+    this.canvas.resetGestures();
     this.fitView();
   }
 
@@ -322,10 +327,9 @@ class PlanimetryEditor implements SceneEditor {
 
   /** Escape: черновик и выделение — прочь, инструмент — «Выбрать». */
   cancel(): void {
-    // Перетаскивание, уже сдвинувшее точку, доводится, как при отпускании.
-    if (this.drag?.moved) this.afterChange();
-
-    this.drag = null;
+    // Перетаскивание, уже сдвинувшее точку, откатывается: точка — на прежнем месте, шага истории нет.
+    this.cancelDrag();
+    this.canvas.cancelPan();
     this.selection = null;
     this.setTool('select');
     this.render();
@@ -468,6 +472,8 @@ class PlanimetryEditor implements SceneEditor {
 
     if (!previous) return;
 
+    // Отмена посреди перетаскивания его заканчивает: снимок жеста уже ушёл в повтор.
+    this.drag = null;
     this.state = previous;
     this.selection = null;
     this.afterChange();
@@ -478,6 +484,7 @@ class PlanimetryEditor implements SceneEditor {
 
     if (!next) return;
 
+    this.drag = null;
     this.state = next;
     this.selection = null;
     this.afterChange();
@@ -623,6 +630,10 @@ class PlanimetryEditor implements SceneEditor {
 
   // ------------------------------------------------------------- указатель
 
+  /** С пустого места протяжка двигает лист в любом инструменте: ни один не рисует протяжкой. */
+  private readonly canPanFrom = (info: PointerInfo): boolean =>
+    this.vertexAt(info.world) === null && this.angleAt(info.world) === null && this.edgeAt(info.world) === null && this.circleAt(info.world) === null;
+
   private readonly onPointerDown = (info: PointerInfo): void => {
     if (info.button !== 0) return;
 
@@ -678,11 +689,41 @@ class PlanimetryEditor implements SceneEditor {
     if (this.draft.length > 0) this.renderOverlay();
   };
 
-  private readonly onPointerUp = (): void => {
+  private readonly onPointerUp = (info: PointerInfo): void => {
+    if (isCancelled(info)) {
+      this.cancelDrag();
+
+      return;
+    }
+
+    this.finishDrag();
+  };
+
+  /**
+   * Конец перетаскивания, как при отпускании кнопки: объект остаётся там, куда
+   * дотащили, его шаг истории остаётся. Зовётся перед клавишей, пишущей свой шаг,
+   * чтобы последующий Escape не снял чужой.
+   */
+  private finishDrag(): void {
     if (this.drag?.moved) this.afterChange();
 
     this.drag = null;
-  };
+  }
+
+  /** Отменённое перетаскивание: сцена — из снимка его начала, шаг истории снимается. */
+  private cancelDrag(): void {
+    const moved = this.drag?.moved === true;
+
+    this.drag = null;
+
+    if (!moved) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange();
+  }
 
   private readonly onDoubleClick = (info: PointerInfo): void => {
     const vertex = this.vertexAt(info.world);
@@ -711,9 +752,17 @@ class PlanimetryEditor implements SceneEditor {
       return;
     }
 
+    // Стрелки без выделения двигают лист на шаг сетки.
+    if (!this.selection && !this.drag && !event.ctrlKey && !event.metaKey && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
+      event.preventDefault();
+
+      return;
+    }
+
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selection) {
         event.preventDefault();
+        this.finishDrag();
         this.deleteSelection();
       }
 

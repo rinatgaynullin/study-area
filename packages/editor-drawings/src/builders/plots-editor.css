@@ -47,13 +47,6 @@
   min-width: 0;
 }
 
-.rte-plots-fn__title {
-  margin: 0;
-  font-size: var(--rte-ui-font-size-xs, 13px);
-  font-weight: var(--rte-title-font-weight, 600);
-  color: var(--rte-color-muted, #898794);
-}
-
 /* Карточка формулы: цвет — цвет графика (из сцены, через style), иначе цвет текста. */
 .rte-plots-fn__formula {
   min-width: 0;

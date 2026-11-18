@@ -998,6 +998,7 @@ describe('набранная функция', () => {
     expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
 
     plots.cancel();
+    expect(palette?.classList.contains('rte-plots__palette--compact')).toBe(false);
     expect(hint()).toContain('«+ Функция»');
   });
 

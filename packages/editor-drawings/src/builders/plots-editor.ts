@@ -12,7 +12,7 @@ import { sampleFunction } from './function-sampler';
 import { distance, distanceToSegment, recognizeStroke, roundPoint, roundTo, snapToGrid } from './geometry-utils';
 import { HistoryStack, cloneScene } from './history';
 import { FINE_DIGITS, MIN_RADIUS, MIN_STRETCH, isReadyFunction, plotExpression } from './plot-functions';
-import { ChangeEmitter, SketchCanvas, type PointerInfo } from './sketch-canvas';
+import { ChangeEmitter, isCancelled, SketchCanvas, type PointerInfo } from './sketch-canvas';
 import { ToolBar, actionButton, toolIcon, type ToolButton } from './tool-bar';
 import type { RawScene, SceneEditor, SceneEditorContext, SceneEditorFactory } from './types';
 
@@ -665,6 +665,8 @@ class PlotsEditor implements SceneEditor {
       onDoubleClick: this.onDoubleClick,
       onKeyDown: this.onKeyDown,
       onViewportChange: () => this.viewChanged(),
+      canPanFrom: this.canPanFrom,
+      grabOnHover: () => this.tool === 'select',
     });
 
     this.tools = new ToolBar<Tool>({ t: this.t, tools: TOOLS, onSelect: (tool) => this.setTool(tool) });
@@ -778,6 +780,8 @@ class PlotsEditor implements SceneEditor {
     this.draft = [];
     this.drag = null;
     this.editFrom = null;
+    // Жест, начатый над прежней сценой, в новую не переходит.
+    this.canvas.resetGestures();
     // Подбор вида при загрузке — не правка: ветви функций остаются дословно такими, как пришли.
     this.quietView = true;
     this.fitView();
@@ -815,10 +819,9 @@ class PlotsEditor implements SceneEditor {
 
   /** Escape: штрих, черновик области и выделение — прочь, инструмент — «Выбрать». */
   cancel(): void {
-    // Перетаскивание, уже сдвинувшее график, доводится, как при отпускании.
-    if (this.drag?.moved) this.afterChange();
-
-    this.drag = null;
+    // Перетаскивание, уже сдвинувшее график, откатывается: график — на прежнем месте, шага истории нет.
+    this.cancelDrag();
+    this.canvas.cancelPan();
     this.selectedId = null;
     this.setTool('select');
     this.render();
@@ -1214,6 +1217,8 @@ class PlotsEditor implements SceneEditor {
 
     if (!previous) return;
 
+    // Отмена посреди перетаскивания его заканчивает: снимок жеста уже ушёл в повтор.
+    this.drag = null;
     this.state = previous;
     this.refreshBranches();
     this.afterChange();
@@ -1224,6 +1229,7 @@ class PlotsEditor implements SceneEditor {
 
     if (!next) return;
 
+    this.drag = null;
     this.state = next;
     this.refreshBranches();
     this.afterChange();
@@ -1409,6 +1415,9 @@ class PlotsEditor implements SceneEditor {
 
   // ------------------------------------------------------------- указатель
 
+  /** С пустого места протяжка двигает лист; карандаш рисует протяжкой, поэтому в нём — нет. */
+  private readonly canPanFrom = (info: PointerInfo): boolean => this.tool !== 'pencil' && this.plotAt(info.world) === null;
+
   private readonly onPointerDown = (info: PointerInfo): void => {
     if (info.button !== 0) return;
 
@@ -1490,15 +1499,48 @@ class PlotsEditor implements SceneEditor {
       const points = this.stroke;
 
       this.stroke = null;
-      this.finishStroke(points, info);
+
+      // Отменённый штрих отбрасывается целиком, какой бы длины он ни был.
+      if (isCancelled(info)) this.renderOverlay();
+      else this.finishStroke(points, info);
 
       return;
     }
 
+    if (isCancelled(info)) {
+      this.cancelDrag();
+
+      return;
+    }
+
+    this.finishDrag();
+  };
+
+  /**
+   * Конец перетаскивания, как при отпускании кнопки: объект остаётся там, куда
+   * дотащили, его шаг истории остаётся. Зовётся перед клавишей, пишущей свой шаг,
+   * чтобы последующий Escape не снял чужой.
+   */
+  private finishDrag(): void {
     if (this.drag?.moved) this.afterChange();
 
     this.drag = null;
-  };
+  }
+
+  /** Отменённое перетаскивание: сцена — из снимка его начала, шаг истории снимается. */
+  private cancelDrag(): void {
+    const moved = this.drag?.moved === true;
+
+    this.drag = null;
+
+    if (!moved) return;
+
+    const before = this.history.discard();
+
+    if (before) this.state = before;
+
+    this.afterChange();
+  }
 
   private readonly onDoubleClick = (info: PointerInfo): void => {
     if (this.tool === 'shading') {
@@ -1548,8 +1590,17 @@ class PlotsEditor implements SceneEditor {
     if (ctrl && key === 'v') {
       if (this.clipboard) {
         event.preventDefault();
+        this.finishDrag();
         this.paste();
       }
+
+      return;
+    }
+
+    // Стрелки без выделения двигают лист на шаг сетки.
+    // Посреди штриха или перетаскивания вид не двигаем: штрих порвался бы скачком.
+    if (this.selectedId === null && !this.stroke && !this.drag && !ctrl && !event.altKey && this.canvas.panByKey(event.key, GRID_STEP)) {
+      event.preventDefault();
 
       return;
     }
@@ -1557,6 +1608,7 @@ class PlotsEditor implements SceneEditor {
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selectedId !== null) {
         event.preventDefault();
+        this.finishDrag();
         this.deleteSelection();
       }
 

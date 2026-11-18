@@ -9,7 +9,7 @@ export const PHYSICS_BUILDER_MESSAGES: Record<string, Messages> = {
   ru: {
     drawings_physics_sections: 'Раздел схемы',
     drawings_physics_palette: 'Добавить элемент',
-    drawings_physics_hint_select: 'Нажми на элемент в палитре — он появится в центре. Элементы и их точки можно перетаскивать, с Ctrl — копировать',
+    drawings_physics_hint_select: 'Нажми на элемент в палитре — он появится в центре. Элементы и их точки можно перетаскивать, с Ctrl — копировать. Тащи пустое место, чтобы подвинуть лист',
     drawings_physics_hint_delete: 'Нажми на то, что хочешь удалить',
     drawings_physics_text_default: 'Текст',
 
@@ -124,7 +124,7 @@ export const PHYSICS_BUILDER_MESSAGES: Record<string, Messages> = {
   en: {
     drawings_physics_sections: 'Diagram section',
     drawings_physics_palette: 'Add element',
-    drawings_physics_hint_select: 'Click an item in the palette to add it to the centre. Drag items and their points, hold Ctrl to copy',
+    drawings_physics_hint_select: 'Click an item in the palette to add it to the centre. Drag items and their points, hold Ctrl to copy. Drag an empty spot to move the sheet',
     drawings_physics_hint_delete: 'Click what you want to remove',
     drawings_physics_text_default: 'Text',
 
