@@ -59,6 +59,23 @@ const NO_TAB = '';
 const readRawScene = (text: string): RawScene | null => parseSceneJson(text) as RawScene | null;
 
 /**
+ * Вид сцены по её содержимому: у физической схемы — `type: 'physics'` или
+ * список `elements`, у геометрии — свой `type` либо вершины, рёбра, графики.
+ * `null` — по тексту не понять: пусто, не разобралось, незнакомые поля.
+ */
+const kindOfScene = (raw: RawScene | null): DrawingKind | null => {
+  if (raw === null) return null;
+
+  if (raw.type === 'physics' || Array.isArray(raw.elements)) return 'physics';
+
+  if (raw.type === '2d' || raw.type === '3d' || raw.type === 'plot_2d') return 'geometry';
+
+  if ('vertices' in raw || 'edges' in raw || 'plots' in raw) return 'geometry';
+
+  return null;
+};
+
+/**
  * Черновики вкладок за одно открытие диалога: какие конструкторы уже показаны
  * (повторный показ ничего в них не загружает) и какие пользователь менял с
  * последней синхронизации — загрузки сцены в конструктор или выгрузки его
@@ -560,6 +577,23 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
   }
 
   /** Сцена из текста JSON для конструктора — только если текст правили и он подходит. */
+  /**
+   * Вид нового чертежа на вкладке JSON задаёт сам текст: физическую схему
+   * могли вставить после вкладки геометрии, и наоборот. У существующего узла
+   * вид не меняется никогда.
+   */
+  private adoptCodeKind(): void {
+    if (this.isEditing) return;
+
+    const kind = kindOfScene(readRawScene(this.codeInput.value));
+
+    if (kind === null || kind === this.drafts.codeKind) return;
+
+    this.drafts.codeKind = kind;
+
+    if (this.activeTab === JSON_TAB) this.setKind(kind);
+  }
+
   private editedCodeFor(factory: SceneEditorFactory): RawScene | null {
     if (!this.options.json || !this.drafts.codeEdited || this.drafts.codeKind !== factory.kind) return null;
 
@@ -709,6 +743,7 @@ class DrawingDialogController implements DialogComponent<DrawingPayload | null> 
 
   private readonly onCodeInput = (): void => {
     this.drafts.codeEdited = true;
+    this.adoptCodeKind();
     this.renderPreview();
   };
 
