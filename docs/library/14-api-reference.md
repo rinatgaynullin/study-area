@@ -449,6 +449,30 @@ const fitLine: (points: Vec2[]) => LineFit | null; const fitCircle: (points: Vec
 const fitParabola: (points: Vec2[]) => ParabolaFit | null; const recognizeStroke: (points: Vec2[]) => RecognizedShape;
 const distance, distanceToSegment, projectOnSegment, nearestOnCircle, snapToGrid, angleBetween, angleDegrees, roundPoint, roundTo;
 const BUILDER_MESSAGES: Record<string, Messages>;
+// Блок «Функция» (builders/plot-functions.ts; сцена не меняется, формула выводится из полей кривой)
+type ParabolaForm = 'vertex' | 'standard'; type FunctionParamId = 'k' | 'b' | 'a' | 'm' | 'n' | 'c' | 'r';
+interface FunctionParam { id: FunctionParamId; value: number; min: number; max: number; step: number }
+type FormulaPart = { kind: 'text'; text: string } | { kind: 'var'; name: string } | { kind: 'sup'; text: string } | { kind: 'frac'; num: FormulaPart[]; den: FormulaPart[] } | { kind: 'sqrt'; body: FormulaPart[] };
+const functionParams: (plot: Plot, form: ParabolaForm) => FunctionParam[];                  // у не-функций пусто
+const applyFunctionParam: (plot: Plot, form: ParabolaForm, id: FunctionParamId, value: number) => Plot;   // новая кривая, вход не меняется
+const describeFunction: (plot: Plot, form: ParabolaForm, separator: string) => FormulaPart[] | null;
+const functionText: (plot: Plot, form: ParabolaForm, separator: string) => string;           // запись для подписи: `y = 2(x - 1)^2 - 3`
+const functionLabel: (plot: Plot, form: ParabolaForm, separator: string) => string | null;
+const isFunctionLabel: (label: string | undefined, plot: Plot, form: ParabolaForm, separator: string) => boolean;
+// Палитра цвета (builders/color-picker.ts): десять плиток, `radiogroup`
+type DrawingColorId = 'blue' | 'cyan' | 'green' | 'yellow' | 'orange' | 'red' | 'pink' | 'purple' | 'brown' | 'gray';
+interface DrawingColor { id: DrawingColorId; value: string; labelKey: string; synonyms: readonly string[] }   // synonyms — прежние hex того же цвета
+const DRAWING_COLORS: readonly DrawingColor[]; const findDrawingColor: (value: string) => DrawingColor | undefined;
+interface ColorPickerOptions { t: Translate; label: string; value: string; allowDefault: boolean; onChange(value: string): void }   // value '' — обычный цвет
+class ColorPicker { constructor(options: ColorPickerOptions); readonly element: HTMLElement; setValue(value: string): void }
+// Общие поля панелей свойств (builders/fields.ts)
+const propsTitle: (text: string) => HTMLElement; const propsEmpty: (text: string) => HTMLElement;
+const textField: (options: TextFieldOptions) => HTMLElement; const numberField: (options: NumberFieldOptions) => HTMLElement;
+const checkField: (options: CheckFieldOptions) => HTMLElement; const selectField: (options: SelectFieldOptions) => HTMLElement;
+const pairField: (options: PairFieldOptions) => HTMLElement;          // два числа, NumberPair = [number | null, number | null]
+const sliderField: (options: SliderFieldOptions) => SliderField;      // { element, setValue(value) }
+const colorField: (options: ColorPickerOptions) => HTMLElement;
+const propertyField: (label: string, control: HTMLElement) => HTMLElement; const selectControl: (options: FieldOption[], value: string) => HTMLSelectElement;
 interface DrawingPayload { kind: DrawingKind; data: string; tikz: string; pos: number | null }
 const DRAWINGS_MESSAGES: Record<string, Messages>;
 const DRAWING_TEMPLATES: DrawingTemplate[];
